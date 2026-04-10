@@ -1,0 +1,28 @@
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+<h2>Pagos</h2>
+<a href="{% url 'gestion:crear_pago' %}">Registrar pago</a>
+<table border="1">
+    <tr>
+        <th>ID</th>
+        <th>Alumno</th>
+        <th>Suscripción</th>
+        <th>Método</th>
+        <th>Valor</th>
+        <th>Estado</th>
+        <th>Fecha reporte</th>
+    </tr>
+    {% for pago in pagos %}
+    <tr>
+        <td>{{ pago.id }}</td>
+        <td>{{ pago.alumno }}</td>
+        <td>{{ pago.suscripcion }}</td>
+        <td>{{ pago.metodo_qr }}</td>
+        <td>{{ pago.valor }}</td>
+        <td>{{ pago.estado }}</td>
+        <td>{{ pago.fecha_reporte }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endblock %}
