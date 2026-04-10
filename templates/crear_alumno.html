@@ -1,0 +1,20 @@
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+<h2>Crear alumno</h2>
+
+<form method="post">
+    {% csrf_token %}
+    <fieldset>
+        <legend>Datos de usuario</legend>
+        {{ usuario_form.as_p }}
+    </fieldset>
+
+    <fieldset>
+        <legend>Datos del alumno</legend>
+        {{ alumno_form.as_p }}
+    </fieldset>
+
+    <button type="submit">Guardar</button>
+</form>
+{% endblock %}

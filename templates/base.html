@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Gestión Academia</title>
+</head>
+
+<body>
+    <h1>Sistema de Gestión Academia</h1>
+
+    <nav>
+        <a href="{% url 'gestion:dashboard' %}">Dashboard</a> |
+        <a href="{% url 'gestion:lista_alumnos' %}">Alumnos</a> |
+        <a href="{% url 'gestion:lista_planes' %}">Planes</a> |
+        <a href="{% url 'gestion:lista_suscripciones' %}">Suscripciones</a> |
+        <a href="{% url 'gestion:lista_pagos' %}">Pagos</a>
+    </nav>
+
+    <hr>
+
+    {% if messages %}
+    {% for message in messages %}
+    <p>{{ message }}</p>
+    {% endfor %}
+    <hr>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+</body>
+
+</html>

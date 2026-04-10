@@ -1,0 +1,24 @@
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+<h2>Planes</h2>
+<a href="{% url 'gestion:crear_plan' %}">Crear plan</a>
+<table border="1">
+    <tr>
+        <th>ID</th>
+        <th>Nombre</th>
+        <th>Precio</th>
+        <th>Duración</th>
+        <th>Activo</th>
+    </tr>
+    {% for plan in planes %}
+    <tr>
+        <td>{{ plan.id }}</td>
+        <td>{{ plan.nombre }}</td>
+        <td>{{ plan.precio }}</td>
+        <td>{{ plan.duracion_dias }}</td>
+        <td>{{ plan.activo }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endblock %}

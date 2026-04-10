@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+
+# Entorno
+env/
+venv/
+academia_django/
+
+# Django
+db.sqlite3
+/media/
+
+# Archivos sensibles
+.env
+
+# VS Code
+.vscode/
+
+# Logs
+*.log

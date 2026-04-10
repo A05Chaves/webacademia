@@ -1,0 +1,26 @@
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+<h2>Suscripciones</h2>
+<a href="{% url 'gestion:crear_suscripcion' %}">Crear suscripción</a>
+<table border="1">
+    <tr>
+        <th>ID</th>
+        <th>Alumno</th>
+        <th>Plan</th>
+        <th>Inicio</th>
+        <th>Vencimiento</th>
+        <th>Estado</th>
+    </tr>
+    {% for suscripcion in suscripciones %}
+    <tr>
+        <td>{{ suscripcion.id }}</td>
+        <td>{{ suscripcion.alumno }}</td>
+        <td>{{ suscripcion.plan.nombre }}</td>
+        <td>{{ suscripcion.fecha_inicio }}</td>
+        <td>{{ suscripcion.fecha_vencimiento }}</td>
+        <td>{{ suscripcion.estado }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endblock %}
