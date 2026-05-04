@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
+from django.utils import timezone
 
 
 class Plan(models.Model):
@@ -67,10 +68,22 @@ class Suscripcion(models.Model):
             raise ValidationError({
                 'fecha_vencimiento': 'La fecha de vencimiento no puede ser anterior a la fecha de inicio.'
             })
-        
+
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
+
+    def actualizar_estado(self):
+        hoy = timezone.now().date()
+
+        if self.fecha_vencimiento < hoy:
+            self.estado = 'VENCIDA'
+        elif self.fecha_inicio <= hoy <= self.fecha_vencimiento:
+            self.estado = 'ACTIVA'
+        else:
+            self.estado = 'PENDIENTE_PAGO'
+
+        self.save()
 
     def __str__(self):
         return f"{self.alumno} - {self.plan.nombre} ({self.estado})"

@@ -11,6 +11,7 @@
         <th>Inicio</th>
         <th>Vencimiento</th>
         <th>Estado</th>
+        <th>Acciones</th>
     </tr>
     {% for suscripcion in suscripciones %}
     <tr>
@@ -20,6 +21,11 @@
         <td>{{ suscripcion.fecha_inicio }}</td>
         <td>{{ suscripcion.fecha_vencimiento }}</td>
         <td>{{ suscripcion.estado }}</td>
+        <td>
+            <a href="{% url 'gestion:editar_suscripcion' suscripcion.id %}">Editar</a>
+            |
+            <a href="{% url 'gestion:eliminar_suscripcion' suscripcion.id %}">Eliminar</a>
+        </td>
     </tr>
     {% endfor %}
 </table>

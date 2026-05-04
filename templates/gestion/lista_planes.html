@@ -10,6 +10,7 @@
         <th>Precio</th>
         <th>Duración</th>
         <th>Activo</th>
+        <th>Acciones</th>
     </tr>
     {% for plan in planes %}
     <tr>
@@ -18,6 +19,11 @@
         <td>{{ plan.precio }}</td>
         <td>{{ plan.duracion_dias }}</td>
         <td>{{ plan.activo }}</td>
+        <td>
+            <a href="{% url 'gestion:editar_plan' plan.id %}">Editar</a>
+            |
+            <a href="{% url 'gestion:eliminar_plan' plan.id %}">Eliminar</a>
+        </td>
     </tr>
     {% endfor %}
 </table>

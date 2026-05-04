@@ -1,0 +1,15 @@
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+<h2>Confirmar eliminación</h2>
+
+<p>¿Seguro que deseas eliminar este registro?</p>
+<p><strong>{{ objeto }}</strong></p>
+
+<form method="post">
+    {% csrf_token %}
+    <button type="submit">Sí, eliminar</button>
+    <a href="{% url cancelar_url %}">Cancelar</a>
+    <a href="{% url 'gestion:dashboard' %}">Home</a>
+</form>
+{% endblock %}

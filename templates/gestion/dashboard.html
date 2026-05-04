@@ -1,0 +1,60 @@
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+<h2>Dashboard</h2>
+
+<ul>
+    <li>Total alumnos: {{ total_alumnos }}</li>
+    <li>Total planes: {{ total_planes }}</li>
+    <li>Total suscripciones: {{ total_suscripciones }}</li>
+    <li>Total pagos: {{ total_pagos }}</li>
+</ul>
+
+<hr>
+
+<h3>Pagos pendientes</h3>
+<ul>
+    {% for pago in pagos_pendientes %}
+    <li>
+        {{ pago.alumno }} - {{ pago.valor }} -
+        <a href="{% url 'gestion:validar_pago' pago.id %}">Validar</a>
+    </li>
+    {% empty %}
+    <li>No hay pagos pendientes.</li>
+    {% endfor %}
+</ul>
+
+<h3>Suscripciones próximas a vencer</h3>
+<ul>
+    {% for suscripcion in suscripciones_por_vencer %}
+    <li>
+        {{ suscripcion.alumno }} - {{ suscripcion.plan.nombre }} -
+        vence: {{ suscripcion.fecha_vencimiento }}
+    </li>
+    {% empty %}
+    <li>No hay suscripciones próximas a vencer.</li>
+    {% endfor %}
+</ul>
+
+<h3>Alumnos vencidos</h3>
+<ul>
+    {% for alumno in alumnos_vencidos %}
+    <li>{{ alumno }} - {{ alumno.documento }}</li>
+    {% empty %}
+    <li>No hay alumnos vencidos.</li>
+    {% endfor %}
+</ul>
+
+<h3>Últimas notificaciones</h3>
+<ul>
+    {% for notificacion in ultimas_notificaciones %}
+    <li>
+        {{ notificacion.usuario }} - {{ notificacion.titulo }} -
+        {{ notificacion.estado }}
+    </li>
+    {% empty %}
+    <li>No hay notificaciones registradas.</li>
+    {% endfor %}
+</ul>
+
+{% endblock %}

@@ -1,0 +1,48 @@
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+<h2>Alumnos</h2>
+<a href="{% url 'gestion:crear_alumno' %}">Crear alumno</a>
+<table border="1">
+    <tr>
+        <th>ID</th>
+        <th>Usuario</th>
+        <th>Documento</th>
+        <th>Disciplina</th>
+        <th>Grado</th>
+        <th>Estado</th>
+
+        <th>Acciones</th>
+        <th>Días restantes</th>
+        <th>Fecha vencimiento</th>
+        <th>Días vencido</th>
+        <th>Mensualidades pendientes</th>
+
+    </tr>
+    {% for alumno in alumnos %}
+    <tr>
+        <td>{{ alumno.id }}</td>
+        <td>{{ alumno.user.get_full_name|default:alumno.user.username }}</td>
+        <td>{{ alumno.documento }}</td>
+        <td>{{ alumno.disciplina }}</td>
+        <td>{{ alumno.grado }}</td>
+        <td>{{ alumno.estado }}</td>
+        <td>
+            <a href="{% url 'gestion:editar_alumno' alumno.id %}">Editar</a>
+            |
+            <a href="{% url 'gestion:eliminar_alumno' alumno.id %}">Eliminar</a>
+        </td>
+        <td>
+            {% if alumno.dias_para_vencer is not None %}
+            {{ alumno.dias_para_vencer }} días
+            {% else %}
+            Sin suscripción
+            {% endif %}
+        </td>
+        <td>{{ alumno.fecha_vencimiento_actual|default:"Sin suscripción" }}</td>
+        <td>{{ alumno.dias_vencido }}</td>
+        <td>{{ alumno.mensualidades_pendientes }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endblock %}

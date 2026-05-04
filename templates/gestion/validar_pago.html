@@ -1,0 +1,25 @@
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+<h2>Validar pago</h2>
+
+<p><strong>Alumno:</strong> {{ pago.alumno }}</p>
+<p><strong>Valor:</strong> {{ pago.valor }}</p>
+<p><strong>Estado actual:</strong> {{ pago.estado }}</p>
+
+{% if pago.comprobante %}
+<p>
+    <strong>Comprobante:</strong>
+    <a href="{{ pago.comprobante.url }}" target="_blank">Ver comprobante</a>
+</p>
+{% endif %}
+
+<form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+
+    <button type="submit">Guardar validación</button>
+</form>
+
+<a href="{% url 'gestion:lista_pagos' %}">Volver</a>
+{% endblock %}

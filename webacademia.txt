@@ -1,0 +1,3 @@
+webacademia
+
+el correo de confirmación de pago se debe generar automático y comuna periodicidad programada
