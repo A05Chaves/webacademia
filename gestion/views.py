@@ -198,7 +198,12 @@ def validar_pago(request, pago_id):
                 suscripcion = pago.suscripcion
                 hoy = timezone.now().date()
 
-                fecha_base = suscripcion.fecha_vencimiento or hoy
+                # fecha_base = suscripcion.fecha_vencimiento or hoy
+                if suscripcion.estado == 'PENDIENTE_PAGO':
+                    fecha_base = hoy
+
+                else:
+                    fecha_base = suscripcion.fecha_vencimiento or hoy
 
                 suscripcion.fecha_inicio = fecha_base
                 suscripcion.fecha_vencimiento = (
