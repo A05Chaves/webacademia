@@ -1,23 +1,128 @@
 {% extends 'gestion/base.html' %}
 
 {% block content %}
-<h2>Crear alumno</h2>
 
-<form method="post">
-    {% csrf_token %}
-    <fieldset>
-        <legend>Datos de usuario</legend>
-        {{ usuario_form.as_p }}
-    </fieldset>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">
+        <i class="fa-solid fa-user-plus"></i>
+        Crear alumno
+    </h2>
 
-    <fieldset>
-        <legend>Datos del alumno</legend>
-        {{ alumno_form.as_p }}
-    </fieldset>
+    <a href="{% url 'gestion:lista_alumnos' %}"
+       class="btn btn-outline-light btn-sm">
+        <i class="fa-solid fa-arrow-left"></i>
+        Volver
+    </a>
+</div>
 
-    <button type="submit">Guardar</button>
-    <a href="{% url 'gestion:lista_alumnos' %}">Cancelar</a>
-    <a href="{% url 'gestion:dashboard' %}">Home</a>
+<div class="card bg-dark text-light border-secondary">
+    <div class="card-body">
 
-</form>
+        <form method="post">
+            {% csrf_token %}
+
+            <h5 class="mb-3">
+                <i class="fa-solid fa-user"></i>
+                Datos de usuario
+            </h5>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Usuario</label>
+                    {{ usuario_form.username }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Contraseña</label>
+                    {{ usuario_form.password }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Nombres</label>
+                    {{ usuario_form.first_name }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Apellidos</label>
+                    {{ usuario_form.last_name }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Correo</label>
+                    {{ usuario_form.email }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Teléfono</label>
+                    {{ usuario_form.telefono }}
+                </div>
+            </div>
+
+            <hr class="border-secondary">
+
+            <h5 class="mb-3">
+                <i class="fa-solid fa-id-card"></i>
+                Datos del alumno
+            </h5>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Documento</label>
+                    {{ alumno_form.documento }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Fecha de nacimiento</label>
+                    {{ alumno_form.fecha_nacimiento }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Dirección</label>
+                    {{ alumno_form.direccion }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Disciplina</label>
+                    {{ alumno_form.disciplina }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Grado</label>
+                    {{ alumno_form.grado }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Estado</label>
+                    {{ alumno_form.estado }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Nombre acudiente</label>
+                    {{ alumno_form.nombre_acudiente }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Teléfono acudiente</label>
+                    {{ alumno_form.telefono_acudiente }}
+                </div>
+            </div>
+
+            <div class="d-flex gap-2 mt-3">
+                <button type="submit" class="btn btn-success">
+                    <i class="fa-solid fa-check"></i>
+                    Guardar alumno
+                </button>
+
+                <a href="{% url 'gestion:lista_alumnos' %}"
+                   class="btn btn-outline-light">
+                    <i class="fa-solid fa-xmark"></i>
+                    Cancelar
+                </a>
+            </div>
+
+        </form>
+
+    </div>
+</div>
+
 {% endblock %}

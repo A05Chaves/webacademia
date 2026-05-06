@@ -28,6 +28,21 @@ from .forms import (
 from datetime import timedelta
 from django.utils import timezone
 from notificaciones.models import Notificacion
+from instructores.models import Instructor
+
+from datetime import datetime, time
+from clases.models import ClaseProgramada, AsistenciaClase
+from datetime import time
+from .forms import ClaseProgramadaForm
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth import logout
+from django.db.models import Count, Q
+from django.db import models
+
+from django.contrib.auth import authenticate
+from django.views.decorators.http import require_POST
+
+from django.utils import timezone
 
 
 @staff_member_required
@@ -41,6 +56,7 @@ def dashboard(request):
     total_planes = Plan.objects.count()
     total_suscripciones = Suscripcion.objects.count()
     total_pagos = Pago.objects.count()
+    total_instructores = Instructor.objects.filter(activo=True).count()
 
     hoy = timezone.now().date()
     limite = hoy + timedelta(days=7)
@@ -72,6 +88,7 @@ def dashboard(request):
         'suscripciones_por_vencer': suscripciones_por_vencer,
         'alumnos_vencidos': alumnos_vencidos,
         'ultimas_notificaciones': ultimas_notificaciones,
+        'total_instructores': total_instructores,
     }
     return render(request, 'gestion/dashboard.html', context)
 
@@ -345,4 +362,273 @@ def eliminar_suscripcion(request, suscripcion_id):
     return render(request, 'gestion/confirmar_eliminar.html', {
         'objeto': suscripcion,
         'cancelar_url': 'gestion:lista_suscripciones'
+    })
+
+
+# VISTA PARA ASISTENCIA A CLASE
+
+# @login_required
+def horario_clases(request):
+
+    hoy = timezone.now().date()
+
+    clases = ClaseProgramada.objects.filter(
+        activa=True
+    ).select_related(
+        'instructor__user'
+    ).annotate(
+        total_asistentes=Count(
+            'asistencias',
+            filter=Q(
+                asistencias__fecha_clase=hoy,
+                asistencias__estado='CONFIRMADA'
+            )
+        )
+    )
+
+    dias = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO']
+    horas = [
+        time(6, 0),
+        time(6, 30),
+        time(7, 0),
+        time(7, 30),
+        time(8, 0),
+        time(8, 30),
+        time(9, 0),
+        time(9, 30),
+        time(10, 0),
+        time(10, 30),
+        time(17, 0),
+        time(17, 30),
+        time(18, 0),
+        time(18, 30),
+        time(19, 0),
+        time(19, 30),
+        time(20, 0),
+        time(20, 30),
+    ]
+
+    horario = []
+
+    for hora in horas:
+        fila = {
+            'hora': hora,
+            'dias': []
+        }
+
+        for dia in dias:
+            clase = clases.filter(dia=dia, hora_inicio=hora).first()
+            fila['dias'].append({
+                'dia': dia,
+                'clase': clase
+            })
+
+        horario.append(fila)
+
+    ahora = timezone.localtime()
+
+    return render(request, 'gestion/horario_clases.html', {
+        'dias': dias,
+        'horario': horario,
+        'hora_actual': ahora,
+    })
+
+
+@login_required
+def confirmar_asistencia(request, clase_id):
+    clase = get_object_or_404(ClaseProgramada, id=clase_id, activa=True)
+
+    if not hasattr(request.user, 'perfil_alumno'):
+        messages.error(
+            request, 'Solo los alumnos pueden confirmar asistencia.')
+        return redirect('gestion:horario_clases')
+
+    alumno = request.user.perfil_alumno
+    ahora = timezone.localtime()
+    hoy = ahora.date()
+
+    inicio_clase = datetime.combine(hoy, clase.hora_inicio)
+    inicio_clase = timezone.make_aware(inicio_clase)
+
+    ventana_inicio = inicio_clase - timedelta(minutes=20)
+    ventana_fin = inicio_clase + timedelta(minutes=10)
+
+    if not (ventana_inicio <= ahora <= ventana_fin):
+        messages.warning(
+            request,
+            'La asistencia solo puede confirmarse desde 20 minutos antes hasta 10 minutos después de iniciar la clase.'
+        )
+        return redirect('gestion:horario_clases')
+
+    # CUPO LLENO
+    total_asistentes = AsistenciaClase.objects.filter(
+        clase=clase,
+        fecha_clase=hoy,
+        estado='CONFIRMADA'
+    ).count()
+
+    ya_confirmo = AsistenciaClase.objects.filter(
+        alumno=alumno,
+        clase=clase,
+        fecha_clase=hoy,
+        estado='CONFIRMADA'
+    ).exists()
+
+    if not ya_confirmo and total_asistentes >= clase.cupo_maximo:
+        messages.error(request, 'No hay cupos disponibles para esta clase.')
+        logout(request)
+        return redirect('gestion:horario_clases')
+
+    asistencia, creada = AsistenciaClase.objects.get_or_create(
+        alumno=alumno,
+        clase=clase,
+        fecha_clase=hoy,
+        defaults={
+            'estado': 'CONFIRMADA',
+            'fecha_confirmacion': ahora,
+        }
+    )
+
+    if not creada:
+        messages.info(
+            request, 'Ya habías confirmado asistencia para esta clase.')
+    else:
+        messages.success(request, 'Asistencia confirmada correctamente.')
+
+        logout(request)
+        return redirect('gestion:horario_clases')
+
+
+# EDICION DE HORARIOS
+
+@staff_member_required
+def crear_clase(request):
+    if request.method == 'POST':
+        form = ClaseProgramadaForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Clase creada correctamente.')
+            return redirect('gestion:horario_clases')
+    else:
+        form = ClaseProgramadaForm()
+
+    return render(request, 'gestion/formulario.html', {
+        'form': form,
+        'titulo': 'Crear clase',
+        'cancelar_url': 'gestion:horario_clases'
+    })
+
+
+@staff_member_required
+def editar_clase(request, clase_id):
+    clase = get_object_or_404(ClaseProgramada, id=clase_id)
+
+    if request.method == 'POST':
+        form = ClaseProgramadaForm(request.POST, instance=clase)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Clase actualizada correctamente.')
+            return redirect('gestion:horario_clases')
+    else:
+        form = ClaseProgramadaForm(instance=clase)
+
+    return render(request, 'gestion/formulario.html', {
+        'form': form,
+        'titulo': 'Editar clase',
+        'cancelar_url': 'gestion:horario_clases'
+    })
+
+
+# VERIFICAR ASISTENCIA EN KIOSKO
+
+@require_POST
+def confirmar_asistencia_kiosko(request):
+    clase_id = request.POST.get('clase_id')
+    username = request.POST.get('username')
+    password = request.POST.get('password')
+
+    clase = get_object_or_404(ClaseProgramada, id=clase_id, activa=True)
+
+    user = authenticate(request, username=username, password=password)
+
+    if user is None:
+        messages.error(request, 'Usuario o contraseña incorrectos.')
+        return redirect('gestion:horario_clases')
+
+    if not hasattr(user, 'perfil_alumno'):
+        messages.error(request, 'Este usuario no está registrado como alumno.')
+        return redirect('gestion:horario_clases')
+
+    alumno = user.perfil_alumno
+    ahora = timezone.localtime()
+    hoy = ahora.date()
+
+    inicio_clase = datetime.combine(hoy, clase.hora_inicio)
+    inicio_clase = timezone.make_aware(inicio_clase)
+
+    ventana_inicio = inicio_clase - timedelta(minutes=20)
+    ventana_fin = inicio_clase + timedelta(minutes=10)
+
+    if not (ventana_inicio <= ahora <= ventana_fin):
+        messages.warning(
+            request,
+            'La asistencia solo puede confirmarse desde 20 minutos antes hasta 10 minutos después de iniciar la clase.'
+        )
+        return redirect('gestion:horario_clases')
+
+    total_asistentes = AsistenciaClase.objects.filter(
+        clase=clase,
+        fecha_clase=hoy,
+        estado='CONFIRMADA'
+    ).count()
+
+    ya_confirmo = AsistenciaClase.objects.filter(
+        alumno=alumno,
+        clase=clase,
+        fecha_clase=hoy,
+        estado='CONFIRMADA'
+    ).exists()
+
+    if not ya_confirmo and total_asistentes >= clase.cupo_maximo:
+        messages.error(request, 'No hay cupos disponibles para esta clase.')
+        return redirect('gestion:horario_clases')
+
+    asistencia, creada = AsistenciaClase.objects.get_or_create(
+        alumno=alumno,
+        clase=clase,
+        fecha_clase=hoy,
+        defaults={
+            'estado': 'CONFIRMADA',
+            'fecha_confirmacion': ahora,
+        }
+    )
+
+    if creada:
+        messages.success(request, 'Asistencia confirmada correctamente.')
+    else:
+        messages.info(
+            request, 'Ya habías confirmado asistencia para esta clase.')
+
+    return redirect('gestion:horario_clases')
+
+
+# ESTUDIANTES EN CLASE
+
+@staff_member_required
+def asistentes_clase(request, clase_id):
+    clase = get_object_or_404(ClaseProgramada, id=clase_id)
+
+    hoy = timezone.now().date()
+
+    asistencias = AsistenciaClase.objects.filter(
+        clase=clase,
+        fecha_clase=hoy,
+        estado='CONFIRMADA'
+    ).select_related('alumno__user')
+
+    return render(request, 'gestion/asistentes_clase.html', {
+        'clase': clase,
+        'asistencias': asistencias,
+        'total_asistentes': asistencias.count(),
+        'hoy': hoy,
     })

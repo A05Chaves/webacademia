@@ -6,6 +6,7 @@ from alumnos.models import Alumno
 from planes.models import Plan, Suscripcion
 from pagos.models import Pago
 from pagos.models import MetodoPagoQR
+from clases.models import ClaseProgramada
 
 Usuario = get_user_model()
 
@@ -13,7 +14,7 @@ Usuario = get_user_model()
 class UsuarioAlumnoForm(forms.ModelForm):
     password = forms.CharField(
         label='Contraseña',
-        widget=forms.PasswordInput
+        widget=forms.PasswordInput(attrs={'class': 'form-control'})
     )
 
     class Meta:
@@ -26,13 +27,13 @@ class UsuarioAlumnoForm(forms.ModelForm):
             'telefono',
             'password',
         ]
-
-    def save(self, commit=True):
-        user = super().save(commit=False)
-        user.set_password(self.cleaned_data['password'])
-        if commit:
-            user.save()
-        return user
+        widgets = {
+            'username': forms.TextInput(attrs={'class': 'form-control'}),
+            'first_name': forms.TextInput(attrs={'class': 'form-control'}),
+            'last_name': forms.TextInput(attrs={'class': 'form-control'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control'}),
+            'telefono': forms.TextInput(attrs={'class': 'form-control'}),
+        }
 
 
 class AlumnoForm(forms.ModelForm):
@@ -49,7 +50,17 @@ class AlumnoForm(forms.ModelForm):
             'estado',
         ]
         widgets = {
-            'fecha_nacimiento': forms.DateInput(attrs={'type': 'date'}),
+            'documento': forms.TextInput(attrs={'class': 'form-control'}),
+            'fecha_nacimiento': forms.DateInput(attrs={
+                'type': 'date',
+                'class': 'form-control'
+            }),
+            'direccion': forms.TextInput(attrs={'class': 'form-control'}),
+            'disciplina': forms.Select(attrs={'class': 'form-select'}),
+            'grado': forms.TextInput(attrs={'class': 'form-control'}),
+            'nombre_acudiente': forms.TextInput(attrs={'class': 'form-control'}),
+            'telefono_acudiente': forms.TextInput(attrs={'class': 'form-control'}),
+            'estado': forms.Select(attrs={'class': 'form-select'}),
         }
 
 
@@ -63,6 +74,16 @@ class PlanForm(forms.ModelForm):
             'duracion_dias',
             'activo',
         ]
+        widgets = {
+            'nombre': forms.TextInput(attrs={'class': 'form-control'}),
+            'descripcion': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3
+            }),
+            'precio': forms.NumberInput(attrs={'class': 'form-control'}),
+            'duracion_dias': forms.NumberInput(attrs={'class': 'form-control'}),
+            'activo': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
 
 
 class SuscripcionForm(forms.ModelForm):
@@ -73,29 +94,31 @@ class SuscripcionForm(forms.ModelForm):
             'plan',
             'fecha_inicio',
             'fecha_vencimiento',
+            'estado',
             'observaciones',
         ]
+
         widgets = {
-            'fecha_inicio': forms.DateInput(attrs={'type': 'date'}),
-            'fecha_vencimiento': forms.DateInput(attrs={'type': 'date'}),
+            'alumno': forms.Select(attrs={'class': 'form-select'}),
+            'plan': forms.Select(attrs={'class': 'form-select'}),
+
+            'fecha_inicio': forms.DateInput(attrs={
+                'type': 'date',
+                'class': 'form-control'
+            }),
+
+            'fecha_vencimiento': forms.DateInput(attrs={
+                'type': 'date',
+                'class': 'form-control'
+            }),
+
+            'estado': forms.Select(attrs={'class': 'form-select'}),
+
+            'observaciones': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3
+            }),
         }
-
-    def clean(self):
-        cleaned_data = super().clean()
-        alumno = cleaned_data.get('alumno')
-
-        if alumno:
-            existe = Suscripcion.objects.filter(
-                alumno=alumno,
-                estado__in=['ACTIVA', 'PENDIENTE_PAGO']
-            ).exists()
-
-            if existe:
-                raise forms.ValidationError(
-                    'Este alumno ya tiene una suscripción activa o pendiente.'
-                )
-
-        return cleaned_data
 
 
 class PagoForm(forms.ModelForm):
@@ -145,3 +168,23 @@ class ValidarPagoForm(forms.ModelForm):
             )
 
         return estado
+
+# FORMULARIO PARA EDICION DE CLASES
+
+
+class ClaseProgramadaForm(forms.ModelForm):
+    class Meta:
+        model = ClaseProgramada
+        fields = [
+            'dia',
+            'hora_inicio',
+            'hora_fin',
+            'disciplina',
+            'instructor',
+            'cupo_maximo',
+            'activa',
+        ]
+        widgets = {
+            'hora_inicio': forms.TimeInput(attrs={'type': 'time'}),
+            'hora_fin': forms.TimeInput(attrs={'type': 'time'}),
+        }

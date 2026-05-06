@@ -1,25 +1,90 @@
 {% extends 'gestion/base.html' %}
 
 {% block content %}
-<h2>Validar pago</h2>
 
-<p><strong>Alumno:</strong> {{ pago.alumno }}</p>
-<p><strong>Valor:</strong> {{ pago.valor }}</p>
-<p><strong>Estado actual:</strong> {{ pago.estado }}</p>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">
+        <i class="fa-solid fa-check-circle"></i>
+        Validar pago
+    </h2>
 
-{% if pago.comprobante %}
-<p>
-    <strong>Comprobante:</strong>
-    <a href="{{ pago.comprobante.url }}" target="_blank">Ver comprobante</a>
-</p>
-{% endif %}
+    <a href="{% url 'gestion:lista_pagos' %}" class="btn btn-outline-light btn-sm">
+        <i class="fa-solid fa-arrow-left"></i>
+        Volver
+    </a>
+</div>
 
-<form method="post">
-    {% csrf_token %}
-    {{ form.as_p }}
+<div class="row">
 
-    <button type="submit">Guardar validación</button>
-</form>
+    <div class="col-md-6 mb-3">
+        <div class="card bg-dark text-light border-secondary">
+            <div class="card-header">
+                Información del pago
+            </div>
 
-<a href="{% url 'gestion:lista_pagos' %}">Volver</a>
+            <div class="card-body">
+                <p><strong>Alumno:</strong> {{ pago.alumno }}</p>
+                <p><strong>Valor:</strong> ${{ pago.valor }}</p>
+                <p><strong>Estado actual:</strong> {{ pago.estado }}</p>
+                <p><strong>Método:</strong> {{ pago.metodo_qr }}</p>
+                <p><strong>Referencia:</strong> {{ pago.referencia_pago|default:"Sin referencia" }}</p>
+                <p><strong>Fecha reporte:</strong> {{ pago.fecha_reporte|date:"d/m/Y H:i" }}</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 mb-3">
+        <div class="card bg-dark text-light border-secondary">
+            <div class="card-header">
+                Comprobante
+            </div>
+
+            <div class="card-body text-center">
+                {% if pago.comprobante %}
+                    <a href="{{ pago.comprobante.url }}" target="_blank"
+                       class="btn btn-outline-info">
+                        <i class="fa-solid fa-file-invoice"></i>
+                        Ver comprobante
+                    </a>
+                {% else %}
+                    <p>No hay comprobante cargado.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div class="card bg-dark text-light border-secondary mt-3">
+    <div class="card-header">
+        Decisión administrativa
+    </div>
+
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+
+            <div class="mb-3">
+                <label class="form-label">Estado</label>
+                {{ form.estado }}
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Observación del administrador</label>
+                {{ form.observacion_admin }}
+            </div>
+
+            <button type="submit" class="btn btn-success">
+                <i class="fa-solid fa-check"></i>
+                Guardar validación
+            </button>
+
+            <a href="{% url 'gestion:lista_pagos' %}" class="btn btn-outline-light">
+                <i class="fa-solid fa-xmark"></i>
+                Cancelar
+            </a>
+        </form>
+    </div>
+</div>
+
 {% endblock %}

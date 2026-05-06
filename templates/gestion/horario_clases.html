@@ -1,0 +1,238 @@
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+
+<style>
+    .horario-container {
+        max-width: 1200px;
+        margin: 20px auto;
+        padding: 20px;
+        background: #1f1f1f;
+        border-radius: 12px;
+        color: #fff;
+    }
+
+    .horario-title {
+        text-align: center;
+        margin-bottom: 20px;
+        font-size: 28px;
+        font-weight: bold;
+    }
+
+    .horario-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        background: #2b2b2b;
+    }
+
+    .horario-table th {
+        background: #111;
+        color: #fff;
+        padding: 12px;
+        border: 1px solid #444;
+        font-size: 16px;
+    }
+
+    .horario-table td {
+        height: 95px;
+        border: 1px solid #444;
+        text-align: center;
+        vertical-align: middle;
+        padding: 6px;
+    }
+
+    .hora-col {
+        background: #111;
+        font-weight: bold;
+        width: 90px;
+    }
+
+    .clase-card {
+        display: block;
+        padding: 8px;
+        border-radius: 8px;
+        text-decoration: none;
+        color: white;
+        font-weight: bold;
+        min-height: 65px;
+        transition: 0.2s ease;
+    }
+
+    .clase-card:hover {
+        transform: scale(1.04);
+        opacity: 0.9;
+    }
+
+    .jiu_jitsu,
+    .JIU_JITSU {
+        background: #1f5fa8;
+    }
+
+    .muay_thai,
+    .MUAY_THAI {
+        background: #a83232;
+    }
+
+    .mma,
+    .MMA {
+        background: #7a2fa8;
+    }
+
+    .otra,
+    .OTRA {
+        background: #777;
+    }
+
+    .clase-disciplina {
+        font-size: 15px;
+        text-transform: uppercase;
+    }
+
+    .clase-instructor {
+        font-size: 12px;
+        margin-top: 4px;
+        font-weight: normal;
+    }
+
+    .clase-hora {
+        font-size: 11px;
+        margin-top: 4px;
+        color: #f2f2f2;
+    }
+
+    .libre {
+        color: #777;
+        font-size: 13px;
+    }
+
+    .acciones-horario {
+        margin-top: 20px;
+        text-align: center;
+    }
+
+    .btn-home {
+        background: #444;
+        color: white;
+        padding: 8px 14px;
+        border-radius: 6px;
+        text-decoration: none;
+    }
+
+    .btn-home:hover {
+        background: #666;
+    }
+
+    .clase-card {
+    border: none;
+    width: 100%;
+    cursor: pointer;
+    }
+</style>
+
+
+<div class="horario-container">
+<div style="text-align:center; margin-bottom:10px; font-size:14px; color:#ccc;">
+    {{ hora_actual }}
+</div>
+    <div class="horario-title">Horario de Clases</div>
+
+    <table class="horario-table">
+        <thead>
+            <tr>
+                <th>Hora</th>
+                {% for dia in dias %}
+                    <th>{{ dia }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for fila in horario %}
+                <tr>
+                    <td class="hora-col">{{ fila.hora }}</td>
+
+                    {% for item in fila.dias %}
+                        <td>
+                            {% if item.clase %}
+
+                                {% if user.is_staff %}
+                                    <a href="{% url 'gestion:editar_clase' item.clase.id %}"
+                                    class="clase-card {{ item.clase.disciplina }}">
+                                {% else %}
+                                    <button type="button"
+                                        class="clase-card {{ item.clase.disciplina }}"
+                                        onclick="abrirModal('{{ item.clase.id }}', '{{ item.clase.get_disciplina_display }}')">
+                                {% endif %}
+
+                                    <div class="clase-disciplina">
+                                        {{ item.clase.get_disciplina_display }}
+                                    </div>
+                                    <div class="clase-instructor">
+                                        {{ item.clase.instructor }}
+                                    </div>
+                                    <div class="clase-hora">
+                                        {{ item.clase.hora_inicio }} - {{ item.clase.hora_fin }}
+                                    </div>
+                                    <div class="clase-cupos">
+                                        {{ item.clase.total_asistentes }} / {{ item.clase.cupo_maximo }}
+                                    </div>
+                                    {% if user.is_staff %}
+                                        <div style="margin-top:5px;">
+                                            <a href="{% url 'gestion:asistentes_clase' item.clase.id %}">
+                                                Ver asistentes
+                                            </a>
+                                        </div>
+                                    {% endif %}
+                                </button>
+
+                            {% else %}
+                                <span class="libre">Libre</span>
+                            {% endif %}
+                            
+                        </td>
+                    {% endfor %}
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="acciones-horario">
+        <a href="{% url 'gestion:dashboard' %}" class="btn-home">Home</a>
+    </div>
+</div>
+
+<div id="modalAsistencia" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:9999;">
+    <div style="background:white; color:black; max-width:400px; margin:120px auto; padding:20px; border-radius:10px;">
+        <h3>Confirmar asistencia</h3>
+        <p id="nombreClase"></p>
+
+        <form method="post" action="{% url 'gestion:confirmar_asistencia_kiosko' %}">
+            {% csrf_token %}
+            <input type="hidden" name="clase_id" id="claseId">
+
+            <label>Usuario</label><br>
+            <input type="text" name="username" required style="width:100%;"><br><br>
+
+            <label>Contraseña</label><br>
+            <input type="password" name="password" required style="width:100%;"><br><br>
+
+            <button type="submit">Confirmar</button>
+            <button type="button" onclick="cerrarModal()">Cancelar</button>
+        </form>
+    </div>
+</div>
+
+<script>
+function abrirModal(claseId, nombreClase) {
+    document.getElementById('claseId').value = claseId;
+    document.getElementById('nombreClase').innerText = nombreClase;
+    document.getElementById('modalAsistencia').style.display = 'block';
+}
+
+function cerrarModal() {
+    document.getElementById('modalAsistencia').style.display = 'none';
+}
+</script>
+
+{% endblock %}

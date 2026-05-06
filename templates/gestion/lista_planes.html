@@ -1,30 +1,53 @@
 {% extends 'gestion/base.html' %}
 
 {% block content %}
-<h2>Planes</h2>
-<a href="{% url 'gestion:crear_plan' %}">Crear plan</a>
-<table border="1">
-    <tr>
-        <th>ID</th>
-        <th>Nombre</th>
-        <th>Precio</th>
-        <th>Duración</th>
-        <th>Activo</th>
-        <th>Acciones</th>
-    </tr>
-    {% for plan in planes %}
-    <tr>
-        <td>{{ plan.id }}</td>
-        <td>{{ plan.nombre }}</td>
-        <td>{{ plan.precio }}</td>
-        <td>{{ plan.duracion_dias }}</td>
-        <td>{{ plan.activo }}</td>
-        <td>
-            <a href="{% url 'gestion:editar_plan' plan.id %}">Editar</a>
-            |
-            <a href="{% url 'gestion:eliminar_plan' plan.id %}">Eliminar</a>
-        </td>
-    </tr>
-    {% endfor %}
-</table>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+
+    <h2 class="mb-0">
+        Planes
+    </h2>
+
+    <a href="{% url 'gestion:crear_plan' %}"
+       class="btn btn-outline-light btn-sm">
+
+        <i class="fa-solid fa-plus"></i>
+        Nuevo plan
+
+    </a>
+
+</div>
+
+
+<div class="table-responsive">
+
+    <table class="table table-dark table-hover table-dark-custom">
+        <tr>
+            <th>ID</th>
+            <th>Nombre</th>
+            <th>Precio</th>
+            <th>Duración</th>
+            <th>Activo</th>
+            <th>Acciones</th>
+        </tr>
+        {% for plan in planes %}
+        <tr>
+            <td>{{ plan.id }}</td>
+            <td>{{ plan.nombre }}</td>
+            <td>{{ plan.precio }}</td>
+            <td>{{ plan.duracion_dias }}</td>
+            <td>{{ plan.activo }}</td>
+            <td>
+                <a href="{% url 'gestion:editar_plan' plan.id %}" class="btn btn-outline-warning btn-sm">
+                    <i class="fa-solid fa-pen"></i> Editar
+                </a>
+                |
+                <a href="{% url 'gestion:eliminar_plan' plan.id %}" class="btn btn-outline-danger btn-sm">
+                    <i class="fa-solid fa-trash"></i> Eliminar
+                </a>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
 {% endblock %}

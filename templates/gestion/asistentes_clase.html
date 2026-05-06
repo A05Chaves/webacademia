@@ -1,0 +1,44 @@
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+<h2>Asistentes de clase</h2>
+
+<p><strong>Clase:</strong> {{ clase.get_disciplina_display }}</p>
+<p><strong>Instructor:</strong> {{ clase.instructor }}</p>
+<p><strong>Fecha:</strong> {{ hoy }}</p>
+<p><strong>Hora:</strong> {{ clase.hora_inicio }} - {{ clase.hora_fin }}</p>
+<p><strong>Total confirmados:</strong> {{ total_asistentes }} / {{ clase.cupo_maximo }}</p>
+
+<hr>
+
+<div class="table-responsive">
+
+    <table class="table table-dark table-hover table-dark-custom">
+
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Alumno</th>
+                <th>Documento</th>
+                <th>Hora confirmación</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for asistencia in asistencias %}
+            <tr>
+                <td>{{ forloop.counter }}</td>
+                <td>{{ asistencia.alumno }}</td>
+                <td>{{ asistencia.alumno.documento }}</td>
+                <td>{{ asistencia.fecha_confirmacion|date:"H:i" }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="4">Aún no hay estudiantes confirmados.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<br>
+<a href="{% url 'gestion:horario_clases' %}">Volver al horario</a>
+{% endblock %}

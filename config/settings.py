@@ -16,7 +16,6 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
@@ -49,7 +48,8 @@ INSTALLED_APPS = [
     'notificaciones',
     'web',
     'gestion',
-
+    'instructores',
+    'clases',
 ]
 
 MIDDLEWARE = [
@@ -117,7 +117,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'America/Bogota'
 
 USE_I18N = True
 
@@ -135,3 +135,7 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 AUTH_USER_MODEL = 'usuarios.Usuario'
+
+LOGIN_URL = 'login'
+LOGIN_REDIRECT_URL = 'gestion:dashboard'
+LOGOUT_REDIRECT_URL = '/'

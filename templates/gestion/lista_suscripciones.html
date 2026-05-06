@@ -1,32 +1,55 @@
 {% extends 'gestion/base.html' %}
 
 {% block content %}
-<h2>Suscripciones</h2>
-<a href="{% url 'gestion:crear_suscripcion' %}">Crear suscripción</a>
-<table border="1">
-    <tr>
-        <th>ID</th>
-        <th>Alumno</th>
-        <th>Plan</th>
-        <th>Inicio</th>
-        <th>Vencimiento</th>
-        <th>Estado</th>
-        <th>Acciones</th>
-    </tr>
-    {% for suscripcion in suscripciones %}
-    <tr>
-        <td>{{ suscripcion.id }}</td>
-        <td>{{ suscripcion.alumno }}</td>
-        <td>{{ suscripcion.plan.nombre }}</td>
-        <td>{{ suscripcion.fecha_inicio }}</td>
-        <td>{{ suscripcion.fecha_vencimiento }}</td>
-        <td>{{ suscripcion.estado }}</td>
-        <td>
-            <a href="{% url 'gestion:editar_suscripcion' suscripcion.id %}">Editar</a>
-            |
-            <a href="{% url 'gestion:eliminar_suscripcion' suscripcion.id %}">Eliminar</a>
-        </td>
-    </tr>
-    {% endfor %}
-</table>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+
+    <h2 class="mb-0">
+        Suscripciones
+    </h2>
+
+    <a href="{% url 'gestion:crear_suscripcion' %}"
+       class="btn btn-outline-light btn-sm">
+
+        <i class="fa-solid fa-plus"></i>
+        Nueva suscripción
+
+    </a>
+
+</div>
+
+<div class="table-responsive">
+
+    <table class="table table-dark table-hover table-dark-custom">
+
+        <tr>
+            <th>ID</th>
+            <th>Alumno</th>
+            <th>Plan</th>
+            <th>Inicio</th>
+            <th>Vencimiento</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+        </tr>
+        {% for suscripcion in suscripciones %}
+        <tr>
+            <td>{{ suscripcion.id }}</td>
+            <td>{{ suscripcion.alumno }}</td>
+            <td>{{ suscripcion.plan.nombre }}</td>
+            <td>{{ suscripcion.fecha_inicio }}</td>
+            <td>{{ suscripcion.fecha_vencimiento }}</td>
+            <td>{{ suscripcion.estado }}</td>
+            <td>
+                <a href="{% url 'gestion:editar_suscripcion' suscripcion.id %}" class="btn btn-outline-warning btn-sm">
+                    <i class="fa-solid fa-pen"></i> Editar
+                </a>
+                |
+                <a href="{% url 'gestion:eliminar_suscripcion' suscripcion.id %}" class="btn btn-outline-danger btn-sm">
+                    <i class="fa-solid fa-trash"></i> Eliminar
+                </a>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
 {% endblock %}

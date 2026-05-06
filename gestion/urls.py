@@ -1,6 +1,11 @@
 from django.urls import path
+
+from alumnos import admin
+from config.urls import home_redirect
 from . import views
 from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import path, include
+from django.contrib.auth import views as auth_views
 
 app_name = 'gestion'
 
@@ -33,4 +38,18 @@ urlpatterns = [
          views.editar_suscripcion, name='editar_suscripcion'),
     path('suscripciones/<int:suscripcion_id>/eliminar/',
          views.eliminar_suscripcion, name='eliminar_suscripcion'),
+    path('horario/', views.horario_clases, name='horario_clases'),
+    path('horario/<int:clase_id>/confirmar/',
+         views.confirmar_asistencia, name='confirmar_asistencia'),
+    path('horario/crear/', views.crear_clase, name='crear_clase'),
+    path('horario/<int:clase_id>/editar/',
+         views.editar_clase, name='editar_clase'),
+
+    path('horario/confirmar-kiosko/', views.confirmar_asistencia_kiosko,
+         name='confirmar_asistencia_kiosko'),
+    path(
+        'horario/<int:clase_id>/asistentes/',
+        views.asistentes_clase,
+        name='asistentes_clase'
+    ),
 ]

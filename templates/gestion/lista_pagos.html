@@ -1,36 +1,58 @@
 {% extends 'gestion/base.html' %}
 
 {% block content %}
-<h2>Pagos</h2>
-<a href="{% url 'gestion:crear_pago' %}">Registrar pago</a>
-<table border="1">
-    <tr>
-        <th>ID</th>
-        <th>Alumno</th>
-        <th>Suscripción</th>
-        <th>Método</th>
-        <th>Valor</th>
-        <th>Estado</th>
-        <th>Fecha reporte</th>
-        <th>Acción</th>
-    </tr>
-    {% for pago in pagos %}
-    <tr>
-        <td>{{ pago.id }}</td>
-        <td>{{ pago.alumno }}</td>
-        <td>{{ pago.suscripcion }}</td>
-        <td>{{ pago.metodo_qr }}</td>
-        <td>{{ pago.valor }}</td>
-        <td>{{ pago.estado }}</td>
-        <td>{{ pago.fecha_reporte }}</td>
-        <td>
-            {% if pago.estado == 'PENDIENTE' %}
-            <a href="{% url 'gestion:validar_pago' pago.id %}">Validar</a>
-            {% else %}
-            Validado
-            {% endif %}
-        </td>
-    </tr>
-    {% endfor %}
-</table>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+
+    <h2 class="mb-0">
+        Pagos
+    </h2>
+
+    <a href="{% url 'gestion:crear_pago' %}"
+       class="btn btn-outline-light btn-sm">
+
+        <i class="fa-solid fa-plus"></i>
+        Registrar pago
+
+    </a>
+
+</div>
+
+<div class="table-responsive">
+
+    <table class="table table-dark table-hover table-dark-custom">
+
+        <tr>
+            <th>ID</th>
+            <th>Alumno</th>
+            <th>Suscripción</th>
+            <th>Método</th>
+            <th>Valor</th>
+            <th>Estado</th>
+            <th>Fecha reporte</th>
+            <th>Acción</th>
+        </tr>
+        {% for pago in pagos %}
+        <tr>
+            <td>{{ pago.id }}</td>
+            <td>{{ pago.alumno }}</td>
+            <td>{{ pago.suscripcion }}</td>
+            <td>{{ pago.metodo_qr }}</td>
+            <td>{{ pago.valor }}</td>
+            <td>{{ pago.estado }}</td>
+            <td>{{ pago.fecha_reporte }}</td>
+            <td>
+                {% if pago.estado == 'PENDIENTE' %}
+                <a href="{% url 'gestion:validar_pago' pago.id %}"
+                class="btn btn-outline-success btn-sm">
+                    <i class="fa-solid fa-check"></i>
+                </a>
+                {% else %}
+                Validado
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
 {% endblock %}
