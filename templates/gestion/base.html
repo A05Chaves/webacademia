@@ -119,71 +119,99 @@
 
 <body>
 
-    <nav class="navbar navbar-expand-lg navbar-dark navbar-custom">
-        <div class="container-fluid">
+<nav class="navbar navbar-expand-lg navbar-dark navbar-custom">
+    <div class="container-fluid">
 
-            <a class="navbar-brand" href="{% url 'gestion:horario_clases' %}">
-                <i class="fa-solid fa-dumbbell"></i> Academia
+        <a class="navbar-brand" href="{% url 'gestion:horario_clases' %}">
+            <i class="fa-solid fa-dumbbell"></i> Academia
+        </a>
+
+        <div class="collapse navbar-collapse">
+
+            <!-- IZQUIERDA -->
+          <ul class="navbar-nav">
+
+    <li class="nav-item me-2">
+        <a class="btn btn-outline-light btn-sm"
+           href="{% url 'gestion:horario_clases' %}">
+            <i class="fa-solid fa-house"></i> Home
+        </a>
+    </li>
+
+    {% if user.is_authenticated and user.is_staff %}
+
+        <li class="nav-item me-2">
+            <a class="btn btn-outline-light btn-sm"
+               href="{% url 'gestion:dashboard' %}">
+                <i class="fa-solid fa-chart-line"></i> Dashboard
             </a>
+        </li>
 
-            <div class="collapse navbar-collapse">
+        <li class="nav-item me-2">
+            <a class="btn btn-outline-light btn-sm"
+               href="{% url 'gestion:lista_alumnos' %}">
+                <i class="fa-solid fa-users"></i> Alumnos
+            </a>
+        </li>
 
-                <!-- IZQUIERDA -->
-                <ul class="navbar-nav">
+        <li class="nav-item me-2">
+            <a class="btn btn-outline-light btn-sm"
+               href="{% url 'gestion:lista_planes' %}">
+                <i class="fa-solid fa-layer-group"></i> Planes
+            </a>
+        </li>
 
-                    <li class="nav-item me-2">
-                        <a class="btn btn-outline-light btn-sm"
-                        href="{% url 'gestion:horario_clases' %}">
-                            <i class="fa-solid fa-house"></i> Home
+        <li class="nav-item me-2">
+            <a class="btn btn-outline-light btn-sm"
+               href="{% url 'gestion:lista_suscripciones' %}">
+                <i class="fa-solid fa-id-card"></i> Suscripciones
+            </a>
+        </li>
+
+        <li class="nav-item me-2">
+            <a class="btn btn-outline-light btn-sm"
+               href="{% url 'gestion:lista_pagos' %}">
+                <i class="fa-solid fa-money-bill"></i> Pagos
+            </a>
+        </li>
+
+    {% endif %}
+
+</ul>
+
+            <!-- DERECHA -->
+            <ul class="navbar-nav ms-auto">
+
+                {% if user.is_authenticated %}
+
+                    <li class="nav-item">
+                        <form action="{% url 'logout' %}" method="post">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-danger btn-sm">
+                                <i class="fa-solid fa-right-from-bracket"></i>
+                                Cerrar sesión
+                            </button>
+                        </form>
+                    </li>
+
+                {% else %}
+
+                    <li class="nav-item">
+                        <a class="btn btn-primary btn-sm"
+                           href="{% url 'login' %}">
+                            <i class="fa-solid fa-user-lock"></i>
+                            Iniciar sesión
                         </a>
                     </li>
 
-                    {% if user.is_authenticated and user.is_staff %}
+                {% endif %}
 
-                        <li class="nav-item me-2">
-                            <a class="btn btn-outline-light btn-sm"
-                            href="{% url 'gestion:dashboard' %}">
-                                <i class="fa-solid fa-chart-line"></i> Dashboard
-                            </a>
-                        </li>
-
-                        <li class="nav-item me-2">
-                            <a class="btn btn-outline-light btn-sm"
-                            href="{% url 'gestion:lista_alumnos' %}">
-                                <i class="fa-solid fa-users"></i> Alumnos
-                            </a>
-                        </li>
-
-                        <li class="nav-item me-2">
-                            <a class="btn btn-outline-light btn-sm"
-                            href="{% url 'gestion:lista_planes' %}">
-                                <i class="fa-solid fa-layer-group"></i> Planes
-                            </a>
-                        </li>
-
-                        <li class="nav-item me-2">
-                            <a class="btn btn-outline-light btn-sm"
-                            href="{% url 'gestion:lista_suscripciones' %}">
-                                <i class="fa-solid fa-id-card"></i> Suscripciones
-                            </a>
-                        </li>
-
-                        <li class="nav-item me-2">
-                            <a class="btn btn-outline-light btn-sm"
-                            href="{% url 'gestion:lista_pagos' %}">
-                                <i class="fa-solid fa-money-bill"></i> Pagos
-                            </a>
-                        </li>
-
-                    {% endif %}
-
-                </ul>
-
-            </div>
+            </ul>
 
         </div>
-    </nav>
 
+    </div>
+</nav>
     <div class="container-fluid main-container">
 
         {% if messages %}
