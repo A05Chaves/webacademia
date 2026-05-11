@@ -7,6 +7,8 @@ from planes.models import Plan, Suscripcion
 from pagos.models import Pago
 from pagos.models import MetodoPagoQR
 from clases.models import ClaseProgramada
+from finanzas.models import MovimientoFinanciero, PagoProgramado, CuentaFinanciera, CategoriaFinanciera
+
 
 Usuario = get_user_model()
 
@@ -73,6 +75,7 @@ class PlanForm(forms.ModelForm):
             'precio',
             'duracion_dias',
             'activo',
+            'tipo_acceso',
         ]
         widgets = {
             'nombre': forms.TextInput(attrs={'class': 'form-control'}),
@@ -83,6 +86,7 @@ class PlanForm(forms.ModelForm):
             'precio': forms.NumberInput(attrs={'class': 'form-control'}),
             'duracion_dias': forms.NumberInput(attrs={'class': 'form-control'}),
             'activo': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'tipo_acceso': forms.Select(attrs={'class': 'form-select'}),
         }
 
 
@@ -96,6 +100,7 @@ class SuscripcionForm(forms.ModelForm):
             'fecha_vencimiento',
             'estado',
             'observaciones',
+            'clases_asignadas',
         ]
 
         widgets = {
@@ -118,6 +123,7 @@ class SuscripcionForm(forms.ModelForm):
                 'class': 'form-control',
                 'rows': 3
             }),
+            'clases_asignadas': forms.CheckboxSelectMultiple(),
         }
 
 
@@ -132,11 +138,20 @@ class PagoForm(forms.ModelForm):
             'comprobante',
             'referencia_pago',
         ]
+        widgets = {
+            'alumno': forms.Select(attrs={'class': 'form-select'}),
+            'suscripcion': forms.Select(attrs={'class': 'form-select'}),
+            'metodo_qr': forms.Select(attrs={'class': 'form-select'}),
+            'valor': forms.NumberInput(attrs={'class': 'form-control'}),
+            'comprobante': forms.ClearableFileInput(attrs={'class': 'form-control'}),
+            'referencia_pago': forms.TextInput(attrs={'class': 'form-control'}),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['metodo_qr'].queryset = MetodoPagoQR.objects.filter(
-            activo=True)
+            activo=True
+        )
 
     def clean(self):
         cleaned_data = super().clean()
@@ -188,3 +203,154 @@ class ClaseProgramadaForm(forms.ModelForm):
             'hora_inicio': forms.TimeInput(attrs={'type': 'time'}),
             'hora_fin': forms.TimeInput(attrs={'type': 'time'}),
         }
+
+
+# FORMULARIO DE PAGO POR ESTUDIANTE
+
+class PagoAlumnoForm(forms.ModelForm):
+    class Meta:
+        model = Pago
+        fields = [
+            'metodo_qr',
+            'valor',
+            'comprobante',
+            'referencia_pago',
+        ]
+
+        widgets = {
+            'metodo_qr': forms.Select(attrs={'class': 'form-select'}),
+            'valor': forms.NumberInput(attrs={'class': 'form-control'}),
+            'comprobante': forms.ClearableFileInput(attrs={'class': 'form-control'}),
+            'referencia_pago': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.fields['metodo_qr'].queryset = MetodoPagoQR.objects.filter(
+            activo=True
+        )
+
+# FORMULARIO DE GASTOS
+
+
+class GastoForm(forms.ModelForm):
+    class Meta:
+        model = MovimientoFinanciero
+        fields = [
+            'cuenta',
+            'categoria',
+            'concepto',
+            'valor',
+            'fecha',
+            'observaciones',
+        ]
+
+        widgets = {
+            'cuenta': forms.Select(attrs={'class': 'form-select'}),
+            'concepto': forms.TextInput(attrs={'class': 'form-control'}),
+            'valor': forms.NumberInput(attrs={'class': 'form-control'}),
+            'categoria': forms.Select(attrs={'class': 'form-select'}),
+            'fecha': forms.DateTimeInput(attrs={
+                'type': 'datetime-local',
+                'class': 'form-control'
+            }),
+            'observaciones': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3
+            }),
+
+        }
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+
+            self.fields['categoria'].queryset = CategoriaFinanciera.objects.filter(
+                activa=True
+            ).filter(
+                tipo__in=['EGRESO', 'AMBOS']
+            )
+
+# PAGOS PROGRAMADOS
+
+
+class PagoProgramadoForm(forms.ModelForm):
+    class Meta:
+        model = PagoProgramado
+        fields = [
+            'concepto',
+            'valor',
+            'fecha_vencimiento',
+            'cuenta_pago',
+            'observaciones',
+        ]
+
+        widgets = {
+            'concepto': forms.TextInput(attrs={'class': 'form-control'}),
+            'valor': forms.NumberInput(attrs={'class': 'form-control'}),
+            'fecha_vencimiento': forms.DateInput(attrs={
+                'type': 'date',
+                'class': 'form-control'
+            }),
+            'cuenta_pago': forms.Select(attrs={'class': 'form-select'}),
+            'observaciones': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3
+            }),
+        }
+
+# TRANSFERENCAS ENTRE CUENTAS
+
+
+class TransferenciaForm(forms.Form):
+    cuenta_origen = forms.ModelChoiceField(
+        queryset=CuentaFinanciera.objects.filter(activa=True),
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        label='Cuenta origen'
+    )
+
+    cuenta_destino = forms.ModelChoiceField(
+        queryset=CuentaFinanciera.objects.filter(activa=True),
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        label='Cuenta destino'
+    )
+
+    valor = forms.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        widget=forms.NumberInput(attrs={'class': 'form-control'}),
+        label='Valor'
+    )
+
+    concepto = forms.CharField(
+        max_length=200,
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+        label='Concepto'
+    )
+
+    observaciones = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 3
+        }),
+        label='Observaciones'
+    )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        origen = cleaned_data.get('cuenta_origen')
+        destino = cleaned_data.get('cuenta_destino')
+        valor = cleaned_data.get('valor')
+
+        if origen and destino and origen == destino:
+            raise forms.ValidationError(
+                'La cuenta origen y destino no pueden ser la misma.'
+            )
+
+        if origen and valor and valor > origen.saldo_actual:
+            raise forms.ValidationError(
+                'La cuenta origen no tiene saldo suficiente.'
+            )
+
+        return cleaned_data

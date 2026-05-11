@@ -1,0 +1,112 @@
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-5 px-2">
+    <h2 class="mb-0">
+        <i class="fa-solid fa-id-card-clip"></i>
+        Editar suscripción
+    </h2>
+
+    <a href="{% url 'gestion:lista_suscripciones' %}"
+       class="btn btn-outline-light btn-sm">
+        <i class="fa-solid fa-arrow-left"></i>
+        Volver
+    </a>
+</div>
+
+<div class="card bg-dark text-light border-secondary mb-4">
+    <div class="card-body">
+        <h5 class="mb-3">
+            <i class="fa-solid fa-circle-info"></i>
+            Información actual
+        </h5>
+
+        <p><strong>Alumno:</strong> {{ suscripcion.alumno }}</p>
+        <p><strong>Plan:</strong> {{ suscripcion.plan.nombre }}</p>
+        <p><strong>Estado:</strong> {{ suscripcion.estado }}</p>
+        <p><strong>Vencimiento:</strong> {{ suscripcion.fecha_vencimiento }}</p>
+    </div>
+</div>
+
+<div class="card bg-dark text-light border-secondary">
+    <div class="card-body">
+
+        <form method="post">
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger">
+                    {{ form.non_field_errors }}
+                </div>
+            {% endif %}
+
+            <div class="row">
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Alumno</label>
+                    {{ form.alumno }}
+                    {{ form.alumno.errors }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Plan</label>
+                    {{ form.plan }}
+                    {{ form.plan.errors }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Fecha inicio</label>
+                    {{ form.fecha_inicio }}
+                    {{ form.fecha_inicio.errors }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Fecha vencimiento</label>
+                    {{ form.fecha_vencimiento }}
+                    {{ form.fecha_vencimiento.errors }}
+                </div>
+
+                {% if form.estado %}
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Estado</label>
+                    {{ form.estado }}
+                    {{ form.estado.errors }}
+                </div>
+                {% endif %}
+
+                <div class="col-md-12 mb-3">
+                    <label class="form-label">Clases asignadas</label>
+                    <div class="p-3 rounded border border-secondary">
+                        {{ form.clases_asignadas }}
+                    </div>
+                    {{ form.clases_asignadas.errors }}
+                </div>
+
+                <div class="col-md-12 mb-3">
+                    <label class="form-label">Observaciones</label>
+                    {{ form.observaciones }}
+                    {{ form.observaciones.errors }}
+                </div>
+
+            </div>
+
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <a href="{% url 'gestion:lista_suscripciones' %}"
+                   class="btn btn-outline-light">
+                    <i class="fa-solid fa-xmark"></i>
+                    Cancelar
+                </a>
+
+                <button type="submit" class="btn btn-success">
+                    <i class="fa-solid fa-check"></i>
+                    Guardar cambios
+                </button>
+            </div>
+
+        </form>
+
+    </div>
+</div>
+
+{% endblock %}

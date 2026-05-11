@@ -59,6 +59,9 @@
                     <span class="badge-proximo">
                         PRÓXIMO A VENCER
                     </span>
+                
+                {% elif alumno.estado == 'PENDIENTE' %}
+                    <span class="badge bg-secondary">PENDIENTE</span>
 
                 {% else %}
                     {{ alumno.estado }}

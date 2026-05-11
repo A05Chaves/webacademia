@@ -52,4 +52,32 @@ urlpatterns = [
         views.asistentes_clase,
         name='asistentes_clase'
     ),
+    path('pagos/alumno/registrar/', views.registrar_pago_alumno,
+         name='registrar_pago_alumno'),
+    path(
+        'alumnos/<int:alumno_id>/reset-password/',
+        views.reset_password_alumno,
+        name='reset_password_alumno'
+    ),
+    path('finanzas/gasto/crear/', views.registrar_gasto, name='registrar_gasto'),
+    path(
+        'finanzas/pago-programado/crear/',
+        views.crear_pago_programado,
+        name='crear_pago_programado'
+    ),
+    path(
+        'finanzas/pago-programado/<int:pago_id>/pagar/',
+        views.pagar_pago_programado,
+        name='pagar_pago_programado'
+    ),
+    path(
+        'finanzas/detalle/',
+        views.detalle_financiero,
+        name='detalle_financiero'
+    ),
+    path(
+        'finanzas/transferencia/crear/',
+        views.registrar_transferencia,
+        name='registrar_transferencia'
+    ),
 ]

@@ -1,0 +1,230 @@
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+
+<<div class="d-flex justify-content-between align-items-center mb-5 px-2">
+    <h2 class="mb-0">
+        <i class="fa-solid fa-user-pen"></i>
+        Editar alumno
+    </h2>
+
+    <a href="{% url 'gestion:lista_alumnos' %}" class="btn btn-outline-light btn-sm">
+        <i class="fa-solid fa-arrow-left"></i>
+        Volver
+    </a>
+    <a href="{% url 'gestion:reset_password_alumno' alumno.id %}"
+                    class="btn btn-warning">
+
+                        <i class="fa-solid fa-key"></i>
+                        Restablecer contraseña
+
+                </a>
+</div>
+
+<div class="card bg-dark text-light border-secondary mb-4">
+    <div class="card-body">
+
+        <h5 class="mb-3">
+            <i class="fa-solid fa-circle-info"></i>
+            Información del alumno
+        </h5>
+
+        <div class="row g-3">
+
+            <div class="col-md-4">
+                <div class="p-3 border border-secondary rounded h-100">
+                    <small class="text-secondary">Nombre</small>
+                    <div>{{ alumno.user.get_full_name|default:alumno.user.username }}</div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="p-3 border border-secondary rounded h-100">
+                    <small class="text-secondary">Documento</small>
+                    <div>{{ alumno.documento }}</div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="p-3 border border-secondary rounded h-100">
+                    <small class="text-secondary">Plan actual</small>
+                    <div>
+                        {% if alumno.suscripcion_actual %}
+                            {{ alumno.suscripcion_actual.plan.nombre }}
+                        {% else %}
+                            Sin plan
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="p-3 border border-secondary rounded h-100">
+                    <small class="text-secondary">Vencimiento</small>
+                    <div>{{ alumno.fecha_vencimiento_actual|default:"Sin suscripción" }}</div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="p-3 border border-secondary rounded h-100">
+                    <small class="text-secondary">Estado financiero</small>
+                    <div>
+                        {% if alumno.dias_vencido > 0 %}
+                            <span class="badge bg-danger">Mora: {{ alumno.dias_vencido }} días</span>
+                        {% elif alumno.dias_para_vencer <= 10 %}
+                            <span class="badge bg-warning text-dark">Próximo: {{ alumno.dias_para_vencer }} días</span>
+                        {% else %}
+                            <span class="badge bg-success">Al día</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="p-3 border border-secondary rounded h-100">
+                    <small class="text-secondary">Mensualidades pendientes</small>
+                    <div>{{ alumno.mensualidades_pendientes }}</div>
+                </div>
+            </div>
+
+        </div>
+
+        <hr class="border-secondary">
+
+        <h6 class="mb-3">
+            <i class="fa-solid fa-calendar-days"></i>
+            Horarios asignados
+        </h6>
+
+        {% if alumno.suscripcion_actual and alumno.suscripcion_actual.plan.tipo_acceso == 'TODAS_LAS_CLASES' %}
+
+            <span class="badge bg-info text-dark">
+                Acceso a todas las clases
+            </span>
+
+        {% elif alumno.suscripcion_actual %}
+
+            <div class="row g-2">
+
+                {% for clase in alumno.suscripcion_actual.clases_asignadas.all %}
+                    <div class="col-md-4">
+                        <div class="p-2 border border-secondary rounded">
+                            <strong>{{ clase.get_dia_display }}</strong><br>
+                            {{ clase.get_disciplina_display }}<br>
+                            <small>
+                                {{ clase.hora_inicio }} - {{ clase.hora_fin }}
+                            </small>
+                        </div>
+                    </div>
+                {% empty %}
+                    <div class="col-12">
+                        <span class="text-warning">
+                            Sin clases asignadas.
+                        </span>
+                    </div>
+                {% endfor %}
+
+            </div>
+
+        {% else %}
+
+            <span class="text-warning">
+                Sin horarios asignados.
+            </span>
+
+        {% endif %}
+
+    </div>
+</div>
+
+<div class="card bg-dark text-light border-secondary">
+    <div class="card-body">
+
+        <h5 class="mb-4">
+            <i class="fa-solid fa-pen-to-square"></i>
+            Datos editables
+        </h5>
+
+        <form method="post">
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger">
+                    {{ form.non_field_errors }}
+                </div>
+            {% endif %}
+
+            <div class="row">
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Documento</label>
+                    {{ form.documento }}
+                    {{ form.documento.errors }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Fecha de nacimiento</label>
+                    {{ form.fecha_nacimiento }}
+                    {{ form.fecha_nacimiento.errors }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Dirección</label>
+                    {{ form.direccion }}
+                    {{ form.direccion.errors }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Disciplina</label>
+                    {{ form.disciplina }}
+                    {{ form.disciplina.errors }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Grado</label>
+                    {{ form.grado }}
+                    {{ form.grado.errors }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Estado</label>
+                    {{ form.estado }}
+                    {{ form.estado.errors }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Nombre acudiente</label>
+                    {{ form.nombre_acudiente }}
+                    {{ form.nombre_acudiente.errors }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Teléfono acudiente</label>
+                    {{ form.telefono_acudiente }}
+                    {{ form.telefono_acudiente.errors }}
+                </div>
+                
+            </div>
+            
+
+
+            <div class="d-flex justify-content-end gap-2 mt-4">
+
+                <a href="{% url 'gestion:lista_alumnos' %}" class="btn btn-outline-light">
+                    <i class="fa-solid fa-xmark"></i>
+                    Cancelar
+                </a>
+
+                <button type="submit" class="btn btn-success">
+                    <i class="fa-solid fa-check"></i>
+                    Guardar cambios
+                </button>
+
+            </div>
+
+        </form>
+
+    </div>
+</div>
+
+{% endblock %}

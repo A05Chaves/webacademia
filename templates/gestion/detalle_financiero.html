@@ -1,0 +1,252 @@
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-5 px-2">
+    <h2 class="mb-0">
+        <i class="fa-solid fa-file-invoice-dollar"></i>
+        Detalle financiero
+    </h2>
+
+    <a href="{% url 'gestion:dashboard' %}"
+       class="btn btn-outline-light btn-sm">
+        <i class="fa-solid fa-arrow-left"></i>
+        Volver
+    </a>
+</div>
+
+<div class="card bg-dark text-light border-secondary mb-4">
+    <div class="card-body">
+
+        <form method="get" class="row g-3 align-items-end">
+
+            <div class="col-md-3">
+                <label class="form-label">Mes</label>
+                <select name="mes" class="form-select">
+                    <option value="1" {% if mes == 1 %}selected{% endif %}>Enero</option>
+                    <option value="2" {% if mes == 2 %}selected{% endif %}>Febrero</option>
+                    <option value="3" {% if mes == 3 %}selected{% endif %}>Marzo</option>
+                    <option value="4" {% if mes == 4 %}selected{% endif %}>Abril</option>
+                    <option value="5" {% if mes == 5 %}selected{% endif %}>Mayo</option>
+                    <option value="6" {% if mes == 6 %}selected{% endif %}>Junio</option>
+                    <option value="7" {% if mes == 7 %}selected{% endif %}>Julio</option>
+                    <option value="8" {% if mes == 8 %}selected{% endif %}>Agosto</option>
+                    <option value="9" {% if mes == 9 %}selected{% endif %}>Septiembre</option>
+                    <option value="10" {% if mes == 10 %}selected{% endif %}>Octubre</option>
+                    <option value="11" {% if mes == 11 %}selected{% endif %}>Noviembre</option>
+                    <option value="12" {% if mes == 12 %}selected{% endif %}>Diciembre</option>
+                </select>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Año</label>
+                <input type="number"
+                       name="anio"
+                       value="{{ anio }}"
+                       class="form-control">
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Tipo</label>
+                <select name="tipo" class="form-select">
+                    <option value="" {% if not tipo %}selected{% endif %}>Todos</option>
+                    <option value="INGRESO" {% if tipo == 'INGRESO' %}selected{% endif %}>Ingresos</option>
+                    <option value="EGRESO" {% if tipo == 'EGRESO' %}selected{% endif %}>Gastos</option>
+                </select>
+            </div>
+
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-outline-light w-100">
+                    <i class="fa-solid fa-filter"></i>
+                    Filtrar
+                </button>
+            </div>
+
+        </form>
+
+    </div>
+</div>
+
+<div class="row mb-4">
+
+    <div class="col-md-4 mb-3">
+        <div class="card bg-dark text-light border-success">
+            <div class="card-body">
+                <h6>Total ingresos</h6>
+                <h3>${{ total_ingresos }}</h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-3">
+        <div class="card bg-dark text-light border-danger">
+            <div class="card-body">
+                <h6>Total gastos</h6>
+                <h3>${{ total_egresos }}</h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-3">
+        <div class="card bg-dark text-light border-warning">
+            <div class="card-body">
+                <h6>Resultado del mes</h6>
+                <h3>${{ saldo_mes }}</h3>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div class="row mb-4">
+
+    <div class="col-md-8 mb-3">
+        <div class="card bg-dark text-light border-secondary h-100">
+            <div class="card-body">
+
+                <h5 class="mb-4">
+                    <i class="fa-solid fa-chart-line"></i>
+                    Tendencia financiera anual
+                </h5>
+
+                <div style="height:350px;">
+                    <canvas id="graficoFinanciero"></canvas>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-3">
+        <div class="card bg-dark text-light border-secondary h-100">
+            <div class="card-body">
+
+                <h5 class="mb-4">
+                    <i class="fa-solid fa-chart-pie"></i>
+                    Gastos por categoría
+                </h5>
+
+                <div style="height:350px;">
+                    <canvas id="graficoGastosCategoria"></canvas>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div class="card bg-dark text-light border-secondary">
+    <div class="card-body">
+
+        <h5 class="mb-4">
+            <i class="fa-solid fa-list"></i>
+            Movimientos
+        </h5>
+
+        <div class="table-responsive">
+            <table class="table table-dark table-hover table-dark-custom">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Tipo</th>
+                        <th>Cuenta</th>
+                        <th>Concepto</th>
+                        <th>Valor</th>
+                        <th>Origen</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for movimiento in movimientos %}
+                    <tr>
+                        <td>{{ movimiento.fecha|date:"d/m/Y H:i" }}</td>
+
+                        <td>
+                            {% if movimiento.tipo == 'INGRESO' %}
+                                <span class="badge bg-success">INGRESO</span>
+                            {% elif movimiento.tipo == 'EGRESO' %}
+                                <span class="badge bg-danger">GASTO</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ movimiento.tipo }}</span>
+                            {% endif %}
+                        </td>
+
+                        <td>{{ movimiento.cuenta }}</td>
+                        <td>{{ movimiento.concepto }}</td>
+                        <td>${{ movimiento.valor }}</td>
+
+                        <td>
+                            {% if movimiento.pago %}
+                                Pago alumno #{{ movimiento.pago.id }}
+                            {% else %}
+                                Manual
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center">
+                            No hay movimientos para este filtro.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+
+            </table>
+        </div>
+
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+const ctxFinanciero = document.getElementById('graficoFinanciero');
+
+new Chart(ctxFinanciero, {
+    type: 'line',
+    data: {
+        labels: [
+            'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+            'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
+        ],
+        datasets: [
+            {
+                label: 'Ingresos',
+                data: {{ ingresos_por_mes|safe }},
+                tension: 0.3,
+                fill: false
+            },
+            {
+                label: 'Gastos',
+                data: {{ egresos_por_mes|safe }},
+                tension: 0.3,
+                fill: false
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false
+    }
+});
+
+const ctxGastosCategoria = document.getElementById('graficoGastosCategoria');
+
+new Chart(ctxGastosCategoria, {
+    type: 'doughnut',
+    data: {
+        labels: {{ labels_gastos_categoria|safe }},
+        datasets: [{
+            data: {{ datos_gastos_categoria|safe }}
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false
+    }
+});
+</script>
+
+{% endblock %}

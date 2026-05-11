@@ -11,119 +11,305 @@
 
     <style>
 
-        body {
-            background-color: #121212;
-            color: #f1f1f1;
-            min-height: 100vh;
-        }
+:root {
 
-        .navbar-custom {
-            background-color: #1f1f1f;
-            border-bottom: 2px solid #333;
-        }
+    --bg-main: #121212;
+    --bg-card: #1e1e1e;
+    --bg-navbar: #1f1f1f;
 
-        .navbar-brand {
-            font-weight: bold;
-            color: #fff !important;
-        }
+    --text-main: #f1f1f1;
+    --text-secondary: #bdbdbd;
 
-        .nav-link {
-            color: #ccc !important;
-            transition: 0.2s ease;
-        }
+    --border-color: #333;
 
-        .nav-link:hover {
-            color: #fff !important;
-        }
+    --btn-border: #f8f9fa;
+    --btn-text: #f8f9fa;
 
-        .main-container {
-            padding: 25px;
-        }
+}
 
-        .card-custom {
-            background-color: #1e1e1e;
-            border: 1px solid #333;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
+body[data-theme="light"] {
 
-        .btn-custom {
-            background-color: #2d6cdf;
-            color: white;
-            border: none;
-        }
+    --bg-main: #A5B4C2;
 
-        .btn-custom:hover {
-            background-color: #1f57ba;
-        }
+    --bg-card: rgba(255, 255, 255, 0.55);
 
-        .messages-container p {
-            padding: 10px;
-            border-radius: 6px;
-            background-color: #222;
-            border-left: 4px solid #2d6cdf;
-        }
+    --bg-navbar: rgba(255, 255, 255, 0.75);
 
-       
+    --text-main: #1b1b1b;
 
-        table {
-            width: 100%;
-        }
+    --text-secondary: #3f3f3f;
 
-        .table-dark-custom {
-            background-color: #1e1e1e;
-            color: #f1f1f1;
-            border-radius: 10px;
-            overflow: hidden;
-        }
+    --border-color: rgba(0,0,0,.15);
 
-        .table-dark-custom thead {
-            background-color: #2b2b2b;
-        }
+    --btn-border: #1b1b1b;
 
-        .table-dark-custom th,
-        .table-dark-custom td {
-            vertical-align: middle;
-            border-color: #333;
-        }
+    --btn-text: #1b1b1b;
 
-        .table-dark-custom tbody tr:hover {
-            background-color: #2a2a2a;
-        }
+}
 
-        .badge-activo {
-            background-color: #198754;
-            padding: 6px 10px;
-            border-radius: 20px;
-        }
+body {
 
-        .badge-vencido {
-            background-color: #dc3545;
-            padding: 6px 10px;
-            border-radius: 20px;
-        }
+    background-color: var(--bg-main);
+    color: var(--text-main);
 
-        .badge-proximo {
-            background-color: #ffc107;
-            color: black;
-            padding: 6px 10px;
-            border-radius: 20px;
-        }
+    min-height: 100vh;
 
-    </style>
+    transition: .2s ease;
+
+}
+
+.navbar-custom {
+
+    background-color: var(--bg-navbar) !important;
+
+    border-bottom: 1px solid var(--border-color);
+
+}
+
+.navbar-brand {
+
+    font-weight: bold;
+
+    color: var(--text-main) !important;
+
+}
+
+.main-container {
+
+    padding: 40px 35px 35px 35px;
+
+}
+
+.card,
+.card-custom,
+.bg-dark,
+.table-dark-custom,
+.table-dark {
+
+    background-color: var(--bg-card) !important;
+
+    color: var(--text-main) !important;
+
+    border-color: var(--border-color) !important;
+
+    padding-top: 30px;
+
+}
+
+body[data-theme="light"] .card,
+body[data-theme="light"] .card-custom {
+
+    backdrop-filter: blur(8px);
+
+    box-shadow: 0 4px 20px rgba(0,0,0,.08);
+
+}
+
+.text-secondary {
+
+    color: var(--text-secondary) !important;
+
+}
+
+.border-secondary {
+
+    border-color: var(--border-color) !important;
+
+}
+
+.btn-outline-light {
+
+    color: var(--btn-text) !important;
+
+    border-color: var(--btn-border) !important;
+
+}
+
+.btn-outline-light:hover {
+
+    background-color: var(--btn-text) !important;
+
+    color: var(--bg-card) !important;
+
+}
+
+.messages-container p {
+
+    padding: 10px;
+
+    border-radius: 6px;
+
+    background-color: var(--bg-card);
+
+    border-left: 4px solid #2d6cdf;
+
+}
+
+table {
+
+    width: 100%;
+
+}
+
+.table,
+.table-dark {
+
+    --bs-table-bg: var(--bg-card);
+
+    --bs-table-color: var(--text-main);
+
+    --bs-table-border-color: var(--border-color);
+
+    --bs-table-hover-bg: rgba(120,120,120,.15);
+
+    color: var(--text-main) !important;
+
+}
+
+.table-dark-custom {
+
+    background-color: var(--bg-card);
+
+    color: var(--text-main);
+
+    border-radius: 22px;
+
+    overflow: hidden;
+
+    overflow: hidden;
+
+}
+
+.table-dark-custom thead {
+
+    background-color: rgba(255,255,255,.05);
+
+}
+
+.table-dark-custom th,
+.table-dark-custom td {
+
+    vertical-align: middle;
+
+    border-color: var(--border-color);
+
+}
+
+.table-dark-custom tbody tr:hover {
+
+    background-color: rgba(120,120,120,.1);
+
+}
+
+.badge-activo {
+
+    background-color: #198754;
+
+    padding: 6px 10px;
+
+    border-radius: 20px;
+
+}
+
+.badge-vencido {
+
+    background-color: #dc3545;
+
+    padding: 6px 10px;
+
+    border-radius: 20px;
+
+}
+
+.badge-proximo {
+
+    background-color: #ffc107;
+
+    color: black;
+
+    padding: 6px 10px;
+
+    border-radius: 20px;
+
+}
+
+body[data-theme="light"] .btn-outline-light {
+
+    color: #1b1b1b !important;
+
+    border-color: #1b1b1b !important;
+
+    background-color: rgba(255,255,255,.35);
+
+}
+
+body[data-theme="light"] .btn-outline-light:hover {
+
+    background-color: #1b1b1b !important;
+
+    color: white !important;
+
+}
+
+body[data-theme="light"] .btn-primary {
+
+    background-color: #5f7387 !important;
+
+    border-color: #5f7387 !important;
+
+}
+
+body[data-theme="light"] .btn-success {
+
+    background-color: #4d7c5a !important;
+
+    border-color: #4d7c5a !important;
+
+}
+
+.card,
+.card-custom {
+
+    border-radius: 22px !important;
+
+    overflow: hidden;
+
+    box-shadow:
+        0 4px 20px rgba(0,0,0,.08);
+
+    padding-top: 30px;
+
+}
+
+.card-body {
+
+    padding: 30px !important;
+
+}
+
+form {
+
+    padding-left: 10px;
+
+    padding-right: 10px;
+
+}
+
+</style>
+
+   
 
   
 
 </head>
 
-<body>
+<body id="bodyApp" data-theme="dark">
 
 <nav class="navbar navbar-expand-lg navbar-dark navbar-custom">
     <div class="container-fluid">
 
         <a class="navbar-brand" href="{% url 'gestion:horario_clases' %}">
-            <i class="fa-solid fa-dumbbell"></i> Academia
+            <i class="fa-solid fa-user-ninja"></i> Academia
         </a>
 
         <div class="collapse navbar-collapse">
@@ -181,7 +367,16 @@
 
             <!-- DERECHA -->
             <ul class="navbar-nav ms-auto">
+                <li class="nav-item me-2">
 
+                    <button onclick="toggleTheme()"
+                            class="btn btn-outline-light btn-sm">
+
+                        <i class="fa-solid fa-circle-half-stroke"></i>
+
+                    </button>
+
+                </li>
                 {% if user.is_authenticated %}
 
                     <li class="nav-item">
@@ -233,6 +428,44 @@
         </div>
 
     </div>
+
+<script>
+
+function toggleTheme() {
+
+    const body = document.getElementById('bodyApp');
+
+    const currentTheme = body.getAttribute('data-theme');
+
+    if (currentTheme === 'dark') {
+
+        body.setAttribute('data-theme', 'light');
+        localStorage.setItem('theme', 'light');
+
+    } else {
+
+        body.setAttribute('data-theme', 'dark');
+        localStorage.setItem('theme', 'dark');
+
+    }
+
+}
+
+window.onload = () => {
+
+    const savedTheme = localStorage.getItem('theme');
+
+    if (savedTheme) {
+
+        document
+            .getElementById('bodyApp')
+            .setAttribute('data-theme', savedTheme);
+
+    }
+
+}
+
+</script>
 
 </body>
 

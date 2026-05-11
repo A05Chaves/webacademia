@@ -1,0 +1,108 @@
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-5 px-2">
+    <h2 class="mb-0">
+        <i class="fa-solid fa-arrow-trend-down"></i>
+        Registrar gasto
+    </h2>
+
+    <a href="{% url 'gestion:dashboard' %}"
+       class="btn btn-outline-light btn-sm">
+        <i class="fa-solid fa-arrow-left"></i>
+        Volver
+    </a>
+</div>
+
+<div class="card bg-dark text-light border-secondary">
+    <div class="card-body">
+
+        <form method="post">
+            {% csrf_token %}
+
+            <div class="row">
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Cuenta de salida</label>
+                    {{ form.cuenta }}
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Categoría</label>
+                        {{ form.categoria }}
+                    </div>
+                   
+                </div>
+
+                <div id="saldoCuenta" class="alert alert-info mt-2" style="display:none;">
+                    Saldo disponible: <strong id="valorSaldo"></strong>
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Valor</label>
+                    {{ form.valor }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Fecha</label>
+                    {{ form.fecha }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Concepto</label>
+                    {{ form.concepto }}
+                </div>
+
+                <div class="col-md-12 mb-3">
+                    <label class="form-label">Observaciones</label>
+                    {{ form.observaciones }}
+                </div>
+
+            </div>
+
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <a href="{% url 'gestion:dashboard' %}"
+                   class="btn btn-outline-light">
+                    <i class="fa-solid fa-xmark"></i>
+                    Cancelar
+                </a>
+
+                <button type="submit"
+                        class="btn btn-danger">
+                    <i class="fa-solid fa-save"></i>
+                    Registrar gasto
+                </button>
+            </div>
+
+        </form>
+
+    </div>
+</div>
+
+<script>
+const saldos = {
+    {% for cuenta in cuentas %}
+        "{{ cuenta.id }}": "{{ cuenta.saldo_actual }}",
+    {% endfor %}
+};
+
+const cuentaSelect = document.getElementById("id_cuenta");
+const saldoDiv = document.getElementById("saldoCuenta");
+const valorSaldo = document.getElementById("valorSaldo");
+
+function mostrarSaldoCuenta() {
+    const cuentaId = cuentaSelect.value;
+
+    if (saldos[cuentaId]) {
+        saldoDiv.style.display = "block";
+        valorSaldo.innerText = "$" + saldos[cuentaId];
+    } else {
+        saldoDiv.style.display = "none";
+        valorSaldo.innerText = "";
+    }
+}
+
+cuentaSelect.addEventListener("change", mostrarSaldoCuenta);
+mostrarSaldoCuenta();
+</script>
+
+{% endblock %}

@@ -50,6 +50,8 @@ INSTALLED_APPS = [
     'gestion',
     'instructores',
     'clases',
+    'cortesias',
+    'finanzas',
 ]
 
 MIDDLEWARE = [
@@ -139,3 +141,17 @@ AUTH_USER_MODEL = 'usuarios.Usuario'
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'gestion:dashboard'
 LOGOUT_REDIRECT_URL = '/'
+
+"""
+## CONFIGURACINO DE CORREO
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'tu_correo@gmail.com'
+EMAIL_HOST_PASSWORD = 'clave_de_aplicacion'
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
+"""
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+DEFAULT_FROM_EMAIL = 'no-reply@academia.com'

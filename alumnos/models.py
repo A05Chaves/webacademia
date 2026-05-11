@@ -16,6 +16,7 @@ class Alumno(models.Model):
         PROXIMO_VENCER = 'PROXIMO_VENCER', 'Próximo a vencer'
         VENCIDO = 'VENCIDO', 'Vencido'
         SUSPENDIDO = 'SUSPENDIDO', 'Suspendido'
+        PENDIENTE = 'PENDIENTE', 'Pendiente'
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -80,6 +81,9 @@ class Alumno(models.Model):
         if not suscripcion:
             return 0
 
+        if suscripcion.estado == 'PENDIENTE_PAGO':
+            return 1
+
         dias = self.dias_vencido
 
         if dias <= 0:
@@ -97,6 +101,10 @@ class Alumno(models.Model):
 
         if not suscripcion:
             self.estado = self.Estados.SUSPENDIDO
+
+        elif suscripcion.estado == 'PENDIENTE_PAGO':
+            self.estado = self.Estados.PENDIENTE
+
         else:
             dias = self.dias_para_vencer
 

@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from finanzas.models import CuentaFinanciera
 
 
 class MetodoPagoQR(models.Model):
@@ -11,6 +12,13 @@ class MetodoPagoQR(models.Model):
     activo = models.BooleanField(default=True)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     actualizado = models.DateTimeField(auto_now=True)
+    cuenta_financiera = models.ForeignKey(
+        CuentaFinanciera,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='metodos_pago'
+    )
 
     class Meta:
         verbose_name = 'Método de pago QR'
@@ -67,11 +75,12 @@ class Pago(models.Model):
         ordering = ['-fecha_reporte']
 
     def clean(self):
-        if self.suscripcion and self.alumno:
+        if self.suscripcion_id and self.alumno_id:
             if self.suscripcion.alumno_id != self.alumno_id:
                 raise ValidationError({
                     'suscripcion': 'La suscripción seleccionada no pertenece al alumno indicado.'
                 })
+
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)

@@ -1,61 +1,378 @@
 {% extends 'gestion/base.html' %}
 
 {% block content %}
-<h2>Dashboard</h2>
 
-<ul>
-    <li>Total instructores activos: {{ total_instructores }}</li>
-    <li>Total alumnos: {{ total_alumnos }}</li>
-    <li>Total planes: {{ total_planes }}</li>
-    <li>Total suscripciones: {{ total_suscripciones }}</li>
-    <li>Total pagos: {{ total_pagos }}</li>
-</ul>
+<style>
 
-<hr>
+.chart-container {
 
-<h3>Pagos pendientes</h3>
-<ul>
-    {% for pago in pagos_pendientes %}
-    <li>
-        {{ pago.alumno }} - {{ pago.valor }} -
-        <a href="{% url 'gestion:validar_pago' pago.id %}">Validar</a>
-    </li>
-    {% empty %}
-    <li>No hay pagos pendientes.</li>
-    {% endfor %}
-</ul>
+    position: relative;
 
-<h3>Suscripciones próximas a vencer</h3>
-<ul>
-    {% for suscripcion in suscripciones_por_vencer %}
-    <li>
-        {{ suscripcion.alumno }} - {{ suscripcion.plan.nombre }} -
-        vence: {{ suscripcion.fecha_vencimiento }}
-    </li>
-    {% empty %}
-    <li>No hay suscripciones próximas a vencer.</li>
-    {% endfor %}
-</ul>
+    height: 280px;
 
-<h3>Alumnos vencidos</h3>
-<ul>
-    {% for alumno in alumnos_vencidos %}
-    <li>{{ alumno }} - {{ alumno.documento }}</li>
-    {% empty %}
-    <li>No hay alumnos vencidos.</li>
-    {% endfor %}
-</ul>
+    width: 100%;
 
-<h3>Últimas notificaciones</h3>
-<ul>
-    {% for notificacion in ultimas_notificaciones %}
-    <li>
-        {{ notificacion.usuario }} - {{ notificacion.titulo }} -
-        {{ notificacion.estado }}
-    </li>
-    {% empty %}
-    <li>No hay notificaciones registradas.</li>
-    {% endfor %}
-</ul>
+}
+
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-5 px-2">
+    <h2 class="mb-0">
+        <i class="fa-solid fa-chart-line"></i>
+        Dashboard
+    </h2>
+
+    <a href="{% url 'gestion:crear_clase' %}" class="btn btn-outline-light btn-sm">
+        <i class="fa-solid fa-plus"></i>
+        Agregar clase
+    </a>
+    <a href="{% url 'gestion:registrar_gasto' %}"
+        class="btn btn-outline-light btn-sm">
+            <i class="fa-solid fa-minus"></i>
+            Registrar gasto
+    </a>
+    <a href="{% url 'gestion:crear_pago_programado' %}"
+        class="btn btn-outline-light btn-sm">
+            <i class="fa-solid fa-calendar-plus"></i>
+            Pago programado
+    </a>
+
+    <a href="{% url 'gestion:detalle_financiero' %}"
+        class="btn btn-outline-light btn-sm">
+            <i class="fa-solid fa-file-invoice-dollar"></i>
+            Detalle financiero
+    </a>
+
+    <a href="{% url 'gestion:registrar_transferencia' %}"
+        class="btn btn-outline-light btn-sm">
+            <i class="fa-solid fa-right-left"></i>
+            Transferencia
+    </a>
+</div>
+ ,
+<div class="row mb-5">
+
+    <div class="col-md-3 mb-3">
+        <div class="card bg-dark text-light border-secondary">
+            <div class="card-body">
+                <h6>Alumnos</h6>
+                <h2>{{ total_alumnos }}</h2>
+                <small>Total registrados</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 mb-3">
+        <div class="card bg-dark text-light border-success">
+            <div class="card-body">
+                <h6>Activos</h6>
+                <h2>{{ alumnos_activos }}</h2>
+                <small>Al día</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 mb-3">
+        <div class="card bg-dark text-light border-warning">
+            <div class="card-body">
+                <h6>Próximos a vencer</h6>
+                <h2>{{ alumnos_proximos }}</h2>
+                <small>10 días o menos</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 mb-3">
+        <div class="card bg-dark text-light border-danger">
+            <div class="card-body">
+                <h6>Vencidos</h6>
+                <h2>{{ alumnos_vencidos_total }}</h2>
+                <small>Con mora</small>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div class="row mb-5">
+
+    <div class="col-md-6 mb-3">
+        <div class="card bg-dark text-light border-secondary">
+            <div class="card-header">
+                Estado de alumnos
+            </div>
+            <div class="card-body">
+                <div class="card-body">
+
+                    <div class="chart-container">
+                        <canvas id="graficoAlumnos"></canvas>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 mb-3">
+        <div class="card bg-dark text-light border-secondary">
+            <div class="card-header">
+                Estado de pagos
+            </div>
+            <div class="card-body">
+                <div class="card-body">
+
+                    <div class="chart-container">
+                        <canvas id="graficoPagos"></canvas>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div class="row">
+
+    <div class="col-md-6 mb-3">
+        <div class="card bg-dark text-light border-secondary">
+            <div class="card-header">
+                Pagos pendientes
+            </div>
+
+            <div class="card-body">
+                {% for pago in pagos_pendientes %}
+                    <div class="d-flex justify-content-between align-items-center border-bottom border-secondary py-2">
+                        <span>{{ pago.alumno }} - ${{ pago.valor }}</span>
+                        <a href="{% url 'gestion:validar_pago' pago.id %}" class="btn btn-outline-success btn-sm">
+                            Validar
+                        </a>
+                    </div>
+                {% empty %}
+                    <p>No hay pagos pendientes.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 mb-3">
+        <div class="card bg-dark text-light border-secondary">
+            <div class="card-header">
+                Suscripciones próximas a vencer
+            </div>
+
+            <div class="card-body">
+                {% for suscripcion in suscripciones_por_vencer %}
+                    <div class="border-bottom border-secondary py-2">
+                        <strong>{{ suscripcion.alumno }}</strong><br>
+                        {{ suscripcion.plan.nombre }} - vence: {{ suscripcion.fecha_vencimiento }}
+                    </div>
+                {% empty %}
+                    <p>No hay suscripciones próximas a vencer.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+<div class="row mb-4">
+
+    <div class="col-md-3 mb-3">
+        <div class="card bg-dark text-light border-success">
+            <div class="card-body">
+                <h6>Saldo total</h6>
+                <h2>${{ saldo_total }}</h2>
+                <small>Disponible en cuentas</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 mb-3">
+        <div class="card bg-dark text-light border-info">
+            <div class="card-body">
+                <h6>Ingresos del mes</h6>
+                <h2>${{ ingresos_mes }}</h2>
+                <small>Pagos aprobados y otros ingresos</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 mb-3">
+        <div class="card bg-dark text-light border-danger">
+            <div class="card-body">
+                <h6>Gastos del mes</h6>
+                <h2>${{ gastos_mes }}</h2>
+                <small>Egresos registrados</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 mb-3">
+        <div class="card bg-dark text-light border-warning">
+            <div class="card-body">
+                <h6>Utilidad del mes</h6>
+                <h2>${{ utilidad_mes }}</h2>
+                <small>Ingresos - gastos</small>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+
+<div class="card bg-dark text-light border-secondary mb-4">
+    <div class="card-body">
+
+        <h5 class="mb-4">
+            <i class="fa-solid fa-wallet"></i>
+            Saldos por cuenta
+        </h5>
+
+        <div class="table-responsive">
+            <table class="table table-dark table-hover table-dark-custom">
+                <thead>
+                    <tr>
+                        <th>Cuenta</th>
+                        <th>Tipo</th>
+                        <th>Saldo actual</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for cuenta in cuentas_financieras %}
+                    <tr>
+                        <td>{{ cuenta.nombre }}</td>
+                        <td>{{ cuenta.get_tipo_display }}</td>
+                        <td>${{ cuenta.saldo_actual }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="3" class="text-center">
+                            No hay cuentas financieras registradas.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+</div>
+
+    <div class="card bg-dark text-light border-secondary mt-4">
+    <div class="card-body">
+
+        <h5 class="mb-4">
+            <i class="fa-solid fa-calendar-days"></i>
+            Próximos pagos
+        </h5>
+
+        <div class="table-responsive">
+
+            <table class="table table-dark table-hover table-dark-custom">
+
+                <thead>
+                    <tr>
+                        <th>Concepto</th>
+                        <th>Valor</th>
+                        <th>Vence</th>
+                        <th>Cuenta</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for pago in pagos_programados %}
+
+                    <tr>
+
+                        <td>{{ pago.concepto }}</td>
+
+                        <td>${{ pago.valor }}</td>
+
+                        <td>{{ pago.fecha_vencimiento }}</td>
+
+                        <td>{{ pago.cuenta_pago }}</td>
+
+                        <td>
+
+                            <a href="{% url 'gestion:pagar_pago_programado' pago.id %}"
+                               class="btn btn-success btn-sm">
+
+                                <i class="fa-solid fa-check"></i>
+                                Pagar
+
+                            </a>
+
+                        </td>
+
+                    </tr>
+
+                    {% empty %}
+
+                    <tr>
+                        <td colspan="5" class="text-center">
+                            No hay pagos pendientes.
+                        </td>
+                    </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+</div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    const graficoAlumnos = document.getElementById('graficoAlumnos');
+
+    new Chart(graficoAlumnos, {
+        type: 'doughnut',
+        data: {
+            labels: ['Activos', 'Próximos', 'Vencidos', 'Suspendidos'],
+            datasets: [{
+                data: [
+                    {{ alumnos_activos }},
+                    {{ alumnos_proximos }},
+                    {{ alumnos_vencidos_total }},
+                    {{ alumnos_suspendidos }}
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+
+    const graficoPagos = document.getElementById('graficoPagos');
+
+    new Chart(graficoPagos, {
+        type: 'bar',
+        data: {
+            labels: ['Aprobados', 'Pendientes', 'Rechazados'],
+            datasets: [{
+                label: 'Pagos',
+                data: [
+                    {{ pagos_aprobados }},
+                    {{ pagos_pendientes_total }},
+                    {{ pagos_rechazados }}
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+</script>
 
 {% endblock %}

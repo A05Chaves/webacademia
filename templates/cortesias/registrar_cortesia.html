@@ -1,0 +1,246 @@
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-5 px-2">
+    <h2 class="mb-0">
+        <i class="fa-solid fa-file-signature"></i>
+        Clase de cortesía
+    </h2>
+
+    <a href="{% url 'gestion:horario_clases' %}" class="btn btn-outline-light btn-sm">
+        <i class="fa-solid fa-arrow-left"></i>
+        Volver
+    </a>
+</div>
+
+<div class="card bg-dark text-light border-secondary">
+    <div class="card-body">
+
+        <p>
+            <strong>Clase:</strong> {{ clase.get_disciplina_display }} |
+            <strong>Hora:</strong> {{ clase.hora_inicio }} - {{ clase.hora_fin }}
+        </p>
+
+        <form method="post" onsubmit="guardarFirma()">
+            {% csrf_token %}
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Nombres</label>
+                    {{ form.nombres }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Apellidos</label>
+                    {{ form.apellidos }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Documento</label>
+                    {{ form.documento }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Teléfono</label>
+                    {{ form.telefono }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Correo</label>
+                    {{ form.correo }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Edad</label>
+                    {{ form.edad }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Tipo de participante</label>
+                    {{ form.tipo_persona }}
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">EPS</label>
+                    {{ form.eps }}
+                </div>
+
+                <div class="col-md-12 mb-3">
+                    <label class="form-label">
+                        ¿Tiene alguna discapacidad, lesión o enfermedad importante que debamos saber?
+                    </label>
+                    {{ form.condicion_medica }}
+                </div>
+            </div>
+            <div id="datosAcudiente" style="display:none;">
+
+    <hr class="border-secondary">
+
+    <h5>
+        <i class="fa-solid fa-user-shield"></i>
+        Datos del acudiente
+    </h5>
+
+    <div class="row">
+
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Nombre del acudiente</label>
+                {{ form.nombre_acudiente }}
+            </div>
+
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Documento del acudiente</label>
+                {{ form.documento_acudiente }}
+            </div>
+
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Teléfono del acudiente</label>
+                {{ form.telefono_acudiente }}
+            </div>
+
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Parentesco</label>
+                {{ form.parentesco_acudiente }}
+            </div>
+
+        </div>
+
+    </div>
+
+            <hr class="border-secondary">
+
+            <h5>Consentimiento informado</h5>
+
+            <div id="consentimientoAdulto" class="alert alert-secondary">
+                {{ consentimiento_adulto }}
+            </div>
+
+            <div id="consentimientoMenor" class="alert alert-warning" style="display:none;">
+                {{ consentimiento_menor }}
+            </div>
+
+            <div class="form-check mb-3">
+                {{ form.consentimiento }}
+                <label class="form-check-label">
+                    Acepto el consentimiento informado
+                </label>
+            </div>
+
+            <h5>Firma</h5>
+
+            <canvas id="firmaCanvas"
+                    width="500"
+                    height="180"
+                    style="background:white; border-radius:8px; width:100%; max-width:500px;">
+            </canvas>
+
+            {{ form.firma_base64 }}
+
+            <div class="mt-2">
+                <button type="button" class="btn btn-outline-light btn-sm" onclick="limpiarFirma()">
+                    Limpiar firma
+                </button>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <a href="{% url 'gestion:horario_clases' %}" class="btn btn-outline-light">
+                    Cancelar
+                </a>
+
+                <button type="submit" class="btn btn-success">
+                    Registrar cortesía
+                </button>
+            </div>
+
+        </form>
+
+    </div>
+</div>
+
+<script>
+const tipoPersona = document.getElementById("id_tipo_persona");
+const consentimientoAdulto = document.getElementById("consentimientoAdulto");
+const consentimientoMenor = document.getElementById("consentimientoMenor");
+
+function cambiarConsentimiento() {
+    const datosAcudiente = document.getElementById("datosAcudiente");
+
+    if (tipoPersona.value === "MENOR") {
+        consentimientoAdulto.style.display = "none";
+        consentimientoMenor.style.display = "block";
+        datosAcudiente.style.display = "block";
+    } else {
+        consentimientoAdulto.style.display = "block";
+        consentimientoMenor.style.display = "none";
+        datosAcudiente.style.display = "none";
+    }
+}
+
+tipoPersona.addEventListener("change", cambiarConsentimiento);
+cambiarConsentimiento();
+
+const canvas = document.getElementById("firmaCanvas");
+const ctx = canvas.getContext("2d");
+let dibujando = false;
+
+canvas.addEventListener("mousedown", () => dibujando = true);
+canvas.addEventListener("mouseup", () => {
+    dibujando = false;
+    ctx.beginPath();
+});
+canvas.addEventListener("mousemove", dibujar);
+
+canvas.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    dibujando = true;
+});
+
+canvas.addEventListener("touchend", () => {
+    dibujando = false;
+    ctx.beginPath();
+});
+
+canvas.addEventListener("touchmove", (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+
+    dibujarEn(
+        touch.clientX - rect.left,
+        touch.clientY - rect.top
+    );
+});
+
+function dibujar(e) {
+    if (!dibujando) return;
+
+    const rect = canvas.getBoundingClientRect();
+
+    dibujarEn(
+        e.clientX - rect.left,
+        e.clientY - rect.top
+    );
+}
+
+function dibujarEn(x, y) {
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "black";
+
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+}
+
+function limpiarFirma() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    document.getElementById("id_firma_base64").value = "";
+}
+
+function guardarFirma() {
+    document.getElementById("id_firma_base64").value = canvas.toDataURL("image/png");
+}
+</script>
+
+{% endblock %}

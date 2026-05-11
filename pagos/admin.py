@@ -4,9 +4,15 @@ from .models import MetodoPagoQR, Pago
 
 @admin.register(MetodoPagoQR)
 class MetodoPagoQRAdmin(admin.ModelAdmin):
-    list_display = ('id', 'nombre', 'titular', 'activo')
+    list_display = (
+        'id',
+        'nombre',
+        'titular',
+        'cuenta_financiera',
+        'activo',
+    )
     search_fields = ('nombre', 'titular')
-    list_filter = ('activo',)
+    list_filter = ('activo', 'cuenta_financiera')
 
 
 @admin.register(Pago)

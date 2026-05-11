@@ -3,6 +3,8 @@
 Vistas del módulo de gestión de la academia.
 """
 
+import random
+from django.contrib.auth.hashers import make_password
 from django.contrib.admin.views.decorators import staff_member_required
 from django.db.models.manager import BaseManager
 from django.shortcuts import render, redirect
@@ -11,9 +13,8 @@ from django.contrib import messages
 from alumnos.models import Alumno
 from planes.models import Plan, Suscripcion
 from pagos.models import Pago
-
+from pagos.models import MetodoPagoQR
 from datetime import timedelta
-from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from .forms import ValidarPagoForm
 
@@ -25,14 +26,12 @@ from .forms import (
     PagoForm,
 )
 
-from datetime import timedelta
 from django.utils import timezone
 from notificaciones.models import Notificacion
 from instructores.models import Instructor
 
 from datetime import datetime, time
 from clases.models import ClaseProgramada, AsistenciaClase
-from datetime import time
 from .forms import ClaseProgramadaForm
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import logout
@@ -42,7 +41,15 @@ from django.db import models
 from django.contrib.auth import authenticate
 from django.views.decorators.http import require_POST
 
-from django.utils import timezone
+from django.contrib.auth import authenticate
+from .forms import PagoAlumnoForm
+from django.core.mail import send_mail
+from django.conf import settings
+
+from finanzas.models import CategoriaFinanciera, CuentaFinanciera, MovimientoFinanciero, PagoProgramado
+from .forms import GastoForm
+from .forms import PagoProgramadoForm, TransferenciaForm
+from django.db.models import Sum
 
 
 @staff_member_required
@@ -79,6 +86,42 @@ def dashboard(request):
         'usuario'
     ).order_by('-fecha_creacion')[:5]
 
+    alumnos_activos = Alumno.objects.filter(estado='ACTIVO').count()
+    alumnos_proximos = Alumno.objects.filter(estado='PROXIMO_VENCER').count()
+    alumnos_vencidos_total = Alumno.objects.filter(estado='VENCIDO').count()
+    alumnos_suspendidos = Alumno.objects.filter(estado='SUSPENDIDO').count()
+
+    pagos_aprobados = Pago.objects.filter(estado='APROBADO').count()
+    pagos_pendientes_total = Pago.objects.filter(estado='PENDIENTE').count()
+    pagos_rechazados = Pago.objects.filter(estado='RECHAZADO').count()
+    pagos_programados = PagoProgramado.objects.filter(
+        estado='PENDIENTE'
+    ).order_by('fecha_vencimiento')[:5]
+
+    hoy = timezone.now().date()
+
+    ingresos_mes = MovimientoFinanciero.objects.filter(
+        tipo='INGRESO',
+        fecha__month=hoy.month,
+        fecha__year=hoy.year
+    ).aggregate(total=Sum('valor'))['total'] or 0
+
+    gastos_mes = MovimientoFinanciero.objects.filter(
+        tipo='EGRESO',
+        fecha__month=hoy.month,
+        fecha__year=hoy.year
+    ).aggregate(total=Sum('valor'))['total'] or 0
+
+    utilidad_mes = ingresos_mes - gastos_mes
+
+    cuentas_financieras = CuentaFinanciera.objects.filter(activa=True)
+
+    saldo_total = sum(cuenta.saldo_actual for cuenta in cuentas_financieras)
+
+    pagos_programados_pendientes = PagoProgramado.objects.filter(
+        estado='PENDIENTE'
+    ).count()
+
     context = {
         'total_alumnos': total_alumnos,
         'total_planes': total_planes,
@@ -89,6 +132,20 @@ def dashboard(request):
         'alumnos_vencidos': alumnos_vencidos,
         'ultimas_notificaciones': ultimas_notificaciones,
         'total_instructores': total_instructores,
+        'alumnos_activos': alumnos_activos,
+        'alumnos_proximos': alumnos_proximos,
+        'alumnos_vencidos_total': alumnos_vencidos_total,
+        'alumnos_suspendidos': alumnos_suspendidos,
+        'pagos_aprobados': pagos_aprobados,
+        'pagos_pendientes_total': pagos_pendientes_total,
+        'pagos_rechazados': pagos_rechazados,
+        'pagos_programados': pagos_programados,
+        'ingresos_mes': ingresos_mes,
+        'gastos_mes': gastos_mes,
+        'utilidad_mes': utilidad_mes,
+        'saldo_total': saldo_total,
+        'cuentas_financieras': cuentas_financieras,
+        'pagos_programados_pendientes': pagos_programados_pendientes,
     }
     return render(request, 'gestion/dashboard.html', context)
 
@@ -96,7 +153,15 @@ def dashboard(request):
 @staff_member_required
 def lista_alumnos(request):
     alumnos = Alumno.objects.select_related('user').all()
-    return render(request, 'gestion/lista_alumnos.html', {'alumnos': alumnos})
+
+    for alumno in alumnos:
+        alumno.actualizar_estado()
+
+    alumnos = Alumno.objects.select_related('user').all()
+
+    return render(request, 'gestion/lista_alumnos.html', {
+        'alumnos': alumnos
+    })
 
 
 @staff_member_required
@@ -215,10 +280,8 @@ def validar_pago(request, pago_id):
                 suscripcion = pago.suscripcion
                 hoy = timezone.now().date()
 
-                # fecha_base = suscripcion.fecha_vencimiento or hoy
                 if suscripcion.estado == 'PENDIENTE_PAGO':
                     fecha_base = hoy
-
                 else:
                     fecha_base = suscripcion.fecha_vencimiento or hoy
 
@@ -244,11 +307,79 @@ def validar_pago(request, pago_id):
 
                 suscripcion.save()
                 pago.alumno.save()
+                pago.save()
+
+                cuenta = pago.metodo_qr.cuenta_financiera
+
+                categoria_mensualidad = CategoriaFinanciera.objects.filter(
+                    nombre='Mensualidades'
+                ).first()
+
+                if cuenta:
+                    MovimientoFinanciero.objects.get_or_create(
+                        pago=pago,
+                        defaults={
+                            'cuenta': cuenta,
+                            'tipo': 'INGRESO',
+                            'concepto': f'Pago mensualidad - {pago.alumno}',
+                            'valor': pago.valor,
+                            'fecha': pago.fecha_validacion,
+                            'observaciones': f'Ingreso generado automáticamente desde el pago #{pago.id}.',
+                            'categoria': categoria_mensualidad,
+                        }
+                    )
+                else:
+                    messages.warning(
+                        request,
+                        'Pago aprobado, pero no se creó movimiento financiero porque el método de pago no tiene cuenta asociada.'
+                    )
+
+                correo = pago.alumno.user.email
+
+                if correo:
+                    send_mail(
+                        subject='Pago aprobado',
+                        message=(
+                            f'Hola {pago.alumno},\n\n'
+                            f'Tu pago fue aprobado correctamente.\n\n'
+                            f'Detalles del pago:\n'
+                            f'Valor: ${pago.valor}\n'
+                            f'Método: {pago.metodo_qr}\n'
+                            f'Referencia: {pago.referencia_pago or "Sin referencia"}\n'
+                            f'Fecha de validación: {pago.fecha_validacion.strftime("%d/%m/%Y %H:%M")}\n'
+                            f'Nueva fecha de vencimiento: {pago.suscripcion.fecha_vencimiento}\n\n'
+                            f'Gracias por tu pago.'
+                        ),
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        recipient_list=[correo],
+                        fail_silently=False,
+                    )
 
             elif pago.estado == 'RECHAZADO':
-                messages.warning(request, 'Pago rechazado correctamente.')
+                pago.save()
 
-            pago.save()
+                alumno = pago.alumno
+                correo = alumno.user.email
+
+                if correo:
+                    send_mail(
+                        subject='Pago rechazado',
+                        message=(
+                            f'Hola {alumno},\n\n'
+                            f'Tu pago fue rechazado.\n\n'
+                            f'Motivo: {pago.observacion_admin or "No se especificó motivo."}\n\n'
+                            f'Por favor revisa el comprobante y registra nuevamente el pago.'
+                        ),
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        recipient_list=[correo],
+                        fail_silently=False,
+                    )
+
+                messages.warning(
+                    request,
+                    'Pago rechazado correctamente. Se notificó al alumno por correo.'
+                )
+
             return redirect('gestion:lista_pagos')
 
     else:
@@ -273,10 +404,9 @@ def editar_alumno(request, alumno_id):
     else:
         form = AlumnoForm(instance=alumno)
 
-    return render(request, 'gestion/formulario.html', {
+    return render(request, 'gestion/editar_alumno.html', {
         'form': form,
-        'titulo': 'Editar alumno',
-        'cancelar_url': 'gestion:lista_alumnos'
+        'alumno': alumno,
     })
 
 
@@ -343,10 +473,9 @@ def editar_suscripcion(request, suscripcion_id):
     else:
         form = SuscripcionForm(instance=suscripcion)
 
-    return render(request, 'gestion/formulario.html', {
+    return render(request, 'gestion/editar_suscripcion.html', {
         'form': form,
-        'titulo': 'Editar suscripción',
-        'cancelar_url': 'gestion:lista_suscripciones'
+        'suscripcion': suscripcion,
     })
 
 
@@ -427,10 +556,13 @@ def horario_clases(request):
 
     ahora = timezone.localtime()
 
+    metodos_pago = MetodoPagoQR.objects.filter(activo=True)
+
     return render(request, 'gestion/horario_clases.html', {
         'dias': dias,
         'horario': horario,
         'hora_actual': ahora,
+        'metodos_pago': metodos_pago
     })
 
 
@@ -491,12 +623,13 @@ def confirmar_asistencia(request, clase_id):
 
     if not creada:
         messages.info(
-            request, 'Ya habías confirmado asistencia para esta clase.')
+            request, 'Ya habías confirmado asistencia para esta clase.'
+        )
     else:
         messages.success(request, 'Asistencia confirmada correctamente.')
 
-        logout(request)
-        return redirect('gestion:horario_clases')
+    logout(request)
+    return redirect('gestion:horario_clases')
 
 
 # EDICION DE HORARIOS
@@ -631,4 +764,296 @@ def asistentes_clase(request, clase_id):
         'asistencias': asistencias,
         'total_asistentes': asistencias.count(),
         'hoy': hoy,
+    })
+
+
+def registrar_pago_alumno(request):
+    if request.method == 'POST':
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+
+        user = authenticate(request, username=username, password=password)
+
+        if user is None:
+            messages.error(request, 'Usuario o contraseña incorrectos.')
+            return redirect('gestion:horario_clases')
+
+        if not hasattr(user, 'perfil_alumno'):
+            messages.error(
+                request, 'Este usuario no está registrado como alumno.')
+            return redirect('gestion:horario_clases')
+
+        alumno = user.perfil_alumno
+        suscripcion = alumno.suscripcion_actual
+
+        if not suscripcion:
+            messages.error(request, 'No tienes una suscripción registrada.')
+            return redirect('gestion:horario_clases')
+
+        form = PagoAlumnoForm(request.POST, request.FILES)
+
+        if form.is_valid():
+            pago = form.save(commit=False)
+            pago.alumno = alumno
+            pago.suscripcion = suscripcion
+            pago.estado = 'PENDIENTE'
+            pago.save()
+
+            messages.success(
+                request,
+                'Pago registrado correctamente. Queda pendiente de validación.'
+            )
+
+            return redirect('gestion:horario_clases')
+
+        messages.error(request, 'Revisa los datos del pago.')
+        return redirect('gestion:horario_clases')
+
+    return redirect('gestion:horario_clases')
+
+
+# RESTABLECER CONTRASEÑA
+
+
+@staff_member_required
+def reset_password_alumno(request, alumno_id):
+
+    alumno = get_object_or_404(Alumno, id=alumno_id)
+
+    nueva_clave = str(random.randint(100000, 999999))
+
+    alumno.user.password = make_password(nueva_clave)
+
+    alumno.user.save()
+
+    messages.success(
+        request,
+        f'Nueva contraseña temporal: {nueva_clave}'
+    )
+
+    return redirect('gestion:editar_alumno', alumno_id=alumno.id)
+
+# REGISTRO DE GASTOS
+
+
+@staff_member_required
+def registrar_gasto(request):
+    if request.method == 'POST':
+        form = GastoForm(request.POST)
+
+        if form.is_valid():
+            gasto = form.save(commit=False)
+            gasto.tipo = 'EGRESO'
+            gasto.save()
+
+            messages.success(request, 'Gasto registrado correctamente.')
+            return redirect('gestion:dashboard')
+
+    else:
+        form = GastoForm()
+
+    cuentas = CuentaFinanciera.objects.filter(activa=True)
+
+    return render(request, 'gestion/registrar_gasto.html', {
+        'form': form,
+        'cuentas': cuentas,
+    })
+
+
+# VISTA DE PAGOS PROGRAMADOS
+
+@staff_member_required
+def crear_pago_programado(request):
+    if request.method == 'POST':
+        form = PagoProgramadoForm(request.POST)
+
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Pago programado creado correctamente.')
+            return redirect('gestion:dashboard')
+    else:
+        form = PagoProgramadoForm()
+
+    return render(request, 'gestion/crear_pago_programado.html', {
+        'form': form,
+    })
+
+
+# VISTA DE PAGOS PROGRAMADOS
+
+@staff_member_required
+def pagar_pago_programado(request, pago_id):
+
+    pago_programado = get_object_or_404(
+        PagoProgramado,
+        id=pago_id
+    )
+
+    if pago_programado.estado == 'PAGADO':
+        messages.warning(request, 'Este pago ya fue registrado.')
+        return redirect('gestion:dashboard')
+
+    if not pago_programado.cuenta_pago:
+        messages.error(
+            request,
+            'El pago programado no tiene cuenta asignada.'
+        )
+        return redirect('gestion:dashboard')
+
+    MovimientoFinanciero.objects.create(
+        cuenta=pago_programado.cuenta_pago,
+        tipo='EGRESO',
+        concepto=f'Pago programado - {pago_programado.concepto}',
+        valor=pago_programado.valor,
+        fecha=timezone.now(),
+        observaciones='Generado automáticamente desde pago programado.'
+    )
+
+    pago_programado.estado = 'PAGADO'
+    pago_programado.fecha_pago = timezone.now()
+    pago_programado.save()
+
+    messages.success(request, 'Pago registrado correctamente.')
+
+    return redirect('gestion:dashboard')
+
+# VISTA DETALLADA DE LOS GASTOS E INGRESOS
+
+
+@staff_member_required
+def detalle_financiero(request):
+
+    hoy = timezone.now().date()
+
+    mes = int(request.GET.get('mes', hoy.month))
+    anio = int(request.GET.get('anio', hoy.year))
+    tipo = request.GET.get('tipo', '')
+
+    movimientos = MovimientoFinanciero.objects.filter(
+        fecha__month=mes,
+        fecha__year=anio
+    ).select_related('cuenta', 'pago')
+
+    if tipo in ['INGRESO', 'EGRESO']:
+        movimientos = movimientos.filter(tipo=tipo)
+
+    total_ingresos = movimientos.filter(
+        tipo='INGRESO'
+    ).aggregate(
+        total=Sum('valor')
+    )['total'] or 0
+
+    total_egresos = movimientos.filter(
+        tipo='EGRESO'
+    ).aggregate(
+        total=Sum('valor')
+    )['total'] or 0
+
+    saldo_mes = total_ingresos - total_egresos
+
+    ingresos_por_mes = []
+    egresos_por_mes = []
+
+    for m in range(1, 13):
+
+        ingresos = MovimientoFinanciero.objects.filter(
+            tipo='INGRESO',
+            fecha__year=anio,
+            fecha__month=m
+        ).aggregate(
+            total=Sum('valor')
+        )['total'] or 0
+
+        egresos = MovimientoFinanciero.objects.filter(
+            tipo='EGRESO',
+            fecha__year=anio,
+            fecha__month=m
+        ).aggregate(
+            total=Sum('valor')
+        )['total'] or 0
+
+        ingresos_por_mes.append(float(ingresos))
+        egresos_por_mes.append(float(egresos))
+
+    gastos_por_categoria = MovimientoFinanciero.objects.filter(
+        tipo='EGRESO',
+        fecha__year=anio,
+        fecha__month=mes,
+        categoria__isnull=False
+    ).values(
+        'categoria__nombre'
+    ).annotate(
+        total=Sum('valor')
+    ).order_by('-total')
+
+    labels_gastos_categoria = [
+        item['categoria__nombre']
+        for item in gastos_por_categoria
+    ]
+
+    datos_gastos_categoria = [
+        float(item['total'])
+        for item in gastos_por_categoria
+    ]
+
+    return render(request, 'gestion/detalle_financiero.html', {
+
+        'movimientos': movimientos,
+
+        'mes': mes,
+        'anio': anio,
+        'tipo': tipo,
+
+        'total_ingresos': total_ingresos,
+        'total_egresos': total_egresos,
+        'saldo_mes': saldo_mes,
+
+        'ingresos_por_mes': ingresos_por_mes,
+        'egresos_por_mes': egresos_por_mes,
+
+        'gastos_por_categoria': gastos_por_categoria,
+        'labels_gastos_categoria': labels_gastos_categoria,
+        'datos_gastos_categoria': datos_gastos_categoria,
+
+    })
+# TRANSFERENCIAS ENTRE CUENTAS
+
+
+@staff_member_required
+def registrar_transferencia(request):
+    if request.method == 'POST':
+        form = TransferenciaForm(request.POST)
+
+        if form.is_valid():
+            origen = form.cleaned_data['cuenta_origen']
+            destino = form.cleaned_data['cuenta_destino']
+            valor = form.cleaned_data['valor']
+            concepto = form.cleaned_data['concepto']
+            observaciones = form.cleaned_data['observaciones']
+
+            MovimientoFinanciero.objects.create(
+                cuenta=origen,
+                tipo='EGRESO',
+                concepto=f'Transferencia salida - {concepto}',
+                valor=valor,
+                observaciones=f'Destino: {destino}. {observaciones}'
+            )
+
+            MovimientoFinanciero.objects.create(
+                cuenta=destino,
+                tipo='INGRESO',
+                concepto=f'Transferencia entrada - {concepto}',
+                valor=valor,
+                observaciones=f'Origen: {origen}. {observaciones}'
+            )
+
+            messages.success(
+                request, 'Transferencia registrada correctamente.')
+            return redirect('gestion:dashboard')
+
+    else:
+        form = TransferenciaForm()
+
+    return render(request, 'gestion/registrar_transferencia.html', {
+        'form': form,
     })
