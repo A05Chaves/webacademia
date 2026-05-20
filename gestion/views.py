@@ -1,9 +1,13 @@
 
 """
 Vistas del módulo de gestión de la academia.
+from registros_legales.services import crear_alumno_desde_registro
 """
 
-from registros_legales.services import crear_alumno_desde_registro
+from registros_legales.services import (
+    crear_alumno_desde_registro,
+    enviar_correo_bienvenida_alumno,
+)
 from reportlab.lib.utils import ImageReader
 from io import BytesIO
 import base64
@@ -1187,6 +1191,11 @@ def aprobar_registro_legal(request, registro_id):
 
     registro.estado = 'APROBADO'
     registro.save()
+
+    enviar_correo_bienvenida_alumno(
+        registro,
+        password_temporal
+    )
 
     messages.success(
         request,

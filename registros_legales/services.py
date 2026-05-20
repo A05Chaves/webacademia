@@ -1,4 +1,6 @@
 from django.contrib.auth import get_user_model
+from django.core.mail import send_mail
+from django.conf import settings
 
 from alumnos.models import Alumno
 
@@ -37,3 +39,28 @@ def crear_alumno_desde_registro(registro):
     )
 
     return alumno, password_temporal, None
+
+# FUNCION PARA ENVIAR CORREOS A LOS ESTUDIANTES CON SUS CREDENCIALES DE ACCESO
+
+
+def enviar_correo_bienvenida_alumno(registro, password_temporal):
+    if not registro.correo:
+        return
+
+    send_mail(
+        subject='Registro aprobado - Galeras BJJ',
+        message=(
+            f'Hola {registro.nombres},\n\n'
+            f'Tu registro en Galeras BJJ fue aprobado correctamente.\n\n'
+            f'Tus datos de acceso son:\n'
+            f'Usuario: {registro.documento}\n'
+            f'Contraseña temporal: {password_temporal}\n\n'
+            f'Ingresa al sistema y cambia tu contraseña al primer acceso.\n\n'
+            f'Link de acceso:\n'
+            f'http://127.0.0.1:8000/login/\n\n'
+            f'Bienvenido a la academia.'
+        ),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[registro.correo],
+        fail_silently=False,
+    )
