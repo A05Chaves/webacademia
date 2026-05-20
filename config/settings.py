@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'clases',
     'cortesias',
     'finanzas',
+    'registros_legales',
 ]
 
 MIDDLEWARE = [
@@ -138,9 +139,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 AUTH_USER_MODEL = 'usuarios.Usuario'
 
-LOGIN_URL = 'login'
-LOGIN_REDIRECT_URL = 'gestion:dashboard'
-LOGOUT_REDIRECT_URL = '/'
+LOGIN_URL = '/login/'
+LOGIN_REDIRECT_URL = '/gestion/horario/'
+LOGOUT_REDIRECT_URL = '/gestion/horario/'
 
 """
 ## CONFIGURACINO DE CORREO

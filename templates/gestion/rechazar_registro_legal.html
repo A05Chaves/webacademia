@@ -1,0 +1,52 @@
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-5 px-2">
+    <h2 class="mb-0">
+        <i class="fa-solid fa-xmark"></i>
+        Rechazar registro
+    </h2>
+
+    <a href="{% url 'gestion:detalle_registro_legal' registro.id %}"
+       class="btn btn-outline-light btn-sm">
+        <i class="fa-solid fa-arrow-left"></i>
+        Volver
+    </a>
+</div>
+
+<div class="card bg-dark text-light border-danger">
+    <div class="card-body">
+
+        <p>
+            Vas a rechazar el registro de:
+            <strong>{{ registro.nombres }} {{ registro.apellidos }}</strong>
+        </p>
+
+        <form method="post">
+            {% csrf_token %}
+
+            <div class="mb-3">
+                <label class="form-label">Motivo del rechazo</label>
+                <textarea name="observacion_admin"
+                          class="form-control"
+                          rows="4"
+                          required></textarea>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2">
+                <a href="{% url 'gestion:detalle_registro_legal' registro.id %}"
+                   class="btn btn-outline-light">
+                    Cancelar
+                </a>
+
+                <button type="submit" class="btn btn-danger">
+                    Confirmar rechazo
+                </button>
+            </div>
+        </form>
+
+    </div>
+</div>
+
+{% endblock %}

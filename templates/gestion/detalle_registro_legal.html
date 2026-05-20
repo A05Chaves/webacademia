@@ -1,0 +1,199 @@
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-5 px-2">
+
+    <h2 class="mb-0">
+        <i class="fa-solid fa-file-signature"></i>
+        Detalle registro legal
+    </h2>
+
+    {% if registro.estado == 'PENDIENTE_VALIDACION' %}
+        <div class="d-flex gap-2 mb-4 px-2">
+
+            <a href="{% url 'gestion:aprobar_registro_legal' registro.id %}"
+            class="btn btn-success">
+                <i class="fa-solid fa-check"></i>
+                Aprobar
+            </a>
+
+            <a href="{% url 'gestion:rechazar_registro_legal' registro.id %}"
+            class="btn btn-danger">
+                <i class="fa-solid fa-xmark"></i>
+                Rechazar
+            </a>
+
+        </div>
+    {% endif %}
+
+    <a href="{% url 'gestion:lista_registros_legales' %}"
+       class="btn btn-outline-light btn-sm">
+
+        <i class="fa-solid fa-arrow-left"></i>
+        Volver
+
+    </a>
+
+    <a href="{% url 'gestion:descargar_pdf_registro_legal' registro.id %}"
+    class="btn btn-outline-light btn-sm">
+        <i class="fa-solid fa-file-pdf"></i>
+        Descargar PDF firmado
+    </a>
+
+</div>
+
+<div class="card bg-dark text-light border-secondary">
+
+    <div class="card-body">
+
+        <div class="row g-4">
+
+            <div class="col-md-3 text-center">
+
+                {% if registro.foto %}
+                    <img src="{{ registro.foto.url }}"
+                         class="img-fluid rounded-4 border border-secondary">
+                {% endif %}
+
+            </div>
+
+            <div class="col-md-9">
+
+                <div class="row g-3">
+
+                    <div class="col-md-6">
+                        <strong>Nombre:</strong><br>
+                        {{ registro.nombres }} {{ registro.apellidos }}
+                    </div>
+
+                    <div class="col-md-6">
+                        <strong>Documento:</strong><br>
+                        {{ registro.documento }}
+                    </div>
+
+                    <div class="col-md-6">
+                        <strong>Tipo estudiante:</strong><br>
+                        {{ registro.get_tipo_estudiante_display }}
+                    </div>
+
+                    <div class="col-md-6">
+                        <strong>Celular:</strong><br>
+                        {{ registro.celular }}
+                    </div>
+
+                    <div class="col-md-6">
+                        <strong>Correo:</strong><br>
+                        {{ registro.correo }}
+                    </div>
+
+                    <div class="col-md-6">
+                        <strong>EPS:</strong><br>
+                        {{ registro.eps }}
+                    </div>
+
+                    <div class="col-md-12">
+                        <strong>Condición médica:</strong><br>
+                        {{ registro.condicion_medica }}
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        {% if registro.tipo_estudiante == 'MENOR' %}
+
+        <hr class="border-secondary my-4">
+
+        <h5 class="mb-3">
+            Acudiente
+        </h5>
+
+        <div class="row g-3">
+
+            <div class="col-md-6">
+                <strong>Nombre:</strong><br>
+                {{ registro.nombre_acudiente }}
+            </div>
+
+            <div class="col-md-6">
+                <strong>Documento:</strong><br>
+                {{ registro.documento_acudiente }}
+            </div>
+
+            <div class="col-md-6">
+                <strong>Parentesco:</strong><br>
+                {{ registro.parentesco_acudiente }}
+            </div>
+
+            <div class="col-md-6">
+                <strong>Celular:</strong><br>
+                {{ registro.celular_acudiente }}
+            </div>
+
+        </div>
+
+        {% endif %}
+
+        <hr class="border-secondary my-4">
+
+        <h5 class="mb-3">
+            Consentimientos
+        </h5>
+
+                <hr class="border-secondary my-4">
+
+        <h5 class="mb-3">
+            <i class="fa-solid fa-signature"></i>
+            Firma
+        </h5>
+
+        {% if registro.firma_base64 %}
+            <img src="{{ registro.firma_base64 }}"
+                alt="Firma digital"
+                class="img-fluid bg-white rounded-4 p-3 border border-secondary"
+                style="max-width: 500px;">
+        {% else %}
+            <span class="text-warning">
+                No hay firma registrada.
+            </span>
+        {% endif %}
+
+        <div class="row g-3">
+
+            <div class="col-md-4">
+                Reglamento:
+                {% if registro.acepta_reglamento %}
+                    <span class="badge bg-success">ACEPTADO</span>
+                {% else %}
+                    <span class="badge bg-danger">NO</span>
+                {% endif %}
+            </div>
+
+            <div class="col-md-4">
+                Riesgos:
+                {% if registro.acepta_riesgos %}
+                    <span class="badge bg-success">ACEPTADO</span>
+                {% else %}
+                    <span class="badge bg-danger">NO</span>
+                {% endif %}
+            </div>
+
+            <div class="col-md-4">
+                Imagen:
+                {% if registro.autoriza_imagen %}
+                    <span class="badge bg-success">ACEPTADO</span>
+                {% else %}
+                    <span class="badge bg-danger">NO</span>
+                {% endif %}
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

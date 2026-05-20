@@ -323,6 +323,13 @@ form {
             <i class="fa-solid fa-house"></i> Home
         </a>
     </li>
+    <li class="nav-item me-2">
+        <a class="btn btn-outline-light btn-sm"
+        href="{% url 'registro_publico' %}">
+            <i class="fa-solid fa-user-plus"></i>
+            Registro
+        </a>
+    </li>
 
     {% if user.is_authenticated and user.is_staff %}
 
@@ -351,6 +358,12 @@ form {
             <a class="btn btn-outline-light btn-sm"
                href="{% url 'gestion:lista_suscripciones' %}">
                 <i class="fa-solid fa-id-card"></i> Suscripciones
+            </a>
+        </li>
+        <li class="nav-item me-2">
+            <a class="btn btn-outline-light btn-sm"
+            href="{% url 'gestion:lista_registros_legales' %}">
+                <i class="fa-solid fa-file-signature"></i> Registros
             </a>
         </li>
 

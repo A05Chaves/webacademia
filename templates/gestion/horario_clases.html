@@ -211,6 +211,14 @@
         Horario de clases
     </h2>
 
+    {% if user.is_authenticated and user.is_staff %}
+        <a href="{% url 'gestion:crear_clase' %}"
+        class="btn btn-outline-light btn-sm">
+            <i class="fa-solid fa-plus"></i>
+            Agregar clase
+        </a>
+    {% endif %}
+
     <div class="hora-sistema">
         <i class="fa-solid fa-clock"></i>
         {{ hora_actual|date:"d/m/Y H:i" }}

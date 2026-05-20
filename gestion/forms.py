@@ -8,7 +8,8 @@ from pagos.models import Pago
 from pagos.models import MetodoPagoQR
 from clases.models import ClaseProgramada
 from finanzas.models import MovimientoFinanciero, PagoProgramado, CuentaFinanciera, CategoriaFinanciera
-
+from usuarios.models import Usuario
+from django.contrib.auth.forms import PasswordChangeForm
 
 Usuario = get_user_model()
 
@@ -354,3 +355,44 @@ class TransferenciaForm(forms.Form):
             )
 
         return cleaned_data
+
+# CAMBIO DE CONTRASEÑA OBLIGATORIO
+
+
+class CambioPasswordObligatorioForm(PasswordChangeForm):
+    pass
+
+# FORMULARIO PARA EDICION DE ALUMNO
+
+
+class UsuarioAlumnoEditForm(forms.ModelForm):
+
+    class Meta:
+        model = Usuario
+
+        fields = [
+            'first_name',
+            'last_name',
+            'email',
+            'telefono',
+        ]
+
+        widgets = {
+
+            'first_name': forms.TextInput(attrs={
+                'class': 'form-control'
+            }),
+
+            'last_name': forms.TextInput(attrs={
+                'class': 'form-control'
+            }),
+
+            'email': forms.EmailInput(attrs={
+                'class': 'form-control'
+            }),
+
+            'telefono': forms.TextInput(attrs={
+                'class': 'form-control'
+            }),
+
+        }

@@ -3,6 +3,14 @@
 Vistas del módulo de gestión de la academia.
 """
 
+from registros_legales.services import crear_alumno_desde_registro
+from reportlab.lib.utils import ImageReader
+from io import BytesIO
+import base64
+from reportlab.pdfgen import canvas
+from django.http import HttpResponse
+from .forms import CambioPasswordObligatorioForm
+from django.contrib.auth import update_session_auth_hash
 import random
 from django.contrib.auth.hashers import make_password
 from django.contrib.admin.views.decorators import staff_member_required
@@ -20,10 +28,12 @@ from .forms import ValidarPagoForm
 
 from .forms import (
     UsuarioAlumnoForm,
+    UsuarioAlumnoEditForm,
     AlumnoForm,
     PlanForm,
     SuscripcionForm,
     PagoForm,
+
 )
 
 from django.utils import timezone
@@ -41,7 +51,7 @@ from django.db import models
 from django.contrib.auth import authenticate
 from django.views.decorators.http import require_POST
 
-from django.contrib.auth import authenticate
+
 from .forms import PagoAlumnoForm
 from django.core.mail import send_mail
 from django.conf import settings
@@ -50,6 +60,11 @@ from finanzas.models import CategoriaFinanciera, CuentaFinanciera, MovimientoFin
 from .forms import GastoForm
 from .forms import PagoProgramadoForm, TransferenciaForm
 from django.db.models import Sum
+from registros_legales.models import RegistroLegalEstudiante
+
+from alumnos.models import Alumno
+from django.contrib.auth import get_user_model
+User = get_user_model()
 
 
 @staff_member_required
@@ -393,21 +408,57 @@ def validar_pago(request, pago_id):
 
 @staff_member_required
 def editar_alumno(request, alumno_id):
-    alumno = get_object_or_404(Alumno, id=alumno_id)
+
+    alumno = get_object_or_404(
+        Alumno,
+        id=alumno_id
+    )
+
+    usuario = alumno.user
 
     if request.method == 'POST':
-        form = AlumnoForm(request.POST, instance=alumno)
-        if form.is_valid():
-            form.save()
-            messages.success(request, 'Alumno actualizado correctamente.')
-            return redirect('gestion:lista_alumnos')
-    else:
-        form = AlumnoForm(instance=alumno)
 
-    return render(request, 'gestion/editar_alumno.html', {
-        'form': form,
-        'alumno': alumno,
-    })
+        usuario_form = UsuarioAlumnoEditForm(
+            request.POST,
+            instance=usuario
+        )
+
+        alumno_form = AlumnoForm(
+            request.POST,
+            instance=alumno
+        )
+
+        if usuario_form.is_valid() and alumno_form.is_valid():
+
+            usuario_form.save()
+            alumno_form.save()
+
+            messages.success(
+                request,
+                'Alumno actualizado correctamente.'
+            )
+
+            return redirect('gestion:lista_alumnos')
+
+    else:
+
+        usuario_form = UsuarioAlumnoEditForm(
+            instance=usuario
+        )
+
+        alumno_form = AlumnoForm(
+            instance=alumno
+        )
+
+    return render(
+        request,
+        'gestion/editar_alumno.html',
+        {
+            'usuario_form': usuario_form,
+            'alumno_form': alumno_form,
+            'alumno': alumno,
+        }
+    )
 
 
 @staff_member_required
@@ -498,6 +549,14 @@ def eliminar_suscripcion(request, suscripcion_id):
 
 # @login_required
 def horario_clases(request):
+
+    if request.user.is_authenticated:
+
+        if request.user.debe_cambiar_password:
+
+            return redirect(
+                'gestion:cambio_password_obligatorio'
+            )
 
     hoy = timezone.now().date()
 
@@ -1057,3 +1116,317 @@ def registrar_transferencia(request):
     return render(request, 'gestion/registrar_transferencia.html', {
         'form': form,
     })
+
+# VISTA DE REGISTROS LEGALES
+
+
+@staff_member_required
+def lista_registros_legales(request):
+    registros = RegistroLegalEstudiante.objects.all()
+
+    return render(request, 'gestion/lista_registros_legales.html', {
+        'registros': registros
+    })
+
+# DETALLE DE REGISTRO LEGAL
+
+
+@staff_member_required
+def detalle_registro_legal(request, registro_id):
+
+    registro = get_object_or_404(
+        RegistroLegalEstudiante,
+        id=registro_id
+    )
+
+    return render(
+        request,
+        'gestion/detalle_registro_legal.html',
+        {
+            'registro': registro
+        }
+    )
+
+# VISTAS PARA REGISTROS LEGALES
+
+
+@staff_member_required
+def aprobar_registro_legal(request, registro_id):
+
+    registro = get_object_or_404(
+        RegistroLegalEstudiante,
+        id=registro_id
+    )
+
+    if registro.estado == 'APROBADO':
+        messages.warning(
+            request,
+            'Este registro ya fue aprobado.'
+        )
+
+        return redirect(
+            'gestion:detalle_registro_legal',
+            registro_id=registro.id
+        )
+
+    alumno, password_temporal, error = crear_alumno_desde_registro(
+        registro
+    )
+
+    if error:
+
+        messages.error(
+            request,
+            error
+        )
+
+        return redirect(
+            'gestion:detalle_registro_legal',
+            registro_id=registro.id
+        )
+
+    registro.estado = 'APROBADO'
+    registro.save()
+
+    messages.success(
+        request,
+        f'Alumno creado correctamente. Usuario: {registro.documento} | Clave temporal: {password_temporal}'
+    )
+
+    return redirect(
+        'gestion:detalle_registro_legal',
+        registro_id=registro.id
+    )
+
+
+@staff_member_required
+def rechazar_registro_legal(request, registro_id):
+    registro = get_object_or_404(RegistroLegalEstudiante, id=registro_id)
+
+    if request.method == 'POST':
+        observacion = request.POST.get('observacion_admin', '')
+
+        registro.estado = 'RECHAZADO'
+        registro.observacion_admin = observacion
+        registro.save()
+
+        messages.warning(request, 'Registro legal rechazado.')
+
+        return redirect('gestion:detalle_registro_legal', registro_id=registro.id)
+
+    return render(request, 'gestion/rechazar_registro_legal.html', {
+        'registro': registro,
+    })
+
+
+# VISTA DE CAMBIO DE CLAVE OBLIGATORIO
+
+@login_required
+def cambio_password_obligatorio(request):
+    if not request.user.debe_cambiar_password:
+        return redirect('gestion:horario_clases')
+
+    if request.method == 'POST':
+        form = CambioPasswordObligatorioForm(
+            user=request.user,
+            data=request.POST
+        )
+
+        if form.is_valid():
+            user = form.save()
+            user.debe_cambiar_password = False
+            user.save()
+
+            update_session_auth_hash(request, user)
+
+            messages.success(request, 'Contraseña actualizada correctamente.')
+            return redirect('gestion:horario_clases')
+    else:
+        form = CambioPasswordObligatorioForm(user=request.user)
+
+    return render(request, 'gestion/cambio_password_obligatorio.html', {
+        'form': form,
+    })
+
+# VISTA PARA DESCARGAR PDF
+
+
+@staff_member_required
+def descargar_pdf_registro_legal(request, registro_id):
+    registro = get_object_or_404(RegistroLegalEstudiante, id=registro_id)
+
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = (
+        f'attachment; filename="registro_legal_{registro.documento}.pdf"'
+    )
+
+    p = canvas.Canvas(response)
+    width, height = p._pagesize
+
+    y = 800
+
+    p.setFont("Helvetica-Bold", 16)
+    p.drawString(60, y, "REGISTRO LEGAL DE ESTUDIANTE")
+    y -= 35
+
+    p.setFont("Helvetica", 10)
+    p.drawString(60, y, f"Nombre: {registro.nombres} {registro.apellidos}")
+    y -= 18
+    p.drawString(60, y, f"Documento: {registro.documento}")
+    y -= 18
+    p.drawString(60, y, f"Tipo: {registro.get_tipo_estudiante_display()}")
+    y -= 18
+    p.drawString(60, y, f"Fecha nacimiento: {registro.fecha_nacimiento}")
+    y -= 18
+    p.drawString(60, y, f"Dirección: {registro.direccion}")
+    y -= 18
+    p.drawString(60, y, f"Celular: {registro.celular}")
+    y -= 18
+    p.drawString(60, y, f"Correo: {registro.correo or 'No registrado'}")
+    y -= 18
+    p.drawString(60, y, f"EPS: {registro.eps}")
+    y -= 25
+
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(60, y, "Condición médica")
+    y -= 18
+
+    p.setFont("Helvetica", 10)
+    p.drawString(60, y, registro.condicion_medica[:100])
+    y -= 30
+
+    if registro.tipo_estudiante == 'MENOR':
+        p.setFont("Helvetica-Bold", 12)
+        p.drawString(60, y, "Datos del acudiente")
+        y -= 18
+
+        p.setFont("Helvetica", 10)
+        p.drawString(60, y, f"Nombre: {registro.nombre_acudiente}")
+        y -= 18
+        p.drawString(60, y, f"Documento: {registro.documento_acudiente}")
+        y -= 18
+        p.drawString(60, y, f"Parentesco: {registro.parentesco_acudiente}")
+        y -= 18
+        p.drawString(60, y, f"Celular: {registro.celular_acudiente}")
+        y -= 30
+    acuerdos = [
+        {
+            'titulo': 'Reglamento interno',
+            'texto': (
+                'Declaro que conozco y acepto el reglamento interno de la academia, '
+                'sus normas de conducta, disciplina, respeto, puntualidad, cuidado de las '
+                'instalaciones y comportamiento durante entrenamientos, clases o eventos.'
+            ),
+            'aceptado': registro.acepta_reglamento,
+            'etiqueta': 'Reglamento aceptado'
+        },
+        {
+            'titulo': 'Responsabilidad medica y riesgos deportivos',
+            'texto': (
+                'Declaro que he sido informado sobre las caracteristicas de la actividad '
+                'deportiva y entiendo que la practica de artes marciales puede implicar '
+                'riesgos como golpes, caidas, lesiones musculares, articulares, accidentes '
+                'o afectaciones de salud. Participo voluntariamente y asumo dichos riesgos.'
+            ),
+            'aceptado': registro.acepta_riesgos,
+            'etiqueta': 'Riesgos deportivos aceptados'
+        },
+        {
+            'titulo': 'Autorizacion de uso de imagen',
+            'texto': (
+                'Autorizo de manera gratuita el uso de imagenes individuales o grupales '
+                'tomadas durante entrenamientos, clases, eventos deportivos o actividades '
+                'realizadas por la academia. Entiendo que esta autorizacion es opcional.'
+            ),
+            'aceptado': registro.autoriza_imagen,
+            'etiqueta': 'Autoriza uso de imagen'
+        },
+    ]
+
+    for acuerdo in acuerdos:
+        if y < 180:
+            p.showPage()
+            y = 800
+
+        p.setFont("Helvetica-Bold", 12)
+        p.drawString(60, y, acuerdo['titulo'])
+        y -= 18
+
+        p.setFont("Helvetica", 9)
+
+        texto = acuerdo['texto']
+        lineas = []
+        while len(texto) > 95:
+            corte = texto[:95].rfind(' ')
+            lineas.append(texto[:corte])
+            texto = texto[corte:].strip()
+        lineas.append(texto)
+
+        for linea in lineas:
+            p.drawString(60, y, linea)
+            y -= 14
+
+        y -= 6
+        p.setFont("Helvetica-Bold", 10)
+        p.drawString(
+            60,
+            y,
+            f"{acuerdo['etiqueta']}: {'SI' if acuerdo['aceptado'] else 'NO'}"
+        )
+        y -= 28
+
+    p.setFont("Helvetica", 10)
+    p.drawString(
+        60, y, f"Reglamento aceptado: {'Sí' if registro.acepta_reglamento else 'No'}")
+    y -= 18
+    p.drawString(
+        60, y, f"Riesgos deportivos aceptados: {'Sí' if registro.acepta_riesgos else 'No'}")
+    y -= 18
+    p.drawString(
+        60, y, f"Autoriza uso de imagen: {'Sí' if registro.autoriza_imagen else 'No'}")
+    y -= 30
+
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(60, y, "Firma")
+    y -= 18
+
+    p.setFont("Helvetica", 10)
+    p.drawString(60, y, f"Fecha firma: {registro.fecha_firma}")
+    y -= 18
+    p.drawString(60, y, f"IP firma: {registro.ip_firma or 'No registrada'}")
+
+    y -= 40
+
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(60, y, "Firma digital")
+    y -= 20
+
+    if registro.firma_base64:
+        try:
+            firma_data = registro.firma_base64.split(',')[1]
+            firma_bytes = base64.b64decode(firma_data)
+            firma_imagen = ImageReader(BytesIO(firma_bytes))
+
+            p.drawImage(
+                firma_imagen,
+                60,
+                y - 100,
+                width=250,
+                height=90,
+                preserveAspectRatio=True,
+                mask='auto'
+            )
+
+            y -= 120
+
+        except Exception:
+            p.setFont("Helvetica", 10)
+            p.drawString(60, y, "No fue posible cargar la firma digital.")
+        else:
+            p.setFont("Helvetica", 10)
+            p.drawString(60, y, "No hay firma registrada.")
+
+    p.showPage()
+    p.save()
+
+    return response

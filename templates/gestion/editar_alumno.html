@@ -47,6 +47,20 @@
 
             <div class="col-md-4">
                 <div class="p-3 border border-secondary rounded h-100">
+                    <small class="text-secondary">Correo</small>
+                    <div>{{ alumno.user.email|default:"Sin correo" }}</div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="p-3 border border-secondary rounded h-100">
+                    <small class="text-secondary">Celular</small>
+                    <div>{{ alumno.user.telefono|default:"Sin celular" }}</div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="p-3 border border-secondary rounded h-100">
                     <small class="text-secondary">Plan actual</small>
                     <div>
                         {% if alumno.suscripcion_actual %}
@@ -157,51 +171,75 @@
             <div class="row">
 
                 <div class="col-md-6 mb-3">
+                    <label class="form-label">Nombres</label>
+                    {{ usuario_form.first_name }}
+                    {{ usuario_form.first_name.errors }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Apellidos</label>
+                    {{ usuario_form.last_name }}
+                    {{ usuario_form.last_name.errors }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Correo</label>
+                    {{ usuario_form.email }}
+                    {{ usuario_form.email.errors }}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Celular</label>
+                    {{ usuario_form.telefono }}
+                    {{ usuario_form.telefono.errors }}
+                </div>
+
+                <div class="col-md-6 mb-3">
                     <label class="form-label">Documento</label>
-                    {{ form.documento }}
-                    {{ form.documento.errors }}
+                    {{ alumno_form.documento }}
+                    {{ alumno_form.documento.errors }}
                 </div>
 
                 <div class="col-md-6 mb-3">
                     <label class="form-label">Fecha de nacimiento</label>
-                    {{ form.fecha_nacimiento }}
-                    {{ form.fecha_nacimiento.errors }}
+                    {{ alumno_form.fecha_nacimiento }}
+                    {{ alumno_form.fecha_nacimiento.errors }}
                 </div>
 
                 <div class="col-md-6 mb-3">
                     <label class="form-label">Dirección</label>
-                    {{ form.direccion }}
-                    {{ form.direccion.errors }}
+                    {{ alumno_form.direccion }}
+                    {{ alumno_form.direccion.errors }}
                 </div>
 
                 <div class="col-md-6 mb-3">
                     <label class="form-label">Disciplina</label>
-                    {{ form.disciplina }}
-                    {{ form.disciplina.errors }}
+                    {{ alumno_form.disciplina }}
+                    {{ alumno_form.disciplina.errors }}
                 </div>
 
                 <div class="col-md-6 mb-3">
                     <label class="form-label">Grado</label>
-                    {{ form.grado }}
-                    {{ form.grado.errors }}
+                    {{ alumno_form.grado }}
+                    {{ alumno_form.grado.errors }}
                 </div>
 
                 <div class="col-md-6 mb-3">
                     <label class="form-label">Estado</label>
-                    {{ form.estado }}
-                    {{ form.estado.errors }}
+                    {{ alumno_form.estado }}
+                    {{ alumno_form.estado.errors }}
                 </div>
 
                 <div class="col-md-6 mb-3">
                     <label class="form-label">Nombre acudiente</label>
-                    {{ form.nombre_acudiente }}
-                    {{ form.nombre_acudiente.errors }}
+                    {{ alumno_form.nombre_acudiente }}
+                    {{ alumno_form.nombre_acudiente.errors }}
                 </div>
 
                 <div class="col-md-6 mb-3">
                     <label class="form-label">Teléfono acudiente</label>
-                    {{ form.telefono_acudiente }}
-                    {{ form.telefono_acudiente.errors }}
+                    {{ alumno_form.telefono_acudiente }}
+                    {{ alumno_form.telefono_acudiente.errors }}
                 </div>
                 
             </div>

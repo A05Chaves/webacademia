@@ -5,6 +5,10 @@ from django.db import models
 
 
 class Usuario(AbstractUser):
+    debe_cambiar_password = models.BooleanField(
+        default=True
+    )
+
     class Roles(models.TextChoices):
         ADMIN = 'ADMIN', 'Administrador'
         ALUMNO = 'ALUMNO', 'Alumno'
