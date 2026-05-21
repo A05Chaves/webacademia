@@ -586,6 +586,8 @@ def horario_clases(request):
         time(9, 0),
         time(9, 30),
         time(10, 0),
+        time(11, 0),
+        time(16, 0),
         time(17, 0),
         time(17, 30),
         time(18, 0),
@@ -593,6 +595,7 @@ def horario_clases(request):
         time(19, 0),
         time(19, 30),
         time(20, 0),
+        time(20, 30),
     ]
 
     horario = []
