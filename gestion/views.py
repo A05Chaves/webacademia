@@ -581,9 +581,7 @@ def horario_clases(request):
     dias = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO']
     horas = [
         time(6, 0),
-        time(7, 0),
         time(8, 0),
-        time(9, 0),
         time(9, 30),
         time(10, 0),
         time(11, 0),
@@ -592,10 +590,7 @@ def horario_clases(request):
         time(17, 30),
         time(18, 0),
         time(18, 30),
-        time(19, 0),
         time(19, 30),
-        time(20, 0),
-        time(20, 30),
     ]
 
     horario = []
