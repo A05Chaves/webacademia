@@ -1334,7 +1334,7 @@ def descargar_pdf_registro_legal(request, registro_id):
             'etiqueta': 'Riesgos deportivos aceptados'
         },
         {
-            'titulo': 'Autorizacion de uso de imagen',
+            'titulo': 'Autorizacion de uso de imagen y datos personales',
             'texto': (
                 'Autorizo de manera gratuita el uso de imagenes individuales o grupales '
                 'tomadas durante entrenamientos, clases, eventos deportivos o actividades '
