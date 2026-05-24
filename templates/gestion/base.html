@@ -305,117 +305,55 @@ form {
 
 <body id="bodyApp" data-theme="dark">
 
-<nav class="navbar navbar-expand-lg navbar-dark navbar-custom">
+<nav class="navbar navbar-expand-lg navbar-light px-3">
     <div class="container-fluid">
 
-        <a class="navbar-brand" href="{% url 'gestion:horario_clases' %}">
-            <i class="fa-solid fa-user-ninja"></i> Academia
+        <a class="navbar-brand fw-bold" href="{% url 'gestion:horario_clases' %}">
+            <i class="fa-solid fa-user-ninja"></i>
+            Academia
         </a>
 
-        <div class="collapse navbar-collapse">
+        <button class="navbar-toggler"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#menuPrincipal"
+                aria-controls="menuPrincipal"
+                aria-expanded="false"
+                aria-label="Abrir menú">
+            <span class="navbar-toggler-icon"></span>
+        </button>
 
-            <!-- IZQUIERDA -->
-          <ul class="navbar-nav">
+        <div class="collapse navbar-collapse" id="menuPrincipal">
 
-    <li class="nav-item me-2">
-        <a class="btn btn-outline-light btn-sm"
-           href="{% url 'gestion:horario_clases' %}">
-            <i class="fa-solid fa-house"></i> Home
-        </a>
-    </li>
-    <li class="nav-item me-2">
-        <a class="btn btn-outline-light btn-sm"
-        href="{% url 'registro_publico' %}">
-            <i class="fa-solid fa-user-plus"></i>
-            Registro
-        </a>
-    </li>
+            <div class="navbar-nav ms-auto gap-2 mt-3 mt-lg-0">
 
-    {% if user.is_authenticated and user.is_staff %}
+                <a class="btn btn-outline-dark btn-sm"
+                   href="{% url 'gestion:horario_clases' %}">
+                    <i class="fa-solid fa-house"></i>
+                    Home
+                </a>
 
-        <li class="nav-item me-2">
-            <a class="btn btn-outline-light btn-sm"
-               href="{% url 'gestion:dashboard' %}">
-                <i class="fa-solid fa-chart-line"></i> Dashboard
-            </a>
-        </li>
+                <a class="btn btn-outline-dark btn-sm"
+                   href="{% url 'registro_publico' %}">
+                    <i class="fa-solid fa-user-plus"></i>
+                    Registro
+                </a>
 
-        <li class="nav-item me-2">
-            <a class="btn btn-outline-light btn-sm"
-               href="{% url 'gestion:lista_alumnos' %}">
-                <i class="fa-solid fa-users"></i> Alumnos
-            </a>
-        </li>
-
-        <li class="nav-item me-2">
-            <a class="btn btn-outline-light btn-sm"
-               href="{% url 'gestion:lista_planes' %}">
-                <i class="fa-solid fa-layer-group"></i> Planes
-            </a>
-        </li>
-
-        <li class="nav-item me-2">
-            <a class="btn btn-outline-light btn-sm"
-               href="{% url 'gestion:lista_suscripciones' %}">
-                <i class="fa-solid fa-id-card"></i> Suscripciones
-            </a>
-        </li>
-        <li class="nav-item me-2">
-            <a class="btn btn-outline-light btn-sm"
-            href="{% url 'gestion:lista_registros_legales' %}">
-                <i class="fa-solid fa-file-signature"></i> Registros
-            </a>
-        </li>
-
-        <li class="nav-item me-2">
-            <a class="btn btn-outline-light btn-sm"
-               href="{% url 'gestion:lista_pagos' %}">
-                <i class="fa-solid fa-money-bill"></i> Pagos
-            </a>
-        </li>
-
-    {% endif %}
-
-</ul>
-
-            <!-- DERECHA -->
-            <ul class="navbar-nav ms-auto">
-                <li class="nav-item me-2">
-
-                    <button onclick="toggleTheme()"
-                            class="btn btn-outline-light btn-sm">
-
-                        <i class="fa-solid fa-circle-half-stroke"></i>
-
-                    </button>
-
-                </li>
                 {% if user.is_authenticated %}
-
-                    <li class="nav-item">
-                        <form action="{% url 'logout' %}" method="post">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn-danger btn-sm">
-                                <i class="fa-solid fa-right-from-bracket"></i>
-                                Cerrar sesión
-                            </button>
-                        </form>
-                    </li>
-
+                    <a class="btn btn-danger btn-sm"
+                       href="{% url 'logout' %}">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                        Cerrar sesión
+                    </a>
                 {% else %}
-
-                    <li class="nav-item">
-                        <a class="btn btn-primary btn-sm"
-                           href="{% url 'login' %}">
-                            <i class="fa-solid fa-user-lock"></i>
-                            Iniciar sesión
-                        </a>
-                    </li>
-
+                    <a class="btn btn-outline-dark btn-sm"
+                       href="{% url 'login' %}">
+                        <i class="fa-solid fa-right-to-bracket"></i>
+                        Iniciar sesión
+                    </a>
                 {% endif %}
 
-            </ul>
-
+            </div>
         </div>
 
     </div>
@@ -479,7 +417,7 @@ window.onload = () => {
 }
 
 </script>
-
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 
 </html>
