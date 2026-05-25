@@ -3,444 +3,405 @@
 
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestión Academia</title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
     <link rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 
     <style>
 
-:root {
+        :root {
 
-    --bg-main: #121212;
-    --bg-card: #1e1e1e;
-    --bg-navbar: #1f1f1f;
+            --bg-main: #121212;
+            --bg-card: #1e1e1e;
+            --bg-navbar: #1f1f1f;
 
-    --text-main: #f1f1f1;
-    --text-secondary: #bdbdbd;
+            --text-main: #f1f1f1;
+            --text-secondary: #bdbdbd;
 
-    --border-color: #333;
+            --border-color: #333;
 
-    --btn-border: #f8f9fa;
-    --btn-text: #f8f9fa;
+        }
 
-}
+        body[data-theme="light"] {
 
-body[data-theme="light"] {
+            --bg-main: #A5B4C2;
 
-    --bg-main: #A5B4C2;
+            --bg-card: rgba(255,255,255,.60);
 
-    --bg-card: rgba(255, 255, 255, 0.55);
+            --bg-navbar: rgba(255,255,255,.80);
 
-    --bg-navbar: rgba(255, 255, 255, 0.75);
+            --text-main: #1b1b1b;
 
-    --text-main: #1b1b1b;
+            --text-secondary: #3f3f3f;
 
-    --text-secondary: #3f3f3f;
+            --border-color: rgba(0,0,0,.18);
 
-    --border-color: rgba(0,0,0,.15);
+        }
 
-    --btn-border: #1b1b1b;
+        body {
 
-    --btn-text: #1b1b1b;
+            background-color: var(--bg-main);
 
-}
+            color: var(--text-main);
 
-body {
+            min-height: 100vh;
 
-    background-color: var(--bg-main);
-    color: var(--text-main);
+            transition: .2s ease;
 
-    min-height: 100vh;
+        }
 
-    transition: .2s ease;
+        .navbar-custom {
 
-}
+            background-color: var(--bg-navbar) !important;
 
-.navbar-custom {
+            border-bottom: 1px solid var(--border-color);
 
-    background-color: var(--bg-navbar) !important;
+            padding: 12px 18px;
 
-    border-bottom: 1px solid var(--border-color);
+        }
 
-}
+        .navbar-brand {
 
-.navbar-brand {
+            color: var(--text-main) !important;
 
-    font-weight: bold;
+            font-weight: bold;
 
-    color: var(--text-main) !important;
+        }
 
-}
+        .navbar-custom .btn {
 
-.main-container {
+            display: inline-flex;
 
-    padding: 40px 35px 35px 35px;
+            align-items: center;
 
-}
+            justify-content: center;
 
-.card,
-.card-custom,
-.bg-dark,
-.table-dark-custom,
-.table-dark {
+            gap: 6px;
 
-    background-color: var(--bg-card) !important;
+            white-space: nowrap;
 
-    color: var(--text-main) !important;
+        }
 
-    border-color: var(--border-color) !important;
+        .navbar-custom .btn-outline-light {
 
-    padding-top: 30px;
+            color: var(--text-main) !important;
 
-}
+            border-color: var(--text-main) !important;
 
-body[data-theme="light"] .card,
-body[data-theme="light"] .card-custom {
+        }
 
-    backdrop-filter: blur(8px);
+        .navbar-custom .btn-outline-light:hover {
 
-    box-shadow: 0 4px 20px rgba(0,0,0,.08);
+            background-color: var(--text-main) !important;
 
-}
+            color: var(--bg-main) !important;
 
-.text-secondary {
+        }
 
-    color: var(--text-secondary) !important;
+        .main-container {
 
-}
+            padding: 35px;
 
-.border-secondary {
+        }
 
-    border-color: var(--border-color) !important;
+        .card-custom,
+        .card,
+        .bg-dark,
+        .table-dark,
+        .table-dark-custom {
 
-}
+            background-color: var(--bg-card) !important;
 
-.btn-outline-light {
+            color: var(--text-main) !important;
 
-    color: var(--btn-text) !important;
+            border-color: var(--border-color) !important;
 
-    border-color: var(--btn-border) !important;
+        }
 
-}
+        .card-custom,
+        .card {
 
-.btn-outline-light:hover {
+            border-radius: 22px !important;
 
-    background-color: var(--btn-text) !important;
+            overflow: hidden;
 
-    color: var(--bg-card) !important;
+            box-shadow: 0 4px 20px rgba(0,0,0,.08);
 
-}
+        }
 
-.messages-container p {
+        .card-body {
 
-    padding: 10px;
+            padding: 30px !important;
 
-    border-radius: 6px;
+        }
 
-    background-color: var(--bg-card);
+        .text-secondary {
 
-    border-left: 4px solid #2d6cdf;
+            color: var(--text-secondary) !important;
 
-}
+        }
 
-table {
+        .border-secondary {
 
-    width: 100%;
+            border-color: var(--border-color) !important;
 
-}
+        }
 
-.table,
-.table-dark {
+        .table {
 
-    --bs-table-bg: var(--bg-card);
+            --bs-table-bg: var(--bg-card);
 
-    --bs-table-color: var(--text-main);
+            --bs-table-color: var(--text-main);
 
-    --bs-table-border-color: var(--border-color);
+            --bs-table-border-color: var(--border-color);
 
-    --bs-table-hover-bg: rgba(120,120,120,.15);
+            --bs-table-hover-bg: rgba(120,120,120,.15);
 
-    color: var(--text-main) !important;
+        }
 
-}
+        .table-dark-custom {
 
-.table-dark-custom {
+            border-radius: 18px;
 
-    background-color: var(--bg-card);
+            overflow: hidden;
 
-    color: var(--text-main);
+        }
 
-    border-radius: 22px;
+        .badge-activo {
 
-    overflow: hidden;
+            background-color: #198754;
 
-    overflow: hidden;
+            padding: 6px 10px;
 
-}
+            border-radius: 20px;
 
-.table-dark-custom thead {
+        }
 
-    background-color: rgba(255,255,255,.05);
+        .badge-vencido {
 
-}
+            background-color: #dc3545;
 
-.table-dark-custom th,
-.table-dark-custom td {
+            padding: 6px 10px;
 
-    vertical-align: middle;
+            border-radius: 20px;
 
-    border-color: var(--border-color);
+        }
 
-}
+        .badge-proximo {
 
-.table-dark-custom tbody tr:hover {
+            background-color: #ffc107;
 
-    background-color: rgba(120,120,120,.1);
+            color: #111;
 
-}
+            padding: 6px 10px;
 
-.badge-activo {
+            border-radius: 20px;
 
-    background-color: #198754;
+        }
 
-    padding: 6px 10px;
+        .messages-container p {
 
-    border-radius: 20px;
+            padding: 10px;
 
-}
+            border-radius: 8px;
 
-.badge-vencido {
+            background-color: var(--bg-card);
 
-    background-color: #dc3545;
+            border-left: 4px solid #2d6cdf;
 
-    padding: 6px 10px;
+        }
 
-    border-radius: 20px;
+        @media (max-width: 991px) {
 
-}
+            .navbar-collapse {
 
-.badge-proximo {
+                padding-top: 15px;
 
-    background-color: #ffc107;
+            }
 
-    color: black;
+            .navbar-nav {
 
-    padding: 6px 10px;
+                width: 100%;
 
-    border-radius: 20px;
+            }
 
-}
+            .navbar-custom .btn,
+            .navbar-custom form {
 
-body[data-theme="light"] .btn-outline-light {
+                width: 100%;
 
-    color: #1b1b1b !important;
+            }
 
-    border-color: #1b1b1b !important;
+            .main-container {
 
-    background-color: rgba(255,255,255,.35);
+                padding: 20px 12px;
 
-}
+            }
 
-body[data-theme="light"] .btn-outline-light:hover {
+            .card-body {
 
-    background-color: #1b1b1b !important;
+                padding: 20px !important;
 
-    color: white !important;
+            }
 
-}
+        }
 
-body[data-theme="light"] .btn-primary {
-
-    background-color: #5f7387 !important;
-
-    border-color: #5f7387 !important;
-
-}
-
-body[data-theme="light"] .btn-success {
-
-    background-color: #4d7c5a !important;
-
-    border-color: #4d7c5a !important;
-
-}
-
-.card,
-.card-custom {
-
-    border-radius: 22px !important;
-
-    overflow: hidden;
-
-    box-shadow:
-        0 4px 20px rgba(0,0,0,.08);
-
-    padding-top: 30px;
-
-}
-
-.card-body {
-
-    padding: 30px !important;
-
-}
-
-form {
-
-    padding-left: 10px;
-
-    padding-right: 10px;
-
-}
-
-</style>
-
-   
-
-  
+    </style>
 
 </head>
 
 <body id="bodyApp" data-theme="dark">
 
 <nav class="navbar navbar-expand-lg navbar-dark navbar-custom">
+
     <div class="container-fluid">
 
-        <a class="navbar-brand" href="{% url 'gestion:horario_clases' %}">
-            <i class="fa-solid fa-user-ninja"></i> Academia
-        </a>
-
-        <div class="collapse navbar-collapse">
-
-            <!-- IZQUIERDA -->
-          <ul class="navbar-nav">
-
-    <li class="nav-item me-2">
-        <a class="btn btn-outline-light btn-sm"
+        <a class="navbar-brand fw-bold"
            href="{% url 'gestion:horario_clases' %}">
-            <i class="fa-solid fa-house"></i> Home
+
+            <i class="fa-solid fa-user-ninja"></i>
+            Academia
+
         </a>
-    </li>
-    <li class="nav-item me-2">
-        <a class="btn btn-outline-light btn-sm"
-        href="{% url 'registro_publico' %}">
-            <i class="fa-solid fa-user-plus"></i>
-            Registro
-        </a>
-    </li>
 
-    {% if user.is_authenticated and user.is_staff %}
+        <button class="navbar-toggler"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#navbarAcademia"
+                aria-controls="navbarAcademia"
+                aria-expanded="false"
+                aria-label="Toggle navigation">
 
-        <li class="nav-item me-2">
-            <a class="btn btn-outline-light btn-sm"
-               href="{% url 'gestion:dashboard' %}">
-                <i class="fa-solid fa-chart-line"></i> Dashboard
-            </a>
-        </li>
+            <span class="navbar-toggler-icon"></span>
 
-        <li class="nav-item me-2">
-            <a class="btn btn-outline-light btn-sm"
-               href="{% url 'gestion:lista_alumnos' %}">
-                <i class="fa-solid fa-users"></i> Alumnos
-            </a>
-        </li>
+        </button>
 
-        <li class="nav-item me-2">
-            <a class="btn btn-outline-light btn-sm"
-               href="{% url 'gestion:lista_planes' %}">
-                <i class="fa-solid fa-layer-group"></i> Planes
-            </a>
-        </li>
+        <div class="collapse navbar-collapse" id="navbarAcademia">
 
-        <li class="nav-item me-2">
-            <a class="btn btn-outline-light btn-sm"
-               href="{% url 'gestion:lista_suscripciones' %}">
-                <i class="fa-solid fa-id-card"></i> Suscripciones
-            </a>
-        </li>
-        <li class="nav-item me-2">
-            <a class="btn btn-outline-light btn-sm"
-            href="{% url 'gestion:lista_registros_legales' %}">
-                <i class="fa-solid fa-file-signature"></i> Registros
-            </a>
-        </li>
+            <div class="navbar-nav me-auto gap-2 mt-3 mt-lg-0">
 
-        <li class="nav-item me-2">
-            <a class="btn btn-outline-light btn-sm"
-               href="{% url 'gestion:lista_pagos' %}">
-                <i class="fa-solid fa-money-bill"></i> Pagos
-            </a>
-        </li>
+                <a class="btn btn-outline-light btn-sm"
+                   href="{% url 'gestion:horario_clases' %}">
 
-    {% endif %}
+                    <i class="fa-solid fa-house"></i>
+                    Home
 
-</ul>
+                </a>
 
-            <!-- DERECHA -->
-            <ul class="navbar-nav ms-auto">
-                <li class="nav-item me-2">
+                <a class="btn btn-outline-light btn-sm"
+                   href="{% url 'registro_publico' %}">
 
-                    <button onclick="toggleTheme()"
-                            class="btn btn-outline-light btn-sm">
+                    <i class="fa-solid fa-user-plus"></i>
+                    Registro
 
-                        <i class="fa-solid fa-circle-half-stroke"></i>
+                </a>
 
-                    </button>
-
-                </li>
                 {% if user.is_authenticated %}
 
-                    <li class="nav-item">
-                        <form action="{% url 'logout' %}" method="post">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn-danger btn-sm">
-                                <i class="fa-solid fa-right-from-bracket"></i>
-                                Cerrar sesión
-                            </button>
-                        </form>
-                    </li>
+                    <a class="btn btn-outline-light btn-sm"
+                       href="{% url 'gestion:dashboard' %}">
 
-                {% else %}
+                        <i class="fa-solid fa-chart-line"></i>
+                        Dashboard
 
-                    <li class="nav-item">
-                        <a class="btn btn-primary btn-sm"
-                           href="{% url 'login' %}">
-                            <i class="fa-solid fa-user-lock"></i>
-                            Iniciar sesión
-                        </a>
-                    </li>
+                    </a>
+
+                    <a class="btn btn-outline-light btn-sm"
+                       href="{% url 'gestion:lista_alumnos' %}">
+
+                        <i class="fa-solid fa-users"></i>
+                        Alumnos
+
+                    </a>
+
+                    <a class="btn btn-outline-light btn-sm"
+                       href="{% url 'gestion:lista_registros_legales' %}">
+
+                        <i class="fa-solid fa-file-signature"></i>
+                        Registros
+
+                    </a>
 
                 {% endif %}
 
-            </ul>
+            </div>
 
-        </div>
+            <div class="d-flex flex-column flex-lg-row gap-2 mt-3 mt-lg-0">
 
-    </div>
-</nav>
-    <div class="container-fluid main-container">
+                <button type="button"
+                        onclick="toggleTheme()"
+                        class="btn btn-outline-light btn-sm">
 
-        {% if messages %}
+                    <i class="fa-solid fa-circle-half-stroke"></i>
+                    Modo
 
-            <div class="messages-container">
+                </button>
 
-                {% for message in messages %}
-                    <p>{{ message }}</p>
-                {% endfor %}
+                {% if user.is_authenticated %}
+
+                    <form method="post"
+                          action="{% url 'logout' %}"
+                          class="m-0">
+
+                        {% csrf_token %}
+
+                        <button type="submit"
+                                class="btn btn-danger btn-sm w-100">
+
+                            <i class="fa-solid fa-right-from-bracket"></i>
+                            Cerrar sesión
+
+                        </button>
+
+                    </form>
+
+                {% else %}
+
+                    <a class="btn btn-outline-light btn-sm"
+                       href="{% url 'login' %}">
+
+                        <i class="fa-solid fa-right-to-bracket"></i>
+                        Iniciar sesión
+
+                    </a>
+
+                {% endif %}
 
             </div>
 
-        {% endif %}
-
-        <div class="card-custom">
-
-            {% block content %}{% endblock %}
-
         </div>
 
     </div>
+
+</nav>
+
+<div class="container-fluid main-container">
+
+    {% if messages %}
+
+        <div class="messages-container mb-3">
+
+            {% for message in messages %}
+
+                <p>{{ message }}</p>
+
+            {% endfor %}
+
+        </div>
+
+    {% endif %}
+
+    <div class="card-custom">
+
+        {% block content %}{% endblock %}
+
+    </div>
+
+</div>
 
 <script>
 
@@ -453,11 +414,13 @@ function toggleTheme() {
     if (currentTheme === 'dark') {
 
         body.setAttribute('data-theme', 'light');
+
         localStorage.setItem('theme', 'light');
 
     } else {
 
         body.setAttribute('data-theme', 'dark');
+
         localStorage.setItem('theme', 'dark');
 
     }
@@ -479,6 +442,8 @@ window.onload = () => {
 }
 
 </script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 </body>
 
