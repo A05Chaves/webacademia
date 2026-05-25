@@ -3,352 +3,167 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestión Academia</title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 
     <style>
-
-:root {
-
-    --bg-main: #121212;
-    --bg-card: #1e1e1e;
-    --bg-navbar: #1f1f1f;
-
-    --text-main: #f1f1f1;
-    --text-secondary: #bdbdbd;
-
-    --border-color: #333;
-
-    --btn-border: #f8f9fa;
-    --btn-text: #f8f9fa;
-
-}
-
-body[data-theme="light"] {
-
-    --bg-main: #A5B4C2;
-
-    --bg-card: rgba(255, 255, 255, 0.55);
-
-    --bg-navbar: rgba(255, 255, 255, 0.75);
-
-    --text-main: #1b1b1b;
-
-    --text-secondary: #3f3f3f;
-
-    --border-color: rgba(0,0,0,.15);
-
-    --btn-border: #1b1b1b;
-
-    --btn-text: #1b1b1b;
-
-}
-
-body {
-
-    background-color: var(--bg-main);
-    color: var(--text-main);
-
-    min-height: 100vh;
-
-    transition: .2s ease;
-
-}
-
-.navbar-custom {
-
-    background-color: var(--bg-navbar) !important;
-
-    border-bottom: 1px solid var(--border-color);
-
-}
-
-.navbar-brand {
-
-    font-weight: bold;
-
-    color: var(--text-main) !important;
-
-}
-
-.main-container {
-
-    padding: 40px 35px 35px 35px;
-
-}
-
-.card,
-.card-custom,
-.bg-dark,
-.table-dark-custom,
-.table-dark {
-
-    background-color: var(--bg-card) !important;
-
-    color: var(--text-main) !important;
-
-    border-color: var(--border-color) !important;
-
-    padding-top: 30px;
-
-}
-
-body[data-theme="light"] .card,
-body[data-theme="light"] .card-custom {
-
-    backdrop-filter: blur(8px);
-
-    box-shadow: 0 4px 20px rgba(0,0,0,.08);
-
-}
-
-.text-secondary {
-
-    color: var(--text-secondary) !important;
-
-}
-
-.border-secondary {
-
-    border-color: var(--border-color) !important;
-
-}
-
-.btn-outline-light {
-
-    color: var(--btn-text) !important;
-
-    border-color: var(--btn-border) !important;
-
-}
-
-.btn-outline-light:hover {
-
-    background-color: var(--btn-text) !important;
-
-    color: var(--bg-card) !important;
-
-}
-
-.messages-container p {
-
-    padding: 10px;
-
-    border-radius: 6px;
-
-    background-color: var(--bg-card);
-
-    border-left: 4px solid #2d6cdf;
-
-}
-
-table {
-
-    width: 100%;
-
-}
-
-.table,
-.table-dark {
-
-    --bs-table-bg: var(--bg-card);
-
-    --bs-table-color: var(--text-main);
-
-    --bs-table-border-color: var(--border-color);
-
-    --bs-table-hover-bg: rgba(120,120,120,.15);
-
-    color: var(--text-main) !important;
-
-}
-
-.table-dark-custom {
-
-    background-color: var(--bg-card);
-
-    color: var(--text-main);
-
-    border-radius: 22px;
-
-    overflow: hidden;
-
-    overflow: hidden;
-
-}
-
-.table-dark-custom thead {
-
-    background-color: rgba(255,255,255,.05);
-
-}
-
-.table-dark-custom th,
-.table-dark-custom td {
-
-    vertical-align: middle;
-
-    border-color: var(--border-color);
-
-}
-
-.table-dark-custom tbody tr:hover {
-
-    background-color: rgba(120,120,120,.1);
-
-}
-
-.badge-activo {
-
-    background-color: #198754;
-
-    padding: 6px 10px;
-
-    border-radius: 20px;
-
-}
-
-.badge-vencido {
-
-    background-color: #dc3545;
-
-    padding: 6px 10px;
-
-    border-radius: 20px;
-
-}
-
-.badge-proximo {
-
-    background-color: #ffc107;
-
-    color: black;
-
-    padding: 6px 10px;
-
-    border-radius: 20px;
-
-}
-
-body[data-theme="light"] .btn-outline-light {
-
-    color: #1b1b1b !important;
-
-    border-color: #1b1b1b !important;
-
-    background-color: rgba(255,255,255,.35);
-
-}
-
-body[data-theme="light"] .btn-outline-light:hover {
-
-    background-color: #1b1b1b !important;
-
-    color: white !important;
-
-}
-
-body[data-theme="light"] .btn-primary {
-
-    background-color: #5f7387 !important;
-
-    border-color: #5f7387 !important;
-
-}
-
-body[data-theme="light"] .btn-success {
-
-    background-color: #4d7c5a !important;
-
-    border-color: #4d7c5a !important;
-
-}
-
-.card,
-.card-custom {
-
-    border-radius: 22px !important;
-
-    overflow: hidden;
-
-    box-shadow:
-        0 4px 20px rgba(0,0,0,.08);
-
-    padding-top: 30px;
-
-}
-
-.card-body {
-
-    padding: 30px !important;
-
-}
-
-form {
-
-    padding-left: 10px;
-
-    padding-right: 10px;
-
-}
-
-.navbar-custom .btn {
-    display: inline-flex !important;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    white-space: nowrap;
-}
-
-.navbar-custom .btn-outline-light {
-    color: var(--text-main) !important;
-    border-color: var(--text-main) !important;
-    background-color: transparent !important;
-}
-
-.navbar-custom .btn-outline-light:hover {
-    background-color: var(--text-main) !important;
-    color: var(--bg-main) !important;
-}
-
-.navbar-custom .navbar-toggler {
-    border: 1px solid var(--text-main) !important;
-}
-
-.navbar-custom .navbar-toggler-icon {
-    filter: invert(1);
-}
-
-body[data-theme="light"] .navbar-custom .navbar-toggler-icon {
-    filter: invert(0);
-}
-
-@media (max-width: 991px) {
-    .navbar-custom .navbar-nav {
-        width: 100%;
-    }
-
-    .navbar-custom .btn {
-        width: 100%;
-        margin-bottom: 8px;
-    }
-
-    .main-container {
-        padding: 20px 12px;
-    }
-}
-
-
-</style>
-
-   
-
-  
-
+        :root {
+            --bg-main: #121212;
+            --bg-card: #1e1e1e;
+            --bg-navbar: #1f1f1f;
+            --text-main: #f1f1f1;
+            --text-secondary: #bdbdbd;
+            --border-color: #333;
+        }
+
+        body[data-theme="light"] {
+            --bg-main: #A5B4C2;
+            --bg-card: rgba(255,255,255,.60);
+            --bg-navbar: rgba(255,255,255,.80);
+            --text-main: #1b1b1b;
+            --text-secondary: #3f3f3f;
+            --border-color: rgba(0,0,0,.18);
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            min-height: 100vh;
+        }
+
+        .navbar-custom {
+            background-color: var(--bg-navbar) !important;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .navbar-brand {
+            color: var(--text-main) !important;
+            font-weight: 700;
+        }
+
+        .nav-btn {
+            display: inline-flex !important;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            white-space: nowrap;
+            color: var(--text-main) !important;
+            border-color: var(--text-main) !important;
+        }
+
+        .nav-btn:hover {
+            background-color: var(--text-main) !important;
+            color: var(--bg-main) !important;
+        }
+
+        .navbar-toggler {
+            border: 1px solid var(--text-main) !important;
+        }
+
+        .navbar-toggler-icon {
+            filter: invert(1);
+        }
+
+        body[data-theme="light"] .navbar-toggler-icon {
+            filter: invert(0);
+        }
+
+        .main-container {
+            padding: 35px;
+        }
+
+        .card-custom,
+        .card,
+        .bg-dark,
+        .table-dark,
+        .table-dark-custom {
+            background-color: var(--bg-card) !important;
+            color: var(--text-main) !important;
+            border-color: var(--border-color) !important;
+        }
+
+        .card-custom,
+        .card {
+            border-radius: 22px !important;
+            box-shadow: 0 4px 20px rgba(0,0,0,.08);
+            overflow: hidden;
+        }
+
+        .card-body {
+            padding: 30px !important;
+        }
+
+        .text-secondary {
+            color: var(--text-secondary) !important;
+        }
+
+        .border-secondary {
+            border-color: var(--border-color) !important;
+        }
+
+        .table {
+            --bs-table-bg: var(--bg-card);
+            --bs-table-color: var(--text-main);
+            --bs-table-border-color: var(--border-color);
+            --bs-table-hover-bg: rgba(120,120,120,.15);
+        }
+
+        .table-dark-custom {
+            border-radius: 18px;
+            overflow: hidden;
+        }
+
+        .badge-activo,
+        .badge-vencido,
+        .badge-proximo {
+            padding: 6px 10px;
+            border-radius: 20px;
+        }
+
+        .badge-activo {
+            background-color: #198754;
+        }
+
+        .badge-vencido {
+            background-color: #dc3545;
+        }
+
+        .badge-proximo {
+            background-color: #ffc107;
+            color: #111;
+        }
+
+        .messages-container p {
+            padding: 10px;
+            border-radius: 8px;
+            background-color: var(--bg-card);
+            border-left: 4px solid #2d6cdf;
+        }
+
+        @media (max-width: 991px) {
+            .navbar-nav {
+                width: 100%;
+            }
+
+            .nav-btn {
+                width: 100%;
+                margin-bottom: 8px;
+                padding: 10px;
+            }
+
+            .main-container {
+                padding: 20px 12px;
+            }
+
+            .card-body {
+                padding: 20px !important;
+            }
+        }
+    </style>
 </head>
 
 <body id="bodyApp" data-theme="dark">
@@ -356,7 +171,7 @@ body[data-theme="light"] .navbar-custom .navbar-toggler-icon {
 <nav class="navbar navbar-expand-lg navbar-dark navbar-custom px-3">
     <div class="container-fluid">
 
-        <a class="navbar-brand fw-bold d-flex align-items-center gap-2"
+        <a class="navbar-brand d-flex align-items-center gap-2"
            href="{% url 'gestion:horario_clases' %}">
             <i class="fa-solid fa-user-ninja"></i>
             Academia
@@ -373,7 +188,6 @@ body[data-theme="light"] .navbar-custom .navbar-toggler-icon {
         </button>
 
         <div class="collapse navbar-collapse" id="menuPrincipal">
-
             <div class="navbar-nav ms-auto gap-2 mt-3 mt-lg-0">
 
                 <a class="btn btn-outline-light btn-sm nav-btn"
@@ -389,11 +203,13 @@ body[data-theme="light"] .navbar-custom .navbar-toggler-icon {
                 </a>
 
                 {% if user.is_authenticated %}
-                    <a class="btn btn-danger btn-sm nav-btn"
-                       href="{% url 'logout' %}">
-                        <i class="fa-solid fa-right-from-bracket"></i>
-                        <span>Cerrar sesión</span>
-                    </a>
+                    <form action="{% url 'logout' %}" method="post" class="m-0">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-danger btn-sm nav-btn">
+                            <i class="fa-solid fa-right-from-bracket"></i>
+                            <span>Cerrar sesión</span>
+                        </button>
+                    </form>
                 {% else %}
                     <a class="btn btn-outline-light btn-sm nav-btn"
                        href="{% url 'login' %}">
@@ -407,66 +223,47 @@ body[data-theme="light"] .navbar-custom .navbar-toggler-icon {
 
     </div>
 </nav>
-    <div class="container-fluid main-container">
 
-        {% if messages %}
+<div class="container-fluid main-container">
 
-            <div class="messages-container">
-
-                {% for message in messages %}
-                    <p>{{ message }}</p>
-                {% endfor %}
-
-            </div>
-
-        {% endif %}
-
-        <div class="card-custom">
-
-            {% block content %}{% endblock %}
-
+    {% if messages %}
+        <div class="messages-container mb-3">
+            {% for message in messages %}
+                <p>{{ message }}</p>
+            {% endfor %}
         </div>
+    {% endif %}
 
+    <div class="card-custom">
+        {% block content %}{% endblock %}
     </div>
 
+</div>
+
 <script>
+    function toggleTheme() {
+        const body = document.getElementById('bodyApp');
+        const currentTheme = body.getAttribute('data-theme');
 
-function toggleTheme() {
-
-    const body = document.getElementById('bodyApp');
-
-    const currentTheme = body.getAttribute('data-theme');
-
-    if (currentTheme === 'dark') {
-
-        body.setAttribute('data-theme', 'light');
-        localStorage.setItem('theme', 'light');
-
-    } else {
-
-        body.setAttribute('data-theme', 'dark');
-        localStorage.setItem('theme', 'dark');
-
+        if (currentTheme === 'dark') {
+            body.setAttribute('data-theme', 'light');
+            localStorage.setItem('theme', 'light');
+        } else {
+            body.setAttribute('data-theme', 'dark');
+            localStorage.setItem('theme', 'dark');
+        }
     }
 
-}
+    window.onload = () => {
+        const savedTheme = localStorage.getItem('theme');
 
-window.onload = () => {
-
-    const savedTheme = localStorage.getItem('theme');
-
-    if (savedTheme) {
-
-        document
-            .getElementById('bodyApp')
-            .setAttribute('data-theme', savedTheme);
-
+        if (savedTheme) {
+            document.getElementById('bodyApp').setAttribute('data-theme', savedTheme);
+        }
     }
-
-}
-
 </script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-</body>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+</body>
 </html>
