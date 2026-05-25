@@ -163,6 +163,30 @@
                 padding: 20px !important;
             }
         }
+
+                .navbar-custom .btn {
+            display: inline-flex !important;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 991px) {
+            .navbar-custom .navbar-nav {
+                width: 100%;
+            }
+
+            .navbar-custom .btn,
+            .navbar-custom form {
+                width: 100%;
+            }
+
+            .navbar-custom .btn {
+                margin-bottom: 8px;
+                padding: 10px;
+            }
+        }
     </style>
 </head>
 
@@ -171,8 +195,7 @@
 <nav class="navbar navbar-expand-lg navbar-dark navbar-custom px-3">
     <div class="container-fluid">
 
-        <a class="navbar-brand d-flex align-items-center gap-2"
-           href="{% url 'gestion:horario_clases' %}">
+        <a class="navbar-brand fw-bold" href="{% url 'gestion:horario_clases' %}">
             <i class="fa-solid fa-user-ninja"></i>
             Academia
         </a>
@@ -180,45 +203,64 @@
         <button class="navbar-toggler"
                 type="button"
                 data-bs-toggle="collapse"
-                data-bs-target="#menuPrincipal"
-                aria-controls="menuPrincipal"
-                aria-expanded="false"
-                aria-label="Abrir menú">
+                data-bs-target="#menuPrincipal">
             <span class="navbar-toggler-icon"></span>
         </button>
 
         <div class="collapse navbar-collapse" id="menuPrincipal">
-            <div class="navbar-nav ms-auto gap-2 mt-3 mt-lg-0">
 
-                <a class="btn btn-outline-light btn-sm nav-btn"
-                   href="{% url 'gestion:horario_clases' %}">
-                    <i class="fa-solid fa-house"></i>
-                    <span>Home</span>
+            <div class="navbar-nav me-auto gap-2 mt-3 mt-lg-0">
+
+                <a class="btn btn-outline-light btn-sm" href="{% url 'gestion:horario_clases' %}">
+                    <i class="fa-solid fa-house"></i> Home
                 </a>
 
-                <a class="btn btn-outline-light btn-sm nav-btn"
-                   href="{% url 'registro_publico' %}">
-                    <i class="fa-solid fa-user-plus"></i>
-                    <span>Registro</span>
+                <a class="btn btn-outline-light btn-sm" href="{% url 'registro_publico' %}">
+                    <i class="fa-solid fa-user-plus"></i> Registro
                 </a>
 
-                {% if user.is_authenticated %}
-                    <form action="{% url 'logout' %}" method="post" class="m-0">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-danger btn-sm nav-btn">
-                            <i class="fa-solid fa-right-from-bracket"></i>
-                            <span>Cerrar sesión</span>
-                        </button>
-                    </form>
-                {% else %}
-                    <a class="btn btn-outline-light btn-sm nav-btn"
-                       href="{% url 'login' %}">
-                        <i class="fa-solid fa-right-to-bracket"></i>
-                        <span>Iniciar sesión</span>
+                {% if user.is_authenticated and user.is_staff %}
+                    <a class="btn btn-outline-light btn-sm" href="{% url 'gestion:dashboard' %}">
+                        <i class="fa-solid fa-chart-line"></i> Dashboard
+                    </a>
+
+                    <a class="btn btn-outline-light btn-sm" href="{% url 'gestion:lista_alumnos' %}">
+                        <i class="fa-solid fa-users"></i> Alumnos
+                    </a>
+
+                    <a class="btn btn-outline-light btn-sm" href="{% url 'gestion:lista_registros_legales' %}">
+                        <i class="fa-solid fa-file-signature"></i> Registros
                     </a>
                 {% endif %}
 
             </div>
+
+            <div class="navbar-nav ms-auto gap-2 mt-3 mt-lg-0">
+
+                <button type="button"
+                        onclick="toggleTheme()"
+                        class="btn btn-outline-light btn-sm">
+                    <i class="fa-solid fa-circle-half-stroke"></i>
+                    Modo
+                </button>
+
+                {% if user.is_authenticated %}
+                    <form action="{% url 'logout' %}" method="post" class="m-0">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-danger btn-sm w-100">
+                            <i class="fa-solid fa-right-from-bracket"></i>
+                            Cerrar sesión
+                        </button>
+                    </form>
+                {% else %}
+                    <a class="btn btn-outline-light btn-sm" href="{% url 'login' %}">
+                        <i class="fa-solid fa-right-to-bracket"></i>
+                        Iniciar sesión
+                    </a>
+                {% endif %}
+
+            </div>
+
         </div>
 
     </div>
