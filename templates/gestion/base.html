@@ -295,6 +295,29 @@ form {
 
 }
 
+.navbar-custom .btn-outline-light {
+    color: var(--text-main) !important;
+    border-color: var(--text-main) !important;
+    background-color: transparent;
+}
+
+.navbar-custom .btn-outline-light:hover {
+    background-color: var(--text-main) !important;
+    color: var(--bg-main) !important;
+}
+
+.navbar-toggler {
+    border-color: var(--text-main) !important;
+}
+
+.navbar-toggler-icon {
+    filter: invert(1);
+}
+
+body[data-theme="light"] .navbar-toggler-icon {
+    filter: invert(0);
+}
+
 </style>
 
    
