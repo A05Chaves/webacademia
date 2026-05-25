@@ -305,7 +305,7 @@ form {
 
 <body id="bodyApp" data-theme="dark">
 
-<nav class="navbar navbar-expand-lg navbar-light px-3">
+<nav class="navbar navbar-expand-lg navbar-custom px-3">
     <div class="container-fluid">
 
         <a class="navbar-brand fw-bold" href="{% url 'gestion:horario_clases' %}">
@@ -327,13 +327,13 @@ form {
 
             <div class="navbar-nav ms-auto gap-2 mt-3 mt-lg-0">
 
-                <a class="btn btn-outline-dark btn-sm"
+                <a class="btn btn-outline-light btn-sm"
                    href="{% url 'gestion:horario_clases' %}">
                     <i class="fa-solid fa-house"></i>
                     Home
                 </a>
 
-                <a class="btn btn-outline-dark btn-sm"
+                <a class="btn btn-outline-light btn-sm"
                    href="{% url 'registro_publico' %}">
                     <i class="fa-solid fa-user-plus"></i>
                     Registro
@@ -346,7 +346,7 @@ form {
                         Cerrar sesión
                     </a>
                 {% else %}
-                    <a class="btn btn-outline-dark btn-sm"
+                    <a class="btn btn-outline-light btn-sm"
                        href="{% url 'login' %}">
                         <i class="fa-solid fa-right-to-bracket"></i>
                         Iniciar sesión
