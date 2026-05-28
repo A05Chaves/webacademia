@@ -1,3 +1,4 @@
+from .models import ConfiguracionHome
 from pagos.models import Pago, MetodoPagoQR
 from django import forms
 from django.contrib.auth import get_user_model
@@ -395,4 +396,33 @@ class UsuarioAlumnoEditForm(forms.ModelForm):
                 'class': 'form-control'
             }),
 
+        }
+
+
+# FORMULARIO PARA AGREGAR VIDEO Y MUSICA
+
+
+class ConfiguracionHomeForm(forms.ModelForm):
+
+    class Meta:
+        model = ConfiguracionHome
+
+        fields = [
+            'video_promo_url',
+            'playlist_youtube_url',
+            'activo',
+        ]
+
+        widgets = {
+            'video_promo_url': forms.URLInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'https://www.youtube.com/watch?v=...'
+            }),
+            'playlist_youtube_url': forms.URLInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'https://www.youtube.com/playlist?list=...'
+            }),
+            'activo': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
         }

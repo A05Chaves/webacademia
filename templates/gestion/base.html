@@ -207,8 +207,15 @@
 
             <div class="navbar-nav me-auto gap-2 mt-3 mt-lg-0">
 
-                <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'gestion:horario_clases' %}">
+                <a class="btn btn-outline-light btn-sm menu-btn"
+                    href="{% url 'gestion:home_publica' %}">
                     <i class="fa-solid fa-house"></i> Home
+                </a>
+
+                <a class="btn btn-outline-light btn-sm menu-btn"
+                    href="{% url 'gestion:horario_clases' %}">
+                    <i class="fa-solid fa-calendar-days"></i>
+                    Horario
                 </a>
 
                 <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'registro_publico' %}">
@@ -220,6 +227,16 @@
                     <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'gestion:dashboard' %}">
                         <i class="fa-solid fa-chart-line"></i> Dashboard
                     </a>
+
+                    <button
+                        type="button"
+                        onclick="toggleYoutube()"
+                        class="btn btn-danger btn-sm menu-btn">
+
+                        <i class="fa-brands fa-youtube"></i>
+                        Música
+
+                    </button>
 
                     <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'gestion:lista_alumnos' %}">
                         <i class="fa-solid fa-users"></i> Alumnos

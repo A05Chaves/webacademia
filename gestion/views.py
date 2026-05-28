@@ -4,6 +4,7 @@ Vistas del módulo de gestión de la academia.
 from registros_legales.services import crear_alumno_desde_registro
 """
 
+from .forms import ConfiguracionHomeForm
 from registros_legales.services import (
     crear_alumno_desde_registro,
     enviar_correo_bienvenida_alumno,
@@ -65,10 +66,82 @@ from .forms import GastoForm
 from .forms import PagoProgramadoForm, TransferenciaForm
 from django.db.models import Sum
 from registros_legales.models import RegistroLegalEstudiante
-
+from .models import ConfiguracionHome
 from alumnos.models import Alumno
 from django.contrib.auth import get_user_model
 User = get_user_model()
+
+
+# VISTA HOME DEL PROGRAMA
+
+
+def convertir_youtube_embed(url):
+
+    if not url:
+        return ""
+
+    if "playlist?list=" in url:
+
+        playlist_id = url.split("list=")[1].split("&")[0]
+
+        return (
+            f"https://www.youtube.com/embed/videoseries"
+            f"?list={playlist_id}"
+        )
+
+    if "watch?v=" in url:
+
+        video_id = url.split("v=")[1].split("&")[0]
+
+        return (
+            f"https://www.youtube.com/embed/{video_id}"
+            f"?autoplay=1&mute=1&rel=0"
+        )
+
+    if "youtu.be/" in url:
+
+        video_id = url.split("youtu.be/")[1].split("?")[0]
+
+        return (
+            f"https://www.youtube.com/embed/{video_id}"
+            f"?autoplay=1&mute=1&rel=0"
+        )
+
+    return f"https://www.youtube.com/embed/{video_id}?rel=0&autoplay=1&mute=1"
+
+
+def home_publica(request):
+    hoy = timezone.now().date()
+
+    asistencias_hoy = AsistenciaClase.objects.filter(
+        fecha_clase=hoy,
+        estado='CONFIRMADA'
+    ).select_related(
+        'alumno__user',
+        'clase'
+    ).order_by('-fecha_confirmacion')[:10]
+
+    config_home = ConfiguracionHome.objects.filter(
+        activo=True
+    ).first()
+
+    promo_embed = ""
+    playlist_embed = ""
+
+    if config_home:
+        promo_embed = convertir_youtube_embed(
+            config_home.video_promo_url
+        )
+
+        playlist_embed = convertir_youtube_embed(
+            config_home.playlist_youtube_url
+        )
+
+    return render(request, 'gestion/home_publica.html', {
+        'asistencias_hoy': asistencias_hoy,
+        'promo_embed': promo_embed,
+        'playlist_embed': playlist_embed,
+    })
 
 
 @staff_member_required
@@ -1432,3 +1505,43 @@ def descargar_pdf_registro_legal(request, registro_id):
     p.save()
 
     return response
+
+
+# VISTA PARA AGREGAR MUSICA
+
+@staff_member_required
+def configurar_home(request):
+
+    config_home = ConfiguracionHome.objects.filter(
+        activo=True
+    ).first()
+
+    if not config_home:
+        config_home = ConfiguracionHome.objects.create(
+            activo=True
+        )
+
+    if request.method == 'POST':
+        form = ConfiguracionHomeForm(
+            request.POST,
+            instance=config_home
+        )
+
+        if form.is_valid():
+            form.save()
+
+            messages.success(
+                request,
+                'Configuración de la home actualizada correctamente.'
+            )
+
+            return redirect('gestion:configurar_home')
+    else:
+        form = ConfiguracionHomeForm(
+            instance=config_home
+        )
+
+    return render(request, 'gestion/configurar_home.html', {
+        'form': form,
+        'config_home': config_home,
+    })

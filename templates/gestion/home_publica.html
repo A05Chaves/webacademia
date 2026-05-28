@@ -1,0 +1,175 @@
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+
+<div class="row g-4">
+
+    <div class="col-lg-8">
+
+        <div class="card bg-dark text-light border-secondary h-100">
+
+            <div class="ratio ratio-16x9">
+
+                <iframe
+                    id="videoFrame"
+                    src="{{ promo_embed }}"
+                    title="Video Academia"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    referrerpolicy="strict-origin-when-cross-origin"
+                    allowfullscreen>
+                </iframe>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="col-lg-4">
+
+        <div class="card bg-dark text-light border-secondary h-100">
+
+            <div class="card-body">
+
+                <h4 class="mb-4">
+                    <i class="fa-solid fa-users"></i>
+                    Entrenando ahora
+                </h4>
+
+                {% for asistencia in asistencias_hoy %}
+
+                    <div class="border-bottom border-secondary py-2">
+
+                        <strong>
+                            {{ asistencia.alumno.user.get_full_name|default:asistencia.alumno.user.username }}
+                        </strong>
+
+                        <br>
+
+                        <small>
+                            {{ asistencia.clase.disciplina }}
+                            -
+                            {{ asistencia.clase.hora_inicio }}
+                        </small>
+
+                    </div>
+
+                {% empty %}
+
+                    <p class="text-secondary">
+                        Aún no hay alumnos confirmados hoy.
+                    </p>
+
+                {% endfor %}
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<div class="row g-4 mt-4">
+
+    <div class="col-md-3">
+
+        <a href="{% url 'gestion:horario_clases' %}"
+           class="btn btn-outline-light w-100 py-4 fs-4">
+
+            <i class="fa-solid fa-calendar-days"></i>
+
+            <br>
+
+            Horario
+
+        </a>
+
+    </div>
+
+    <div class="col-md-3">
+
+        <a href="#"
+           class="btn btn-outline-light w-100 py-4 fs-4">
+
+            <i class="fa-solid fa-gift"></i>
+
+            <br>
+
+            Cortesía
+
+        </a>
+
+    </div>
+
+    <div class="col-md-3">
+
+        <button
+            type="button"
+            onclick="toggleYoutube()"
+            class="btn btn-danger w-100 py-4 fs-4">
+
+            <i class="fa-brands fa-youtube"></i>
+
+            <br>
+
+            <span id="youtubeBtnText">Música</span>
+
+        </button>
+
+    </div>
+
+    <div class="col-md-3">
+
+        <a href="#"
+           class="btn btn-outline-light w-100 py-4 fs-4">
+
+            <i class="fa-solid fa-stopwatch"></i>
+
+            <br>
+
+            Cronómetro
+
+        </a>
+
+    </div>
+
+</div>
+
+<script>
+
+let mostrandoPlaylist = false;
+
+const promoUrl = "{{ promo_embed }}";
+
+const playlistUrl = "{{ playlist_embed }}";
+
+function toggleYoutube() {
+
+    const videoFrame = document.getElementById('videoFrame');
+
+    const btnText = document.getElementById('youtubeBtnText');
+
+    if (mostrandoPlaylist) {
+
+        videoFrame.src = promoUrl;
+
+        btnText.innerText = "Música";
+
+        mostrandoPlaylist = false;
+
+    } else {
+
+        videoFrame.src = playlistUrl;
+
+        btnText.innerText = "Promo";
+
+        mostrandoPlaylist = true;
+
+    }
+
+}
+
+</script>
+
+{% endblock %}

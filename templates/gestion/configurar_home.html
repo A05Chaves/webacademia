@@ -1,0 +1,76 @@
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+
+    <h2 class="mb-0">
+        <i class="fa-solid fa-sliders"></i>
+        Configuración de Home
+    </h2>
+
+    <a href="{% url 'gestion:home_publica' %}"
+       class="btn btn-outline-light btn-sm">
+        <i class="fa-solid fa-arrow-left"></i>
+        Volver
+    </a>
+
+</div>
+
+<div class="card bg-dark text-light border-secondary">
+
+    <div class="card-body">
+
+        <form method="post">
+
+            {% csrf_token %}
+
+            <div class="mb-3">
+                <label class="form-label">
+                    URL video promo YouTube
+                </label>
+                {{ form.video_promo_url }}
+                <div class="text-danger">
+                    {{ form.video_promo_url.errors }}
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">
+                    URL playlist YouTube
+                </label>
+                {{ form.playlist_youtube_url }}
+                <div class="text-danger">
+                    {{ form.playlist_youtube_url.errors }}
+                </div>
+            </div>
+
+            <div class="form-check mb-4">
+                {{ form.activo }}
+                <label class="form-check-label">
+                    Configuración activa
+                </label>
+            </div>
+
+            <div class="d-flex flex-column flex-md-row justify-content-end gap-3">
+
+                <a href="{% url 'gestion:home_publica' %}"
+                   class="btn btn-outline-secondary">
+                    Cancelar
+                </a>
+
+                <button type="submit"
+                        class="btn btn-success">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    Guardar configuración
+                </button>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+
+{% endblock %}
