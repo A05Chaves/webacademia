@@ -6,24 +6,34 @@
 
     <div class="col-lg-8">
 
-        <div class="card bg-dark text-light border-secondary h-100">
+    <div class="card bg-dark text-light border-secondary h-100">
 
-            <div class="ratio ratio-16x9">
+        <div class="ratio ratio-16x9">
 
-                <iframe
-                    id="videoFrame"
-                    src="{{ promo_embed }}"
-                    title="Video Academia"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    referrerpolicy="strict-origin-when-cross-origin"
-                    allowfullscreen>
-                </iframe>
-
-            </div>
+            <iframe
+                id="videoFrame"
+                src="{{ promo_embed }}"
+                title="Video Academia"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerpolicy="strict-origin-when-cross-origin"
+                allowfullscreen>
+            </iframe>
 
         </div>
 
+        <div class="p-3">
+            <p class="text-warning mt-2">
+                Promo: {{ promo_embed }}
+            </p>
+
+            <p class="text-warning">
+                Playlist: {{ playlist_embed }}
+            </p>
+        </div>
+
     </div>
+
+</div>
 
     <div class="col-lg-4">
 

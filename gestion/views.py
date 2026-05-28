@@ -95,7 +95,7 @@ def convertir_youtube_embed(url):
 
         return (
             f"https://www.youtube.com/embed/{video_id}"
-            f"?autoplay=1&mute=1&rel=0"
+            f"?mute=1&playsinline=1&rel=0"
         )
 
     if "youtu.be/" in url:
@@ -104,13 +104,14 @@ def convertir_youtube_embed(url):
 
         return (
             f"https://www.youtube.com/embed/{video_id}"
-            f"?autoplay=1&mute=1&rel=0"
+            f"?mute=1&playsinline=1&rel=0"
         )
 
-    return f"https://www.youtube.com/embed/{video_id}?rel=0&autoplay=1&mute=1"
+    return url
 
 
 def home_publica(request):
+
     hoy = timezone.now().date()
 
     asistencias_hoy = AsistenciaClase.objects.filter(
@@ -129,6 +130,7 @@ def home_publica(request):
     playlist_embed = ""
 
     if config_home:
+
         promo_embed = convertir_youtube_embed(
             config_home.video_promo_url
         )
