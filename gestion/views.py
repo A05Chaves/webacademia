@@ -122,6 +122,10 @@ def home_publica(request):
         'clase'
     ).order_by('-fecha_confirmacion')[:10]
 
+    clases_hoy = ClaseProgramada.objects.filter(
+        activa=True
+    ).order_by('hora_inicio')
+
     config_home = ConfiguracionHome.objects.filter(
         activo=True
     ).first()
@@ -138,10 +142,6 @@ def home_publica(request):
         playlist_embed = convertir_youtube_embed(
             config_home.playlist_youtube_url
         )
-
-        clases_hoy = ClaseProgramada.objects.filter(
-            activa=True
-        ).order_by('hora_inicio')
 
     return render(request, 'gestion/home_publica.html', {
         'asistencias_hoy': asistencias_hoy,
