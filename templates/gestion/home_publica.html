@@ -73,11 +73,22 @@
 
     <div class="col-md-3">
 
+        {% if clase_confirmable %}
+
         <button
             type="button"
             class="btn btn-outline-light w-100 py-4 fs-4"
             data-bs-toggle="modal"
             data-bs-target="#modalConfirmarClase">
+
+        {% else %}
+
+        <button
+            type="button"
+            class="btn btn-secondary w-100 py-4 fs-4"
+            disabled>
+
+        {% endif %}
 
             <i class="fa-solid fa-user-check"></i>
 
@@ -86,6 +97,17 @@
             Confirmar clase
 
         </button>
+
+        {% if clase_confirmable %}
+            <small class="text-success">
+                {{ clase_confirmable.disciplina }}
+                - {{ clase_confirmable.hora_inicio }}
+            </small>
+        {% else %}
+            <small class="text-warning">
+                No hay clases próximas
+            </small>
+        {% endif %}
 
     </div>
 
@@ -139,7 +161,6 @@
 </div>
 
 
-
 <div class="modal fade"
      id="modalConfirmarClase"
      tabindex="-1">
@@ -151,9 +172,7 @@
             <div class="modal-header">
 
                 <h5 class="modal-title">
-
                     Confirmar asistencia
-
                 </h5>
 
                 <button type="button"
@@ -170,91 +189,82 @@
 
                 <div class="modal-body">
 
-                    <div class="mb-3">
+                    {% if clase_confirmable %}
 
-                        <label class="form-label">
+                        <div class="alert alert-success">
 
-                            Clase
+                            <strong>Clase disponible para confirmar:</strong>
 
-                        </label>
+                            <br>
 
-                        <select
-                            name="clase_id"
-                            class="form-select"
-                            required>
+                            {{ clase_confirmable.disciplina }}
+                            -
+                            {{ clase_confirmable.hora_inicio }}
 
-                            <option value="">
-                                Seleccione una clase
-                            </option>
+                        </div>
 
-                            {% for clase in clases_hoy %}
+                        <input type="hidden"
+                               name="clase_id"
+                               value="{{ clase_confirmable.id }}">
 
-                                <option value="{{ clase.id }}">
+                        <div class="mb-3">
 
-                                    {{ clase.disciplina }}
-                                    -
-                                    {{ clase.hora_inicio }}
+                            <label class="form-label">
+                                Usuario
+                            </label>
 
-                                </option>
+                            <input type="text"
+                                   name="username"
+                                   class="form-control"
+                                   required>
 
-                            {% endfor %}
+                        </div>
 
-                        </select>
+                        <div class="mb-3">
 
-                    </div>
+                            <label class="form-label">
+                                Contraseña
+                            </label>
 
-                    <div class="mb-3">
+                            <input type="password"
+                                   name="password"
+                                   class="form-control"
+                                   required>
 
-                        <label class="form-label">
+                        </div>
 
-                            Usuario
+                    {% else %}
 
-                        </label>
+                        <div class="alert alert-warning mb-0">
 
-                        <input
-                            type="text"
-                            name="username"
-                            class="form-control"
-                            required>
+                            No hay clases disponibles para confirmar en este momento.
 
-                    </div>
+                        </div>
 
-                    <div class="mb-3">
-
-                        <label class="form-label">
-
-                            Contraseña
-
-                        </label>
-
-                        <input
-                            type="password"
-                            name="password"
-                            class="form-control"
-                            required>
-
-                    </div>
+                    {% endif %}
 
                 </div>
 
                 <div class="modal-footer">
 
-                    <button
-                        type="button"
-                        class="btn btn-secondary"
-                        data-bs-dismiss="modal">
+                    <button type="button"
+                            class="btn btn-secondary"
+                            data-bs-dismiss="modal">
 
                         Cancelar
 
                     </button>
 
-                    <button
-                        type="submit"
-                        class="btn btn-success">
+                    {% if clase_confirmable %}
 
-                        Confirmar
+                        <button type="submit"
+                                class="btn btn-success">
 
-                    </button>
+                            Confirmar asistencia
+
+                        </button>
+
+                    {% endif %}
 
                 </div>
 

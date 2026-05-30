@@ -143,11 +143,28 @@ def home_publica(request):
             config_home.playlist_youtube_url
         )
 
+    ahora = timezone.localtime()
+    hora_actual = ahora.time()
+
+    clase_confirmable = None
+
+    for clase in clases_hoy:
+        inicio_clase = datetime.combine(hoy, clase.hora_inicio)
+        inicio_clase = timezone.make_aware(inicio_clase)
+
+        ventana_inicio = inicio_clase - timedelta(minutes=20)
+        ventana_fin = inicio_clase + timedelta(minutes=10)
+
+        if ventana_inicio <= ahora <= ventana_fin:
+            clase_confirmable = clase
+            break
+
     return render(request, 'gestion/home_publica.html', {
         'asistencias_hoy': asistencias_hoy,
         'promo_embed': promo_embed,
         'playlist_embed': playlist_embed,
         'clases_hoy': clases_hoy,
+        'clase_confirmable': clase_confirmable,
     })
 
 
