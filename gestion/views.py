@@ -122,8 +122,27 @@ def home_publica(request):
         'clase'
     ).order_by('-fecha_confirmacion')[:10]
 
+    """
     clases_hoy = ClaseProgramada.objects.filter(
         activa=True
+    ).order_by('hora_inicio')
+    """
+
+    dias_semana = {
+        0: 'LUNES',
+        1: 'MARTES',
+        2: 'MIERCOLES',
+        3: 'JUEVES',
+        4: 'VIERNES',
+        5: 'SABADO',
+        6: 'DOMINGO',
+    }
+
+    dia_actual = dias_semana[hoy.weekday()]
+
+    clases_hoy = ClaseProgramada.objects.filter(
+        activa=True,
+        dia=dia_actual
     ).order_by('hora_inicio')
 
     config_home = ConfiguracionHome.objects.filter(
@@ -152,8 +171,11 @@ def home_publica(request):
         inicio_clase = datetime.combine(hoy, clase.hora_inicio)
         inicio_clase = timezone.make_aware(inicio_clase)
 
-        ventana_inicio = inicio_clase - timedelta(minutes=20)
-        ventana_fin = inicio_clase + timedelta(minutes=10)
+        # ventana_inicio = inicio_clase - timedelta(minutes=20)
+        # ventana_fin = inicio_clase + timedelta(minutes=10)
+
+        ventana_inicio = inicio_clase - timedelta(hours=12)
+        ventana_fin = inicio_clase + timedelta(hours=12)
 
         if ventana_inicio <= ahora <= ventana_fin:
             clase_confirmable = clase
