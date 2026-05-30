@@ -163,7 +163,6 @@ def home_publica(request):
         )
 
     ahora = timezone.localtime()
-    hora_actual = ahora.time()
 
     clase_confirmable = None
 
@@ -171,11 +170,8 @@ def home_publica(request):
         inicio_clase = datetime.combine(hoy, clase.hora_inicio)
         inicio_clase = timezone.make_aware(inicio_clase)
 
-        # ventana_inicio = inicio_clase - timedelta(minutes=20)
-        # ventana_fin = inicio_clase + timedelta(minutes=10)
-
-        ventana_inicio = inicio_clase - timedelta(hours=12)
-        ventana_fin = inicio_clase + timedelta(hours=12)
+        ventana_inicio = inicio_clase - timedelta(hours=20)
+        ventana_fin = inicio_clase + timedelta(hours=30)
 
         if ventana_inicio <= ahora <= ventana_fin:
             clase_confirmable = clase
