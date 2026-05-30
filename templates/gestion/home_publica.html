@@ -73,12 +73,19 @@
 
     <div class="col-md-3">
 
-        <a href="{% url 'gestion:horario_clases' %}"
-        class="btn btn-outline-light w-100 py-4 fs-4">
+        <button
+            type="button"
+            class="btn btn-outline-light w-100 py-4 fs-4"
+            data-bs-toggle="modal"
+            data-bs-target="#modalConfirmarClase">
+
             <i class="fa-solid fa-user-check"></i>
+
             <br>
+
             Confirmar clase
-        </a>
+
+        </button>
 
     </div>
 
@@ -166,5 +173,132 @@ function toggleYoutube() {
 }
 
 </script>
+
+<div class="modal fade"
+     id="modalConfirmarClase"
+     tabindex="-1">
+
+    <div class="modal-dialog">
+
+        <div class="modal-content bg-dark text-light">
+
+            <div class="modal-header">
+
+                <h5 class="modal-title">
+
+                    Confirmar asistencia
+
+                </h5>
+
+                <button type="button"
+                        class="btn-close btn-close-white"
+                        data-bs-dismiss="modal">
+                </button>
+
+            </div>
+
+            <form method="post"
+                  action="{% url 'gestion:confirmar_clase_home' %}">
+
+                {% csrf_token %}
+
+                <div class="modal-body">
+
+                    <div class="mb-3">
+
+                        <label class="form-label">
+
+                            Clase
+
+                        </label>
+
+                        <select
+                            name="clase_id"
+                            class="form-select"
+                            required>
+
+                            <option value="">
+                                Seleccione una clase
+                            </option>
+
+                            {% for clase in clases_hoy %}
+
+                                <option value="{{ clase.id }}">
+
+                                    {{ clase.disciplina }}
+                                    -
+                                    {{ clase.hora_inicio }}
+
+                                </option>
+
+                            {% endfor %}
+
+                        </select>
+
+                    </div>
+
+                    <div class="mb-3">
+
+                        <label class="form-label">
+
+                            Usuario
+
+                        </label>
+
+                        <input
+                            type="text"
+                            name="username"
+                            class="form-control"
+                            required>
+
+                    </div>
+
+                    <div class="mb-3">
+
+                        <label class="form-label">
+
+                            Contraseña
+
+                        </label>
+
+                        <input
+                            type="password"
+                            name="password"
+                            class="form-control"
+                            required>
+
+                    </div>
+
+                </div>
+
+                <div class="modal-footer">
+
+                    <button
+                        type="button"
+                        class="btn btn-secondary"
+                        data-bs-dismiss="modal">
+
+                        Cancelar
+
+                    </button>
+
+                    <button
+                        type="submit"
+                        class="btn btn-success">
+
+                        Confirmar
+
+                    </button>
+
+                </div>
+
+            </form>
+
+        </div>
+
+    </div>
+
+</div>
+
 
 {% endblock %}

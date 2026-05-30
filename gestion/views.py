@@ -139,10 +139,15 @@ def home_publica(request):
             config_home.playlist_youtube_url
         )
 
+        clases_hoy = ClaseProgramada.objects.filter(
+            activa=True
+        ).order_by('hora_inicio')
+
     return render(request, 'gestion/home_publica.html', {
         'asistencias_hoy': asistencias_hoy,
         'promo_embed': promo_embed,
         'playlist_embed': playlist_embed,
+        'clases_hoy': clases_hoy,
     })
 
 
@@ -1547,3 +1552,54 @@ def configurar_home(request):
         'form': form,
         'config_home': config_home,
     })
+
+
+# VISTA PARA CONFIRMAR CLASE DESDE HOME
+
+@require_POST
+def confirmar_clase_home(request):
+
+    clase_id = request.POST.get('clase_id')
+    username = request.POST.get('username')
+    password = request.POST.get('password')
+
+    clase = get_object_or_404(
+        ClaseProgramada,
+        id=clase_id,
+        activa=True
+    )
+
+    user = authenticate(
+        request,
+        username=username,
+        password=password
+    )
+
+    if user is None:
+        messages.error(request, 'Usuario o contraseña incorrectos.')
+        return redirect('gestion:home_publica')
+
+    if not hasattr(user, 'perfil_alumno'):
+        messages.error(request, 'Este usuario no está registrado como alumno.')
+        return redirect('gestion:home_publica')
+
+    alumno = user.perfil_alumno
+    hoy = timezone.now().date()
+    ahora = timezone.localtime()
+
+    asistencia, creada = AsistenciaClase.objects.get_or_create(
+        alumno=alumno,
+        clase=clase,
+        fecha_clase=hoy,
+        defaults={
+            'estado': 'CONFIRMADA',
+            'fecha_confirmacion': ahora,
+        }
+    )
+
+    if creada:
+        messages.success(request, 'Clase confirmada correctamente.')
+    else:
+        messages.info(request, 'Ya habías confirmado esta clase.')
+
+    return redirect('gestion:home_publica')

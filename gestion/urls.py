@@ -88,4 +88,9 @@ urlpatterns = [
         views.configurar_home,
         name='configurar_home'
     ),
+    path(
+        'confirmar-clase-home/',
+        views.confirmar_clase_home,
+        name='confirmar_clase_home'
+    ),
 ]
