@@ -138,41 +138,7 @@
 
 </div>
 
-<script>
 
-let mostrandoPlaylist = false;
-
-const promoUrl = "{{ promo_embed }}";
-
-const playlistUrl = "{{ playlist_embed }}";
-
-function toggleYoutube() {
-
-    const videoFrame = document.getElementById('videoFrame');
-
-    const btnText = document.getElementById('youtubeBtnText');
-
-    if (mostrandoPlaylist) {
-
-        videoFrame.src = promoUrl;
-
-        btnText.innerText = "Música";
-
-        mostrandoPlaylist = false;
-
-    } else {
-
-        videoFrame.src = playlistUrl;
-
-        btnText.innerText = "Promo";
-
-        mostrandoPlaylist = true;
-
-    }
-
-}
-
-</script>
 
 <div class="modal fade"
      id="modalConfirmarClase"
@@ -300,5 +266,39 @@ function toggleYoutube() {
 
 </div>
 
+<script>
 
+    let mostrandoPlaylist = false;
+
+    const promoUrl = "{{ promo_embed }}";
+
+    const playlistUrl = "{{ playlist_embed }}";
+
+    function toggleYoutube() {
+
+        const videoFrame = document.getElementById('videoFrame');
+
+        const btnText = document.getElementById('youtubeBtnText');
+
+        if (mostrandoPlaylist) {
+
+            videoFrame.src = promoUrl;
+
+            btnText.innerText = "Música";
+
+            mostrandoPlaylist = false;
+
+        } else {
+
+            videoFrame.src = playlistUrl;
+
+            btnText.innerText = "Promo";
+
+            mostrandoPlaylist = true;
+
+        }
+
+    }
+
+</script>
 {% endblock %}
