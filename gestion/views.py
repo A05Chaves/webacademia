@@ -329,6 +329,7 @@ def lista_planes(request):
     return render(request, 'gestion/lista_planes.html', {'planes': planes})
 
 
+""""
 @staff_member_required
 def crear_plan(request):
     if request.method == 'POST':
@@ -341,6 +342,32 @@ def crear_plan(request):
         form = PlanForm()
 
     return render(request, 'gestion/crear_plan.html', {'form': form})
+"""
+
+
+# Crear Plan TEMPORAL
+@staff_member_required
+def crear_plan(request):
+    if request.method == 'POST':
+        form = PlanForm(request.POST)
+
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Plan creado correctamente.')
+            return redirect('gestion:lista_planes')
+
+        else:
+            print(form.errors)
+            messages.error(request, form.errors)
+
+    else:
+        form = PlanForm()
+
+    return render(
+        request,
+        'gestion/crear_plan.html',
+        {'form': form}
+    )
 
 
 @staff_member_required
