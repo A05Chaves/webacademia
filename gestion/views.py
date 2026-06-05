@@ -329,23 +329,8 @@ def lista_planes(request):
     return render(request, 'gestion/lista_planes.html', {'planes': planes})
 
 
-""""
-@staff_member_required
-def crear_plan(request):
-    if request.method == 'POST':
-        form = PlanForm(request.POST)
-        if form.is_valid():
-            form.save()
-            messages.success(request, 'Plan creado correctamente.')
-            return redirect('gestion:lista_planes')
-    else:
-        form = PlanForm()
+# VISTA PARA CREAR PLANES
 
-    return render(request, 'gestion/crear_plan.html', {'form': form})
-"""
-
-
-# Crear Plan TEMPORAL
 @staff_member_required
 def crear_plan(request):
     if request.method == 'POST':
@@ -355,10 +340,6 @@ def crear_plan(request):
             form.save()
             messages.success(request, 'Plan creado correctamente.')
             return redirect('gestion:lista_planes')
-
-        else:
-            print(form.errors)
-            messages.error(request, form.errors)
 
     else:
         form = PlanForm()
@@ -1649,6 +1630,50 @@ def confirmar_clase_home(request):
     hoy = timezone.now().date()
     ahora = timezone.localtime()
 
+    suscripcion = Suscripcion.objects.filter(
+        alumno=alumno,
+        estado='ACTIVA',
+        fecha_inicio__lte=hoy,
+        fecha_vencimiento__gte=hoy
+    ).select_related('plan').first()
+
+    if not suscripcion:
+        messages.error(
+            request,
+            'No tienes una suscripción activa para confirmar clases.'
+        )
+        return redirect('gestion:home_publica')
+
+    plan = suscripcion.plan
+
+    if plan.disciplina == 'JIUJITSU' and clase.disciplina != 'JIU_JITSU':
+        messages.error(
+            request,
+            'Tu plan solo permite confirmar clases de Jiu Jitsu.'
+        )
+        return redirect('gestion:home_publica')
+
+    if plan.disciplina == 'MUAY_THAI' and clase.disciplina != 'MUAY_THAI':
+        messages.error(
+            request,
+            'Tu plan solo permite confirmar clases de Muay Thai.'
+        )
+        return redirect('gestion:home_publica')
+
+    clases_consumidas = AsistenciaClase.objects.filter(
+        alumno=alumno,
+        estado='CONFIRMADA',
+        fecha_clase__gte=suscripcion.fecha_inicio,
+        fecha_clase__lte=suscripcion.fecha_vencimiento
+    ).count()
+
+    if clases_consumidas >= plan.clases_mes:
+        messages.error(
+            request,
+            f'Ya consumiste tus {plan.clases_mes} clases disponibles de este plan.'
+        )
+        return redirect('gestion:home_publica')
+
     asistencia, creada = AsistenciaClase.objects.get_or_create(
         alumno=alumno,
         clase=clase,
@@ -1660,7 +1685,12 @@ def confirmar_clase_home(request):
     )
 
     if creada:
-        messages.success(request, 'Clase confirmada correctamente.')
+        restantes = plan.clases_mes - (clases_consumidas + 1)
+
+        messages.success(
+            request,
+            f'Clase confirmada correctamente. Te quedan {restantes} clases disponibles.'
+        )
     else:
         messages.info(request, 'Ya habías confirmado esta clase.')
 

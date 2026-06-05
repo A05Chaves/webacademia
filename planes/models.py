@@ -6,9 +6,10 @@ from django.utils import timezone
 
 class Plan(models.Model):
 
-    class TipoAcceso(models.TextChoices):
-        CLASES_ESPECIFICAS = 'CLASES_ESPECIFICAS', 'Clases específicas'
-        TODAS_LAS_CLASES = 'TODAS_LAS_CLASES', 'Todas las clases'
+    class DisciplinaPlan(models.TextChoices):
+        JIUJITSU = 'JIUJITSU', 'Jiujitsu'
+        MUAY_THAI = 'MUAY_THAI', 'Muay Thai'
+        MIXTO = 'MIXTO', 'Mixto'
 
     nombre = models.CharField(max_length=100, unique=True)
     descripcion = models.TextField(blank=True, null=True)
@@ -17,10 +18,15 @@ class Plan(models.Model):
     activo = models.BooleanField(default=True)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     actualizado = models.DateTimeField(auto_now=True)
-    tipo_acceso = models.CharField(
-        max_length=30,
-        choices=TipoAcceso.choices,
-        default=TipoAcceso.CLASES_ESPECIFICAS
+
+    disciplina = models.CharField(
+        max_length=20,
+        choices=DisciplinaPlan.choices,
+        default=DisciplinaPlan.JIUJITSU
+    )
+
+    clases_mes = models.PositiveIntegerField(
+        default=8
     )
 
     class Meta:

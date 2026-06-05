@@ -76,8 +76,9 @@ class PlanForm(forms.ModelForm):
             'descripcion',
             'precio',
             'duracion_dias',
+            'clases_mes',
+            'disciplina',
             'activo',
-            'tipo_acceso',
         ]
         widgets = {
             'nombre': forms.TextInput(attrs={'class': 'form-control'}),
@@ -88,7 +89,13 @@ class PlanForm(forms.ModelForm):
             'precio': forms.NumberInput(attrs={'class': 'form-control'}),
             'duracion_dias': forms.NumberInput(attrs={'class': 'form-control'}),
             'activo': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'tipo_acceso': forms.Select(attrs={'class': 'form-select'}),
+            'clases_mes': forms.NumberInput(
+                attrs={'class': 'form-control'}
+            ),
+
+            'disciplina': forms.Select(
+                attrs={'class': 'form-select'}
+            ),
         }
 
 

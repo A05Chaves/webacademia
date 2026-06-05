@@ -51,10 +51,18 @@
                 </div>
 
                 <div class="col-md-6 mb-3">
-                    <label class="form-label">Tipo de acceso</label>
-                    {{ form.tipo_acceso }}
+                    <label class="form-label">Clases por mes</label>
+                    {{ form.clases_mes }}
                     <div class="text-danger">
-                        {{ form.tipo_acceso.errors }}
+                        {{ form.clases_mes.errors }}
+                    </div>
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Disciplina</label>
+                    {{ form.disciplina }}
+                    <div class="text-danger">
+                        {{ form.disciplina.errors }}
                     </div>
                 </div>
 
