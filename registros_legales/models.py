@@ -32,6 +32,14 @@ class RegistroLegalEstudiante(models.Model):
     correo = models.EmailField(blank=True, null=True)
     fecha_ingreso = models.DateField(default=timezone.now)
 
+    plan_interes = models.ForeignKey(
+        'planes.Plan',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='registros_interesados'
+    )
+
     contacto_emergencia_nombre = models.CharField(max_length=150)
     contacto_emergencia_celular = models.CharField(max_length=30)
 

@@ -252,7 +252,7 @@
                 <tr>
 
                     <td class="hora-columna">
-                        {{ fila.hora }}
+                        {{ fila.hora|time:"H:i" }}
                     </td>
 
                     {% for item in fila.dias %}
@@ -266,17 +266,17 @@
                                         onclick="abrirModal('{{ item.clase.id }}', '{{ item.clase.get_disciplina_display }}')">
 
                                     <div class="clase-disciplina">
+                                        {{ item.clase.titulo|default:item.clase.get_disciplina_display }}
+                                    </div>
+
+                                    <div class="clase-instructor">
+                                        <i class="fa-solid fa-tag"></i>
                                         {{ item.clase.get_disciplina_display }}
                                     </div>
 
                                     <div class="clase-instructor">
                                         <i class="fa-solid fa-user"></i>
                                         {{ item.clase.instructor }}
-                                    </div>
-
-                                    <div class="clase-hora">
-                                        <i class="fa-solid fa-clock"></i>
-                                        {{ item.clase.hora_inicio }} - {{ item.clase.hora_fin }}
                                     </div>
 
                                     <div class="clase-cupos">
@@ -428,6 +428,13 @@
             </div>
 
             <hr class="border-secondary">
+
+            <div class="mb-3">
+                <label class="form-label">
+                    Plan
+                </label>
+                {{ pago_form.plan }}
+            </div>
 
             <div class="mb-3">
                 <label class="form-label">Método de pago</label>

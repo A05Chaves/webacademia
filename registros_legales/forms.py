@@ -24,7 +24,7 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
             'celular',
             'correo',
             'fecha_ingreso',
-
+            'plan_interes',
             'contacto_emergencia_nombre',
             'contacto_emergencia_celular',
 
@@ -86,6 +86,10 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
                 'class': 'form-control'
             }),
 
+            'plan_interes': forms.Select(attrs={
+                'class': 'form-select'
+            }),
+
             'contacto_emergencia_nombre': forms.TextInput(attrs={
                 'class': 'form-control'
             }),
@@ -133,6 +137,12 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
             self.add_error(
                 'foto',
                 'Debe adjuntar una foto del estudiante.'
+            )
+
+        if not cleaned_data.get('plan_interes'):
+            self.add_error(
+                'plan_interes',
+                'Debe seleccionar el plan de interés.'
             )
 
         if not cleaned_data.get('acepta_reglamento'):

@@ -48,6 +48,11 @@ urlpatterns = [
     path('horario/crear/', views.crear_clase, name='crear_clase'),
     path('horario/<int:clase_id>/editar/',
          views.editar_clase, name='editar_clase'),
+    path(
+        'clases/<int:clase_id>/eliminar/',
+        views.eliminar_clase,
+        name='eliminar_clase'
+    ),
     path('horario/confirmar-kiosko/', views.confirmar_asistencia_kiosko,
          name='confirmar_asistencia_kiosko'),
     path('horario/<int:clase_id>/asistentes/',
@@ -92,5 +97,26 @@ urlpatterns = [
         'confirmar-clase-home/',
         views.confirmar_clase_home,
         name='confirmar_clase_home'
+    ),
+    path(
+        'configuraciones/',
+        views.configuraciones,
+        name='configuraciones'
+    ),
+    path(
+        'configurar-horario/',
+        views.configurar_horario,
+        name='configurar_horario'
+    ),
+    path(
+        'configurar-horario/dia/crear/',
+        views.crear_dia_horario,
+        name='crear_dia_horario'
+    ),
+
+    path(
+        'configurar-horario/hora/crear/',
+        views.crear_hora_horario,
+        name='crear_hora_horario'
     ),
 ]

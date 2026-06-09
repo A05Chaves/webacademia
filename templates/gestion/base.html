@@ -228,13 +228,7 @@
                         <i class="fa-solid fa-chart-line"></i> Dashboard
                     </a>
 
-                    <a class="btn btn-danger btn-sm menu-btn"
-                        href="{% url 'gestion:configurar_home' %}">
-
-                        <i class="fa-brands fa-youtube"></i>
-                        Música
-
-                    </a>
+                    
 
                     <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'gestion:lista_alumnos' %}">
                         <i class="fa-solid fa-users"></i> Alumnos
@@ -254,6 +248,12 @@
 
                     <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'gestion:lista_registros_legales' %}">
                         <i class="fa-solid fa-file-signature"></i> Registros
+                    </a>
+
+                    <a class="btn btn-outline-light btn-sm menu-btn"
+                        href="{% url 'gestion:configuraciones' %}">
+                        <i class="fa-solid fa-gear"></i>
+                        Configuraciones
                     </a>
 
                 {% endif %}

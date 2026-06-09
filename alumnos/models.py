@@ -100,7 +100,7 @@ class Alumno(models.Model):
         suscripcion = self.suscripcion_actual
 
         if not suscripcion:
-            self.estado = self.Estados.SUSPENDIDO
+            self.estado = self.Estados.PENDIENTE
 
         elif suscripcion.estado == 'PENDIENTE_PAGO':
             self.estado = self.Estados.PENDIENTE

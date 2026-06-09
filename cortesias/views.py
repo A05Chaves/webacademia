@@ -5,7 +5,7 @@ from django.utils import timezone
 from clases.models import ClaseProgramada
 from .forms import ClaseCortesiaForm
 from .models import ConsentimientoFirmado, ClaseCortesia
-
+from django.contrib.admin.views.decorators import staff_member_required
 
 CONSENTIMIENTO_ADULTO = """
 Declaro que participo voluntariamente en las actividades deportivas
@@ -80,5 +80,36 @@ def registrar_cortesia(request, clase_id):
             'clase': clase,
             'consentimiento_adulto': CONSENTIMIENTO_ADULTO,
             'consentimiento_menor': CONSENTIMIENTO_MENOR,
+        }
+    )
+
+
+@staff_member_required
+def lista_cortesias(request):
+
+    cortesias = ClaseCortesia.objects.select_related(
+        'clase'
+    ).order_by(
+        '-fecha_registro'
+    )
+
+    total_cortesias = cortesias.count()
+
+    total_contactados = cortesias.filter(
+        contactado=True
+    ).count()
+
+    total_convertidos = cortesias.filter(
+        se_convirtio=True
+    ).count()
+
+    return render(
+        request,
+        'cortesias/lista_cortesias.html',
+        {
+            'cortesias': cortesias,
+            'total_cortesias': total_cortesias,
+            'total_contactados': total_contactados,
+            'total_convertidos': total_convertidos,
         }
     )

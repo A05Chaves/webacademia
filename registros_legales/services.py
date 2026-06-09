@@ -35,7 +35,7 @@ def crear_alumno_desde_registro(registro):
         direccion=registro.direccion,
         nombre_acudiente=registro.nombre_acudiente,
         telefono_acudiente=registro.celular_acudiente,
-        estado='SUSPENDIDO',
+        estado='PENDIENTE',
     )
 
     return alumno, password_temporal, None

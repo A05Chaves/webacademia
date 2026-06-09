@@ -10,5 +10,10 @@ urlpatterns = [
         views.registrar_cortesia,
         name='registrar_cortesia'
     ),
+    path(
+        'lista/',
+        views.lista_cortesias,
+        name='lista_cortesias'
+    ),
 
 ]

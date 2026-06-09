@@ -28,6 +28,15 @@ class ClaseProgramada(models.Model):
         max_length=30,
         choices=Disciplinas.choices
     )
+
+    # TITULO DE LA CLASE
+
+    titulo = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True
+    )
+
     instructor = models.ForeignKey(
         'instructores.Instructor',
         on_delete=models.PROTECT,

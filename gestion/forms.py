@@ -2,7 +2,7 @@ from .models import ConfiguracionHome
 from pagos.models import Pago, MetodoPagoQR
 from django import forms
 from django.contrib.auth import get_user_model
-
+from .models import DiaHorario, HoraHorario
 from alumnos.models import Alumno
 from planes.models import Plan, Suscripcion
 from pagos.models import Pago
@@ -11,7 +11,7 @@ from clases.models import ClaseProgramada
 from finanzas.models import MovimientoFinanciero, PagoProgramado, CuentaFinanciera, CategoriaFinanciera
 from usuarios.models import Usuario
 from django.contrib.auth.forms import PasswordChangeForm
-
+from planes.models import Plan
 Usuario = get_user_model()
 
 
@@ -141,15 +141,16 @@ class PagoForm(forms.ModelForm):
         model = Pago
         fields = [
             'alumno',
-            'suscripcion',
+            'plan',
             'metodo_qr',
             'valor',
             'comprobante',
             'referencia_pago',
         ]
+
         widgets = {
             'alumno': forms.Select(attrs={'class': 'form-select'}),
-            'suscripcion': forms.Select(attrs={'class': 'form-select'}),
+            'plan': forms.Select(attrs={'class': 'form-select'}),
             'metodo_qr': forms.Select(attrs={'class': 'form-select'}),
             'valor': forms.NumberInput(attrs={'class': 'form-control'}),
             'comprobante': forms.ClearableFileInput(attrs={'class': 'form-control'}),
@@ -158,21 +159,14 @@ class PagoForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
         self.fields['metodo_qr'].queryset = MetodoPagoQR.objects.filter(
             activo=True
         )
 
-    def clean(self):
-        cleaned_data = super().clean()
-        alumno = cleaned_data.get('alumno')
-        suscripcion = cleaned_data.get('suscripcion')
-
-        if alumno and suscripcion and suscripcion.alumno_id != alumno.id:
-            raise forms.ValidationError(
-                'La suscripción seleccionada no pertenece al alumno indicado.'
-            )
-
-        return cleaned_data
+        self.fields['plan'].queryset = Plan.objects.filter(
+            activo=True
+        )
 
 
 class ValidarPagoForm(forms.ModelForm):
@@ -204,22 +198,40 @@ class ClaseProgramadaForm(forms.ModelForm):
             'hora_inicio',
             'hora_fin',
             'disciplina',
+            'titulo',
             'instructor',
             'cupo_maximo',
             'activa',
         ]
+
         widgets = {
-            'hora_inicio': forms.TimeInput(attrs={'type': 'time'}),
-            'hora_fin': forms.TimeInput(attrs={'type': 'time'}),
+            'dia': forms.Select(attrs={'class': 'form-select'}),
+            'hora_inicio': forms.TimeInput(attrs={
+                'type': 'time',
+                'class': 'form-control'
+            }),
+            'hora_fin': forms.TimeInput(attrs={
+                'type': 'time',
+                'class': 'form-control'
+            }),
+            'disciplina': forms.Select(attrs={'class': 'form-select'}),
+            'titulo': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Ej: Niños, Mujeres, Competencia'
+            }),
+            'instructor': forms.Select(attrs={'class': 'form-select'}),
+            'cupo_maximo': forms.NumberInput(attrs={'class': 'form-control'}),
+            'activa': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
-
 # FORMULARIO DE PAGO POR ESTUDIANTE
+
 
 class PagoAlumnoForm(forms.ModelForm):
     class Meta:
         model = Pago
         fields = [
+            'plan',
             'metodo_qr',
             'valor',
             'comprobante',
@@ -227,6 +239,7 @@ class PagoAlumnoForm(forms.ModelForm):
         ]
 
         widgets = {
+            'plan': forms.Select(attrs={'class': 'form-select'}),
             'metodo_qr': forms.Select(attrs={'class': 'form-select'}),
             'valor': forms.NumberInput(attrs={'class': 'form-control'}),
             'comprobante': forms.ClearableFileInput(attrs={'class': 'form-control'}),
@@ -235,6 +248,10 @@ class PagoAlumnoForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        self.fields['plan'].queryset = Plan.objects.filter(
+            activo=True
+        )
 
         self.fields['metodo_qr'].queryset = MetodoPagoQR.objects.filter(
             activo=True
@@ -432,4 +449,32 @@ class ConfiguracionHomeForm(forms.ModelForm):
             'activo': forms.CheckboxInput(attrs={
                 'class': 'form-check-input'
             }),
+        }
+
+
+# FORMULARIO PARA CONFIGURACION DE NOTIFICACIONES
+
+
+class DiaHorarioForm(forms.ModelForm):
+    class Meta:
+        model = DiaHorario
+        fields = ['nombre', 'orden', 'activo']
+        widgets = {
+            'nombre': forms.TextInput(attrs={'class': 'form-control'}),
+            'orden': forms.NumberInput(attrs={'class': 'form-control'}),
+            'activo': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+
+class HoraHorarioForm(forms.ModelForm):
+    class Meta:
+        model = HoraHorario
+        fields = ['hora', 'orden', 'activo']
+        widgets = {
+            'hora': forms.TimeInput(attrs={
+                'class': 'form-control',
+                'type': 'time'
+            }),
+            'orden': forms.NumberInput(attrs={'class': 'form-control'}),
+            'activo': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }

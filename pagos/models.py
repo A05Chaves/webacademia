@@ -40,11 +40,23 @@ class Pago(models.Model):
         on_delete=models.CASCADE,
         related_name='pagos'
     )
+
     suscripcion = models.ForeignKey(
         'planes.Suscripcion',
-        on_delete=models.CASCADE,
-        related_name='pagos'
+        on_delete=models.SET_NULL,
+        related_name='pagos',
+        blank=True,
+        null=True
     )
+
+    plan = models.ForeignKey(
+        'planes.Plan',
+        on_delete=models.PROTECT,
+        related_name='pagos',
+        blank=True,
+        null=True
+    )
+
     metodo_qr = models.ForeignKey(
         MetodoPagoQR,
         on_delete=models.PROTECT,
@@ -80,6 +92,11 @@ class Pago(models.Model):
                 raise ValidationError({
                     'suscripcion': 'La suscripción seleccionada no pertenece al alumno indicado.'
                 })
+
+        if not self.suscripcion_id and not self.plan_id:
+            raise ValidationError({
+                'plan': 'Debe seleccionar un plan cuando el pago no tiene suscripción asociada.'
+            })
 
     def save(self, *args, **kwargs):
         self.full_clean()

@@ -113,16 +113,19 @@
 
     <div class="col-md-3">
 
-        <a href="#"
-           class="btn btn-outline-light w-100 py-4 fs-4">
+        <button
+            type="button"
+            class="btn btn-outline-light w-100 py-4 fs-4"
+            data-bs-toggle="modal"
+            data-bs-target="#modalRegistrarPago">
 
-            <i class="fa-solid fa-gift"></i>
+            <i class="fa-solid fa-money-bill-wave"></i>
 
             <br>
 
-            Cortesía
+            Registrar pago
 
-        </a>
+        </button>
 
     </div>
 
@@ -265,6 +268,101 @@
                         </button>
 
                     {% endif %}
+
+                </div>
+
+            </form>
+
+        </div>
+
+    </div>
+
+</div>
+
+<div class="modal fade"
+     id="modalRegistrarPago"
+     tabindex="-1">
+
+    <div class="modal-dialog">
+
+        <div class="modal-content bg-dark text-light">
+
+            <div class="modal-header">
+
+                <h5 class="modal-title">
+                    Registrar pago
+                </h5>
+
+                <button type="button"
+                        class="btn-close btn-close-white"
+                        data-bs-dismiss="modal">
+                </button>
+
+            </div>
+
+            <form method="post"
+                  enctype="multipart/form-data"
+                  action="{% url 'gestion:registrar_pago_alumno' %}">
+
+                {% csrf_token %}
+
+                <div class="modal-body">
+
+                    <div class="mb-3">
+                        <label class="form-label">Usuario</label>
+                        <input type="text"
+                               name="username"
+                               class="form-control"
+                               required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Contraseña</label>
+                        <input type="password"
+                               name="password"
+                               class="form-control"
+                               required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Plan</label>
+                        {{ pago_form.plan }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Método de pago</label>
+                        {{ pago_form.metodo_qr }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Valor</label>
+                        {{ pago_form.valor }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Referencia de pago</label>
+                        {{ pago_form.referencia_pago }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Comprobante</label>
+                        {{ pago_form.comprobante }}
+                    </div>
+
+                </div>
+
+                <div class="modal-footer">
+
+                    <button type="button"
+                            class="btn btn-secondary"
+                            data-bs-dismiss="modal">
+                        Cancelar
+                    </button>
+
+                    <button type="submit"
+                            class="btn btn-success">
+                        Enviar pago
+                    </button>
 
                 </div>
 

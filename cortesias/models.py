@@ -32,14 +32,19 @@ class ClaseCortesia(models.Model):
         on_delete=models.CASCADE,
         related_name='cortesias'
     )
+
     nombres = models.CharField(max_length=100)
     apellidos = models.CharField(max_length=100)
     documento = models.CharField(max_length=30, blank=True, null=True)
     telefono = models.CharField(max_length=30)
     correo = models.EmailField(blank=True, null=True)
     edad = models.PositiveIntegerField()
+
     tipo_persona = models.CharField(
-        max_length=20, choices=TiposPersona.choices)
+        max_length=20,
+        choices=TiposPersona.choices
+    )
+
     eps = models.CharField(max_length=150, blank=True, null=True)
 
     condicion_medica = models.TextField(
@@ -52,15 +57,34 @@ class ClaseCortesia(models.Model):
     documento_acudiente = models.CharField(
         max_length=30, blank=True, null=True)
     telefono_acudiente = models.CharField(max_length=30, blank=True, null=True)
+
     parentesco_acudiente = models.CharField(
-        max_length=50, blank=True, null=True)
+        max_length=50,
+        blank=True,
+        null=True
+    )
+
     consentimiento = models.OneToOneField(
         ConsentimientoFirmado,
         on_delete=models.PROTECT,
         related_name='clase_cortesia'
     )
+
+    contactado = models.BooleanField(default=False)
+
+    se_convirtio = models.BooleanField(default=False)
+
+    observacion_seguimiento = models.TextField(
+        blank=True,
+        null=True
+    )
+
+    fecha_contacto = models.DateTimeField(
+        blank=True,
+        null=True
+    )
+
     fecha_registro = models.DateTimeField(default=timezone.now)
 
-
-def __str__(self):
-    return f"{self.nombres} {self.apellidos} - Cortesía"
+    def __str__(self):
+        return f"{self.nombres} {self.apellidos} - Cortesía"

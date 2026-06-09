@@ -87,6 +87,18 @@
                         {{ registro.correo }}
                     </div>
 
+
+                    <div class="col-md-6">
+                        <strong>Plan de interés:</strong><br>
+                        {% if registro.plan_interes %}
+                            {{ registro.plan_interes.nombre }}
+                            -
+                            ${{ registro.plan_interes.precio }}
+                        {% else %}
+                            <span class="text-warning">No seleccionado</span>
+                        {% endif %}
+                    </div>
+
                     <div class="col-md-6">
                         <strong>EPS:</strong><br>
                         {{ registro.eps }}

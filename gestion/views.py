@@ -55,7 +55,8 @@ from django.db import models
 
 from django.contrib.auth import authenticate
 from django.views.decorators.http import require_POST
-
+from .models import DiaHorario, HoraHorario
+from .forms import DiaHorarioForm, HoraHorarioForm
 
 from .forms import PagoAlumnoForm
 from django.core.mail import send_mail
@@ -70,7 +71,6 @@ from .models import ConfiguracionHome
 from alumnos.models import Alumno
 from django.contrib.auth import get_user_model
 User = get_user_model()
-
 
 # VISTA HOME DEL PROGRAMA
 
@@ -112,7 +112,8 @@ def convertir_youtube_embed(url):
 
 def home_publica(request):
 
-    hoy = timezone.now().date()
+    ahora = timezone.localtime()
+    hoy = ahora.date()
 
     asistencias_hoy = AsistenciaClase.objects.filter(
         fecha_clase=hoy,
@@ -121,12 +122,6 @@ def home_publica(request):
         'alumno__user',
         'clase'
     ).order_by('-fecha_confirmacion')[:10]
-
-    """
-    clases_hoy = ClaseProgramada.objects.filter(
-        activa=True
-    ).order_by('hora_inicio')
-    """
 
     dias_semana = {
         0: 'LUNES',
@@ -138,7 +133,7 @@ def home_publica(request):
         6: 'DOMINGO',
     }
 
-    dia_actual = dias_semana[hoy.weekday()]
+    dia_actual = dias_semana[ahora.weekday()]
 
     clases_hoy = ClaseProgramada.objects.filter(
         activa=True,
@@ -153,7 +148,6 @@ def home_publica(request):
     playlist_embed = ""
 
     if config_home:
-
         promo_embed = convertir_youtube_embed(
             config_home.video_promo_url
         )
@@ -162,20 +156,28 @@ def home_publica(request):
             config_home.playlist_youtube_url
         )
 
-    ahora = timezone.localtime()
-
     clase_confirmable = None
 
     for clase in clases_hoy:
-        inicio_clase = datetime.combine(hoy, clase.hora_inicio)
-        inicio_clase = timezone.make_aware(inicio_clase)
 
-        ventana_inicio = inicio_clase - timedelta(hours=20)
-        ventana_fin = inicio_clase + timedelta(hours=30)
+        inicio_clase = datetime.combine(
+            hoy,
+            clase.hora_inicio
+        )
+
+        inicio_clase = timezone.make_aware(
+            inicio_clase,
+            timezone.get_current_timezone()
+        )
+
+        ventana_inicio = inicio_clase - timedelta(minutes=20)
+        ventana_fin = inicio_clase + timedelta(minutes=30)
 
         if ventana_inicio <= ahora <= ventana_fin:
             clase_confirmable = clase
             break
+
+    pago_form = PagoAlumnoForm()
 
     return render(request, 'gestion/home_publica.html', {
         'asistencias_hoy': asistencias_hoy,
@@ -183,6 +185,7 @@ def home_publica(request):
         'playlist_embed': playlist_embed,
         'clases_hoy': clases_hoy,
         'clase_confirmable': clase_confirmable,
+        'pago_form': pago_form,
     })
 
 
@@ -219,6 +222,12 @@ def dashboard(request):
     ultimas_notificaciones: BaseManager[Notificacion] = Notificacion.objects.select_related(
         'usuario'
     ).order_by('-fecha_creacion')[:5]
+
+    # notificacion de estudiante nuevo
+
+    registros_pendientes = RegistroLegalEstudiante.objects.filter(
+        estado__startswith='PENDIENTE'
+    ).count()
 
     alumnos_activos = Alumno.objects.filter(estado='ACTIVO').count()
     alumnos_proximos = Alumno.objects.filter(estado='PROXIMO_VENCER').count()
@@ -280,6 +289,7 @@ def dashboard(request):
         'saldo_total': saldo_total,
         'cuentas_financieras': cuentas_financieras,
         'pagos_programados_pendientes': pagos_programados_pendientes,
+        'registros_pendientes': registros_pendientes,
     }
     return render(request, 'gestion/dashboard.html', context)
 
@@ -387,19 +397,25 @@ def lista_pagos(request):
 def crear_pago(request):
     if request.method == 'POST':
         form = PagoForm(request.POST, request.FILES)
+
         if form.is_valid():
             pago = form.save(commit=False)
-
-            if pago.estado in ['APROBADO', 'RECHAZADO']:
-                pago.validado_por = request.user
-
+            pago.estado = 'PENDIENTE'
+            pago.suscripcion = None
             pago.save()
-            messages.success(request, 'Pago registrado correctamente.')
+
+            messages.success(
+                request,
+                'Pago registrado correctamente y quedó pendiente por validar.'
+            )
+
             return redirect('gestion:lista_pagos')
     else:
         form = PagoForm()
 
-    return render(request, 'gestion/crear_pago.html', {'form': form})
+    return render(request, 'gestion/crear_pago.html', {
+        'form': form
+    })
 
 
 @staff_member_required
@@ -419,35 +435,49 @@ def validar_pago(request, pago_id):
             pago.fecha_validacion = timezone.now()
 
             if pago.estado == 'APROBADO':
-                suscripcion = pago.suscripcion
+
                 hoy = timezone.now().date()
+                plan = pago.plan
 
-                if suscripcion.estado == 'PENDIENTE_PAGO':
-                    fecha_base = hoy
+                if not plan:
+                    messages.error(
+                        request,
+                        'No se puede aprobar el pago porque no tiene un plan asociado.'
+                    )
+                    return redirect('gestion:validar_pago', pago_id=pago.id)
+
+                ultima_suscripcion = Suscripcion.objects.filter(
+                    alumno=pago.alumno
+                ).order_by('-fecha_vencimiento').first()
+
+                if ultima_suscripcion and ultima_suscripcion.fecha_vencimiento >= hoy:
+                    fecha_inicio = ultima_suscripcion.fecha_vencimiento + \
+                        timedelta(days=1)
                 else:
-                    fecha_base = suscripcion.fecha_vencimiento or hoy
+                    fecha_inicio = hoy
 
-                suscripcion.fecha_inicio = fecha_base
-                suscripcion.fecha_vencimiento = (
-                    fecha_base + timedelta(days=suscripcion.plan.duracion_dias)
+                fecha_vencimiento = fecha_inicio + timedelta(
+                    days=plan.duracion_dias
                 )
 
-                if suscripcion.fecha_vencimiento < hoy:
-                    suscripcion.estado = 'VENCIDA'
-                    pago.alumno.estado = 'VENCIDO'
-                    messages.warning(
-                        request,
-                        'Pago aprobado, pero el alumno aún queda con mensualidades vencidas.'
-                    )
-                else:
-                    suscripcion.estado = 'ACTIVA'
-                    pago.alumno.estado = 'ACTIVO'
-                    messages.success(
-                        request,
-                        'Pago aprobado y suscripción actualizada correctamente.'
-                    )
+                Suscripcion.objects.filter(
+                    alumno=pago.alumno,
+                    estado='ACTIVA'
+                ).update(
+                    estado='FINALIZADA'
+                )
 
-                suscripcion.save()
+                suscripcion = Suscripcion.objects.create(
+                    alumno=pago.alumno,
+                    plan=plan,
+                    fecha_inicio=fecha_inicio,
+                    fecha_vencimiento=fecha_vencimiento,
+                    estado='ACTIVA',
+                )
+
+                pago.suscripcion = suscripcion
+                pago.alumno.estado = 'ACTIVO'
+
                 pago.alumno.save()
                 pago.save()
 
@@ -485,17 +515,25 @@ def validar_pago(request, pago_id):
                             f'Hola {pago.alumno},\n\n'
                             f'Tu pago fue aprobado correctamente.\n\n'
                             f'Detalles del pago:\n'
+                            f'Plan: {plan.nombre}\n'
                             f'Valor: ${pago.valor}\n'
                             f'Método: {pago.metodo_qr}\n'
                             f'Referencia: {pago.referencia_pago or "Sin referencia"}\n'
                             f'Fecha de validación: {pago.fecha_validacion.strftime("%d/%m/%Y %H:%M")}\n'
-                            f'Nueva fecha de vencimiento: {pago.suscripcion.fecha_vencimiento}\n\n'
+                            f'Fecha de inicio: {suscripcion.fecha_inicio}\n'
+                            f'Fecha de vencimiento: {suscripcion.fecha_vencimiento}\n\n'
+                            f'Ya puedes confirmar tus clases disponibles.\n\n'
                             f'Gracias por tu pago.'
                         ),
                         from_email=settings.DEFAULT_FROM_EMAIL,
                         recipient_list=[correo],
                         fail_silently=False,
                     )
+
+                messages.success(
+                    request,
+                    'Pago aprobado, suscripción creada y alumno activado correctamente.'
+                )
 
             elif pago.estado == 'RECHAZADO':
                 pago.save()
@@ -701,20 +739,36 @@ def horario_clases(request):
         )
     )
 
-    dias = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO']
-    horas = [
-        time(6, 0),
-        time(8, 0),
-        time(9, 30),
-        time(10, 0),
-        time(11, 0),
-        time(16, 0),
-        time(17, 0),
-        time(17, 30),
-        time(18, 0),
-        time(18, 30),
-        time(19, 30),
-    ]
+    orden_dias = {
+        'LUNES': 1,
+        'MARTES': 2,
+        'MIERCOLES': 3,
+        'JUEVES': 4,
+        'VIERNES': 5,
+        'SABADO': 6,
+        'DOMINGO': 7,
+    }
+
+    dias = sorted(
+        set(
+            ClaseProgramada.objects.filter(
+                activa=True
+            ).values_list(
+                'dia',
+                flat=True
+            )
+        ),
+        key=lambda dia: orden_dias.get(dia, 99)
+    )
+
+    horas = list(
+        ClaseProgramada.objects.filter(
+            activa=True
+        )
+        .values_list('hora_inicio', flat=True)
+        .distinct()
+        .order_by('hora_inicio')
+    )
 
     horario = []
 
@@ -737,11 +791,14 @@ def horario_clases(request):
 
     metodos_pago = MetodoPagoQR.objects.filter(activo=True)
 
+    pago_form = PagoAlumnoForm()
+
     return render(request, 'gestion/horario_clases.html', {
         'dias': dias,
         'horario': horario,
         'hora_actual': ahora,
-        'metodos_pago': metodos_pago
+        'metodos_pago': metodos_pago,
+        'pago_form': pago_form,
     })
 
 
@@ -840,18 +897,36 @@ def editar_clase(request, clase_id):
         if form.is_valid():
             form.save()
             messages.success(request, 'Clase actualizada correctamente.')
-            return redirect('gestion:horario_clases')
+            return redirect('gestion:configurar_horario')
     else:
         form = ClaseProgramadaForm(instance=clase)
 
     return render(request, 'gestion/formulario.html', {
         'form': form,
         'titulo': 'Editar clase',
-        'cancelar_url': 'gestion:horario_clases'
+        'cancelar_url': 'gestion:configurar_horario'
     })
 
 
+@staff_member_required
+def eliminar_clase(request, clase_id):
+
+    clase = get_object_or_404(
+        ClaseProgramada,
+        id=clase_id
+    )
+
+    clase.delete()
+
+    messages.success(
+        request,
+        'Clase eliminada correctamente.'
+    )
+
+    return redirect('gestion:configurar_horario')
+
 # VERIFICAR ASISTENCIA EN KIOSKO
+
 
 @require_POST
 def confirmar_asistencia_kiosko(request):
@@ -955,27 +1030,26 @@ def registrar_pago_alumno(request):
 
         if user is None:
             messages.error(request, 'Usuario o contraseña incorrectos.')
-            return redirect('gestion:horario_clases')
+            return redirect('gestion:home_publica')
 
         if not hasattr(user, 'perfil_alumno'):
             messages.error(
-                request, 'Este usuario no está registrado como alumno.')
-            return redirect('gestion:horario_clases')
+                request,
+                'Este usuario no está registrado como alumno.'
+            )
+            return redirect('gestion:home_publica')
 
         alumno = user.perfil_alumno
-        suscripcion = alumno.suscripcion_actual
-
-        if not suscripcion:
-            messages.error(request, 'No tienes una suscripción registrada.')
-            return redirect('gestion:horario_clases')
 
         form = PagoAlumnoForm(request.POST, request.FILES)
 
         if form.is_valid():
             pago = form.save(commit=False)
+
             pago.alumno = alumno
-            pago.suscripcion = suscripcion
+            pago.suscripcion = None
             pago.estado = 'PENDIENTE'
+
             pago.save()
 
             messages.success(
@@ -983,13 +1057,12 @@ def registrar_pago_alumno(request):
                 'Pago registrado correctamente. Queda pendiente de validación.'
             )
 
-            return redirect('gestion:horario_clases')
+            return redirect('gestion:home_publica')
 
         messages.error(request, 'Revisa los datos del pago.')
-        return redirect('gestion:horario_clases')
+        return redirect('gestion:home_publica')
 
-    return redirect('gestion:horario_clases')
-
+    return redirect('gestion:home_publica')
 
 # RESTABLECER CONTRASEÑA
 
@@ -1695,3 +1768,57 @@ def confirmar_clase_home(request):
         messages.info(request, 'Ya habías confirmado esta clase.')
 
     return redirect('gestion:home_publica')
+
+# VISTA PARA CONFIGURAR HOME
+
+
+@staff_member_required
+def configuraciones(request):
+    return render(request, 'gestion/configuraciones.html')
+
+
+# VISTAS DE CONFIGURACION DE DIAS Y HORAS
+
+@staff_member_required
+def configurar_horario(request):
+
+    clases = ClaseProgramada.objects.select_related(
+        'instructor'
+    ).order_by(
+        'dia',
+        'hora_inicio'
+    )
+
+    return render(
+        request,
+        'gestion/configurar_horario.html',
+        {
+            'clases': clases
+        }
+    )
+
+# CONFIGURAR HORARIOS
+
+
+@staff_member_required
+def crear_dia_horario(request):
+    if request.method == 'POST':
+        form = DiaHorarioForm(request.POST)
+
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Día agregado correctamente.')
+
+    return redirect('gestion:configurar_horario')
+
+
+@staff_member_required
+def crear_hora_horario(request):
+    if request.method == 'POST':
+        form = HoraHorarioForm(request.POST)
+
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Hora agregada correctamente.')
+
+    return redirect('gestion:configurar_horario')

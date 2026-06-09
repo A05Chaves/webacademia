@@ -34,6 +34,12 @@
             Pago programado
     </a>
 
+    <a href="{% url 'cortesias:lista_cortesias' %}"
+        class="btn btn-outline-light">
+            <i class="fa-solid fa-user-plus"></i>
+            Cortesías
+    </a>
+
     <a href="{% url 'gestion:detalle_financiero' %}"
         class="btn btn-outline-light btn-sm">
             <i class="fa-solid fa-file-invoice-dollar"></i>
@@ -46,7 +52,48 @@
             Transferencia
     </a>
 </div>
- ,
+
+<div class="col-md-3 mb-3">
+    <a href="{% url 'gestion:lista_registros_legales' %}"
+       class="text-decoration-none">
+        <div class="card bg-dark text-light border-warning h-100">
+            <div class="card-body">
+                <h6>Registros pendientes</h6>
+                <h2>{{ registros_pendientes }}</h2>
+                <small class="text-warning">
+                    Estudiantes por aprobar
+                </small>
+            </div>
+        </div>
+    </a>
+</div>
+
+<div class="col-md-3 mb-3">
+    <a href="{% url 'gestion:lista_pagos' %}"
+       class="text-decoration-none">
+
+        <div class="card bg-dark text-light border-warning h-100">
+
+            <div class="card-body">
+
+                <h6>
+                    <i class="fa-solid fa-money-bill-wave"></i>
+                    Pagos pendientes
+                </h6>
+
+                <h2>{{ pagos_pendientes_total }}</h2>
+
+                <small class="text-warning">
+                    Pagos por validar
+                </small>
+
+            </div>
+
+        </div>
+
+    </a>
+</div>
+
 <div class="row mb-5">
 
     <div class="col-md-3 mb-3">

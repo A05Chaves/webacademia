@@ -1,0 +1,129 @@
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+
+    <h2 class="mb-0">
+        <i class="fa-solid fa-user-plus"></i>
+        Posibles estudiantes
+    </h2>
+
+    <a href="{% url 'gestion:dashboard' %}"
+       class="btn btn-outline-light btn-sm">
+        Volver
+    </a>
+
+</div>
+
+<div class="row mb-4">
+
+    <div class="col-md-4">
+        <div class="card bg-dark text-light border-secondary">
+            <div class="card-body text-center">
+                <h2>{{ total_cortesias }}</h2>
+                <small>Cortesías registradas</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card bg-dark text-light border-secondary">
+            <div class="card-body text-center">
+                <h2>{{ total_contactados }}</h2>
+                <small>Contactados</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card bg-dark text-light border-secondary">
+            <div class="card-body text-center">
+                <h2>{{ total_convertidos }}</h2>
+                <small>Convertidos en alumnos</small>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div class="card bg-dark text-light border-secondary">
+
+    <div class="card-body">
+
+        <div class="table-responsive">
+
+            <table class="table table-dark table-hover align-middle">
+
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Nombre</th>
+                        <th>Teléfono</th>
+                        <th>Correo</th>
+                        <th>Edad</th>
+                        <th>Clase</th>
+                        <th>Contactado</th>
+                        <th>Convertido</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for c in cortesias %}
+
+                    <tr>
+
+                        <td>{{ c.fecha_registro|date:"d/m/Y" }}</td>
+
+                        <td>{{ c.nombres }} {{ c.apellidos }}</td>
+
+                        <td>{{ c.telefono }}</td>
+
+                        <td>{{ c.correo|default:"-" }}</td>
+
+                        <td>{{ c.edad }}</td>
+
+                        <td>
+                            {{ c.clase.titulo|default:c.clase.get_disciplina_display }}
+                        </td>
+
+                        <td>
+                            {% if c.contactado %}
+                                <span class="badge bg-success">Sí</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark">No</span>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {% if c.se_convirtio %}
+                                <span class="badge bg-success">Sí</span>
+                            {% else %}
+                                <span class="badge bg-secondary">No</span>
+                            {% endif %}
+                        </td>
+
+                    </tr>
+
+                    {% empty %}
+
+                    <tr>
+                        <td colspan="8" class="text-center">
+                            No hay registros de cortesía.
+                        </td>
+                    </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}
