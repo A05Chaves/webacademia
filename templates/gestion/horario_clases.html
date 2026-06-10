@@ -276,6 +276,14 @@
                                         {{ item.clase.instructor }}
                                     </div>
 
+                                    <div class="clase-hora">
+                                        <i class="fa-solid fa-clock"></i>
+
+                                        {{ item.clase.hora_inicio|time:"g:i a" }}
+                                        -
+                                        {{ item.clase.hora_fin|time:"g:i a" }}
+                                    </div>
+
                                     <div class="clase-cupos">
                                         <i class="fa-solid fa-users"></i>
                                         {{ item.clase.total_asistentes }} / {{ item.clase.cupo_maximo }}

@@ -117,7 +117,7 @@ def home_publica(request):
 
     asistencias_hoy = AsistenciaClase.objects.filter(
         fecha_clase=hoy,
-        estado='CONFIRMADA'
+        estado=AsistenciaClase.Estados.CONFIRMADA
     ).select_related(
         'alumno__user',
         'clase'
@@ -160,13 +160,8 @@ def home_publica(request):
 
     for clase in clases_hoy:
 
-        inicio_clase = datetime.combine(
-            hoy,
-            clase.hora_inicio
-        )
-
         inicio_clase = timezone.make_aware(
-            inicio_clase,
+            datetime.combine(hoy, clase.hora_inicio),
             timezone.get_current_timezone()
         )
 
@@ -1700,15 +1695,34 @@ def confirmar_clase_home(request):
         return redirect('gestion:home_publica')
 
     alumno = user.perfil_alumno
-    hoy = timezone.now().date()
     ahora = timezone.localtime()
+    hoy = ahora.date()
 
     suscripcion = Suscripcion.objects.filter(
         alumno=alumno,
-        estado='ACTIVA',
-        fecha_inicio__lte=hoy,
-        fecha_vencimiento__gte=hoy
-    ).select_related('plan').first()
+        estado='ACTIVA'
+    ).select_related('plan').order_by('-fecha_vencimiento').first()
+
+    if not suscripcion:
+        messages.error(
+            request,
+            'No tienes una suscripción activa para confirmar clases.'
+        )
+        return redirect('gestion:home_publica')
+
+    if suscripcion.fecha_inicio > hoy:
+        messages.error(
+            request,
+            f'Tu suscripción inicia el {suscripcion.fecha_inicio}. Aún no puedes confirmar clases.'
+        )
+        return redirect('gestion:home_publica')
+
+    if suscripcion.fecha_vencimiento < hoy:
+        messages.error(
+            request,
+            f'Tu suscripción venció el {suscripcion.fecha_vencimiento}. Debes renovar.'
+        )
+        return redirect('gestion:home_publica')
 
     if not suscripcion:
         messages.error(
@@ -1735,7 +1749,7 @@ def confirmar_clase_home(request):
 
     clases_consumidas = AsistenciaClase.objects.filter(
         alumno=alumno,
-        estado='CONFIRMADA',
+        estado=AsistenciaClase.Estados.CONFIRMADA,
         fecha_clase__gte=suscripcion.fecha_inicio,
         fecha_clase__lte=suscripcion.fecha_vencimiento
     ).count()
@@ -1752,7 +1766,7 @@ def confirmar_clase_home(request):
         clase=clase,
         fecha_clase=hoy,
         defaults={
-            'estado': 'CONFIRMADA',
+            'estado': AsistenciaClase.Estados.CONFIRMADA,
             'fecha_confirmacion': ahora,
         }
     )

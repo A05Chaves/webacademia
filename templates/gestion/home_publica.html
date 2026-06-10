@@ -30,10 +30,29 @@
 
             <div class="card-body">
 
-                <h4 class="mb-4">
-                    <i class="fa-solid fa-users"></i>
-                    Entrenando ahora
-                </h4>
+                <div class="d-flex justify-content-between align-items-start mb-4">
+
+                    <h4 class="mb-0">
+                        <i class="fa-solid fa-users"></i>
+                        Entrenando ahora
+                    </h4>
+
+                    <div class="text-end">
+
+                        <div id="fechaActual"
+                            class="small text-secondary">
+                        </div>
+
+                        <div id="horaActual"
+                            class="fw-bold">
+                        </div>
+
+                    </div>
+
+                </div>
+
+                    
+                  
 
                 {% for asistencia in asistencias_hoy %}
 
@@ -407,6 +426,23 @@
         }
 
     }
+
+    function actualizarReloj() {
+
+        const ahora = new Date();
+
+        document.getElementById('fechaActual').innerHTML =
+            ahora.toLocaleDateString('es-CO');
+
+        document.getElementById('horaActual').innerHTML =
+            ahora.toLocaleTimeString('es-CO');
+
+    }
+
+    actualizarReloj();
+
+    setInterval(actualizarReloj, 1000);
+
 
 </script>
 {% endblock %}
