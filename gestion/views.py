@@ -4,6 +4,7 @@ Vistas del módulo de gestión de la academia.
 from registros_legales.services import crear_alumno_desde_registro
 """
 
+from urllib.parse import urlparse, parse_qs
 from .forms import ConfiguracionHomeForm
 from registros_legales.services import (
     crear_alumno_desde_registro,
@@ -72,7 +73,7 @@ from alumnos.models import Alumno
 from django.contrib.auth import get_user_model
 User = get_user_model()
 
-# VISTA HOME DEL PROGRAMA
+# CONVIERTE VIDEOS YOUTUBE
 
 
 def convertir_youtube_embed(url):
@@ -80,35 +81,79 @@ def convertir_youtube_embed(url):
     if not url:
         return ""
 
-    if "playlist?list=" in url:
+    url = url.strip()
 
-        playlist_id = url.split("list=")[1].split("&")[0]
+    try:
 
-        return (
-            f"https://www.youtube.com/embed/videoseries"
-            f"?list={playlist_id}"
-        )
+        parsed = urlparse(url)
+        query = parse_qs(parsed.query)
 
-    if "watch?v=" in url:
+        # Playlist
 
-        video_id = url.split("v=")[1].split("&")[0]
+        if "list" in query:
+            playlist_id = query["list"][0]
 
-        return (
-            f"https://www.youtube.com/embed/{video_id}"
-            f"?mute=1&playsinline=1&rel=0"
-        )
+            return (
+                f"https://www.youtube.com/embed/videoseries"
+                f"?list={playlist_id}"
+            )
 
-    if "youtu.be/" in url:
+        # youtu.be
 
-        video_id = url.split("youtu.be/")[1].split("?")[0]
+        if "youtu.be" in parsed.netloc:
 
-        return (
-            f"https://www.youtube.com/embed/{video_id}"
-            f"?mute=1&playsinline=1&rel=0"
-        )
+            video_id = parsed.path.strip("/")
+
+            return (
+                f"https://www.youtube.com/embed/{video_id}"
+                f"?mute=1&playsinline=1&rel=0"
+            )
+
+        # watch?v=
+
+        if parsed.path == "/watch":
+
+            video_id = query.get("v", [""])[0]
+
+            return (
+                f"https://www.youtube.com/embed/{video_id}"
+                f"?mute=1&playsinline=1&rel=0"
+            )
+
+        # shorts
+
+        if "/shorts/" in parsed.path:
+
+            video_id = parsed.path.split("/shorts/")[1].split("/")[0]
+
+            return (
+                f"https://www.youtube.com/embed/{video_id}"
+                f"?mute=1&playsinline=1&rel=0"
+            )
+
+        # live
+
+        if "/live/" in parsed.path:
+
+            video_id = parsed.path.split("/live/")[1].split("/")[0]
+
+            return (
+                f"https://www.youtube.com/embed/{video_id}"
+                f"?mute=1&playsinline=1&rel=0"
+            )
+
+        # embed ya listo
+
+        if "/embed/" in parsed.path:
+            return url
+
+    except Exception:
+        pass
 
     return url
 
+
+# VISTA HOME DEL PROGRAMA
 
 def home_publica(request):
 
