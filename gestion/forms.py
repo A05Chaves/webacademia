@@ -427,12 +427,11 @@ class UsuarioAlumnoEditForm(forms.ModelForm):
 
 
 class ConfiguracionHomeForm(forms.ModelForm):
-
     class Meta:
         model = ConfiguracionHome
-
         fields = [
             'video_promo_url',
+            'video_promo_archivo',
             'playlist_youtube_url',
             'activo',
         ]
@@ -442,6 +441,10 @@ class ConfiguracionHomeForm(forms.ModelForm):
                 'class': 'form-control',
                 'placeholder': 'https://www.youtube.com/watch?v=...'
             }),
+            'video_promo_archivo': forms.ClearableFileInput(attrs={
+                'class': 'form-control',
+                'accept': 'video/mp4'
+            }),
             'playlist_youtube_url': forms.URLInput(attrs={
                 'class': 'form-control',
                 'placeholder': 'https://www.youtube.com/playlist?list=...'
@@ -449,6 +452,11 @@ class ConfiguracionHomeForm(forms.ModelForm):
             'activo': forms.CheckboxInput(attrs={
                 'class': 'form-check-input'
             }),
+        }
+
+        help_texts = {
+            'video_promo_url': 'Pegue el enlace de un video normal de YouTube.',
+            'playlist_youtube_url': 'Pegue una playlist real de YouTube. No use enlaces Radio/Mix.',
         }
 
 

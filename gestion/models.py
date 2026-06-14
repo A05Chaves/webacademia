@@ -1,4 +1,5 @@
 from django.db import models
+from django.core.exceptions import ValidationError
 
 # Create your models here.
 
@@ -8,6 +9,13 @@ class ConfiguracionHome(models.Model):
         verbose_name='URL video promo YouTube',
         blank=True,
         null=True
+    )
+
+    video_promo_archivo = models.FileField(
+        upload_to='videos_home/',
+        blank=True,
+        null=True,
+        verbose_name='Video promo MP4'
     )
 
     playlist_youtube_url = models.URLField(
@@ -23,6 +31,22 @@ class ConfiguracionHome(models.Model):
     class Meta:
         verbose_name = 'Configuración Home'
         verbose_name_plural = 'Configuración Home'
+
+    def clean(self):
+
+        if self.playlist_youtube_url:
+
+            if "list=RD" in self.playlist_youtube_url:
+                raise ValidationError({
+                    'playlist_youtube_url':
+                    'No se permiten enlaces tipo Radio/Mix. Utilice una playlist real de YouTube.'
+                })
+
+            if "playlist?list=" not in self.playlist_youtube_url:
+                raise ValidationError({
+                    'playlist_youtube_url':
+                    'Debe ingresar una playlist de YouTube válida.'
+                })
 
     def __str__(self):
         return 'Configuración Home'

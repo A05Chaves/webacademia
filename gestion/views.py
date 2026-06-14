@@ -81,79 +81,33 @@ def convertir_youtube_embed(url):
     if not url:
         return ""
 
-    url = url.strip()
+    parsed = urlparse(url)
+    query = parse_qs(parsed.query)
 
-    try:
+    # Si existe video, usar el video primero
+    if "v" in query:
 
-        parsed = urlparse(url)
-        query = parse_qs(parsed.query)
+        video_id = query["v"][0]
 
-        # Playlist
+        return (
+            f"https://www.youtube.com/embed/{video_id}"
+            f"?autoplay=1&mute=1&playsinline=1&rel=0"
+        )
 
-        if "list" in query:
-            playlist_id = query["list"][0]
+    # Playlist normal
+    if "list" in query:
 
-            return (
-                f"https://www.youtube.com/embed/videoseries"
-                f"?list={playlist_id}"
-            )
+        playlist_id = query["list"][0]
 
-        # youtu.be
-
-        if "youtu.be" in parsed.netloc:
-
-            video_id = parsed.path.strip("/")
-
-            return (
-                f"https://www.youtube.com/embed/{video_id}"
-                f"?mute=1&playsinline=1&rel=0"
-            )
-
-        # watch?v=
-
-        if parsed.path == "/watch":
-
-            video_id = query.get("v", [""])[0]
-
-            return (
-                f"https://www.youtube.com/embed/{video_id}"
-                f"?mute=1&playsinline=1&rel=0"
-            )
-
-        # shorts
-
-        if "/shorts/" in parsed.path:
-
-            video_id = parsed.path.split("/shorts/")[1].split("/")[0]
-
-            return (
-                f"https://www.youtube.com/embed/{video_id}"
-                f"?mute=1&playsinline=1&rel=0"
-            )
-
-        # live
-
-        if "/live/" in parsed.path:
-
-            video_id = parsed.path.split("/live/")[1].split("/")[0]
-
-            return (
-                f"https://www.youtube.com/embed/{video_id}"
-                f"?mute=1&playsinline=1&rel=0"
-            )
-
-        # embed ya listo
-
-        if "/embed/" in parsed.path:
-            return url
-
-    except Exception:
-        pass
+        return (
+            f"https://www.youtube.com/embed/videoseries"
+            f"?list={playlist_id}"
+        )
 
     return url
 
-
 # VISTA HOME DEL PROGRAMA
+
 
 def home_publica(request):
 
@@ -226,6 +180,7 @@ def home_publica(request):
         'clases_hoy': clases_hoy,
         'clase_confirmable': clase_confirmable,
         'pago_form': pago_form,
+        'config_home': config_home,
     })
 
 
@@ -1687,6 +1642,7 @@ def configurar_home(request):
     if request.method == 'POST':
         form = ConfiguracionHomeForm(
             request.POST,
+            request.FILES,
             instance=config_home
         )
 
@@ -1699,6 +1655,13 @@ def configurar_home(request):
             )
 
             return redirect('gestion:configurar_home')
+
+        else:
+            messages.error(
+                request,
+                'No se pudo guardar. Revisa los errores del formulario.'
+            )
+
     else:
         form = ConfiguracionHomeForm(
             instance=config_home
@@ -1709,8 +1672,8 @@ def configurar_home(request):
         'config_home': config_home,
     })
 
-
 # VISTA PARA CONFIRMAR CLASE DESDE HOME
+
 
 @require_POST
 def confirmar_clase_home(request):

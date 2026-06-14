@@ -10,13 +10,35 @@
 
             <div class="ratio ratio-16x9">
 
-                <iframe
-                    id="videoFrame"
-                    src="{{ promo_embed }}"
-                    title="Video Academia"
-                    allow="autoplay; encrypted-media"
-                    allowfullscreen>
-                </iframe>
+                {% if config_home.video_promo_archivo %}
+
+                    <video
+                        class="w-100 h-100"
+                        autoplay
+                        muted
+                        loop
+                        controls
+                        playsinline>
+
+                        <source
+                            src="{{ config_home.video_promo_archivo.url }}"
+                            type="video/mp4">
+
+                        Tu navegador no soporta video HTML5.
+
+                    </video>
+
+                {% else %}
+
+                    <iframe
+                        id="videoFrame"
+                        src="{{ promo_embed }}"
+                        title="Video Academia"
+                        allow="autoplay; encrypted-media"
+                        allowfullscreen>
+                    </iframe>
+
+                {% endif %}
 
             </div>
 

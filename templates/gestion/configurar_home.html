@@ -18,10 +18,14 @@
 </div>
 
 <div class="card bg-dark text-light border-secondary">
+    <form method="post" enctype="multipart/form-data">
+        <div class="card-body">
 
-    <div class="card-body">
-
-        <form method="post">
+        {% if form.errors %}
+        <div class="alert alert-danger">
+            {{ form.errors }}
+        </div>
+        {% endif %}     
 
             {% csrf_token %}
 
@@ -29,9 +33,32 @@
                 <label class="form-label">
                     URL video promo YouTube
                 </label>
+
                 {{ form.video_promo_url }}
+
+                <div class="form-text text-info">
+                    {{ form.video_promo_url.help_text }}
+                </div>
+
                 <div class="text-danger">
                     {{ form.video_promo_url.errors }}
+                </div>
+            </div>
+
+
+            <div class="mb-3">
+                <label class="form-label">
+                    Video promocional MP4
+                </label>
+
+                {{ form.video_promo_archivo }}
+
+                <div class="form-text text-info">
+                    Si subes un MP4, tendrá prioridad sobre YouTube.
+                </div>
+
+                <div class="text-danger">
+                    {{ form.video_promo_archivo.errors }}
                 </div>
             </div>
 
@@ -39,7 +66,23 @@
                 <label class="form-label">
                     URL playlist YouTube
                 </label>
+
                 {{ form.playlist_youtube_url }}
+
+                <div class="form-text text-info">
+                    {{ form.playlist_youtube_url.help_text }}
+                </div>
+
+                <div class="alert alert-info mt-3">
+                    <strong>Playlist válida:</strong><br>
+                    https://www.youtube.com/playlist?list=PLxxxx
+
+                    <hr>
+
+                    <strong>No usar:</strong><br>
+                    https://www.youtube.com/watch?v=xxxx&list=RDxxxx
+                </div>
+
                 <div class="text-danger">
                     {{ form.playlist_youtube_url.errors }}
                 </div>
@@ -53,9 +96,8 @@
             </div>
 
             <div class="d-flex flex-column flex-md-row justify-content-end gap-3">
-
                 <a href="{% url 'gestion:home_publica' %}"
-                   class="btn btn-outline-secondary">
+                class="btn btn-outline-secondary">
                     Cancelar
                 </a>
 
@@ -64,13 +106,10 @@
                     <i class="fa-solid fa-floppy-disk"></i>
                     Guardar configuración
                 </button>
-
             </div>
 
-        </form>
-
-    </div>
-
+        </div>
+    </form>
 </div>
 
 {% endblock %}
