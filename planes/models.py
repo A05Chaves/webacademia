@@ -9,6 +9,7 @@ class Plan(models.Model):
     class DisciplinaPlan(models.TextChoices):
         JIUJITSU = 'JIUJITSU', 'Jiujitsu'
         MUAY_THAI = 'MUAY_THAI', 'Muay Thai'
+        MMA_MUAYTHAI = 'MMA-MUAYTHAI', 'MMA & Muay Thai'
         MIXTO = 'MIXTO', 'Mixto'
 
     nombre = models.CharField(max_length=100, unique=True)
