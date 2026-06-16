@@ -16,6 +16,7 @@ class ClaseProgramada(models.Model):
         JIU_JITSU = 'JIU_JITSU', 'Jiu Jitsu'
         MUAY_THAI = 'MUAY_THAI', 'Muay Thai'
         MMA = 'MMA', 'MMA'
+        MMA_MUAYTHAI = 'MMA-MUAYTHAI', 'MMA & Muay Thai'
         OTRA = 'OTRA', 'Otra'
 
     dia = models.CharField(
