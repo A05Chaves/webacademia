@@ -99,12 +99,14 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
             }),
 
             'eps': forms.TextInput(attrs={
-                'class': 'form-control'
+                'class': 'form-control',
+                'placeholder': 'Si no tiene escriba NINGUNA.'
             }),
 
             'condicion_medica': forms.Textarea(attrs={
                 'class': 'form-control',
-                'rows': 3
+                'rows': 3,
+                'placeholder': 'Si no tiene alguna condición médica escriba NINGUNA.'
             }),
 
             'nombre_acudiente': forms.TextInput(attrs={
@@ -126,6 +128,32 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
             'firma_base64': forms.HiddenInput(),
 
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        campos_obligatorios = [
+            'tipo_estudiante',
+            'foto',
+            'nombres',
+            'apellidos',
+            'documento',
+            'fecha_nacimiento',
+            'direccion',
+            'celular',
+            'correo',
+            'fecha_ingreso',
+            'plan_interes',
+            'contacto_emergencia_nombre',
+            'contacto_emergencia_celular',
+            'eps',
+            'condicion_medica',
+            'autoriza_imagen',
+            'firma_base64',
+        ]
+
+        for campo in campos_obligatorios:
+            self.fields[campo].required = True
 
     def clean(self):
         cleaned_data = super().clean()
@@ -157,11 +185,11 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
                 'Debe aceptar los riesgos deportivos.'
             )
 
-            if not cleaned_data.get('firma_base64'):
-                self.add_error(
-                    'firma_base64',
-                    'Debe adjuntar la firma del acudiente.'
-                )
+        if not cleaned_data.get('firma_base64'):
+            self.add_error(
+                'firma_base64',
+                'Debe adjuntar la firma del acudiente.'
+            )
 
         # Campos obligatorios solo para menores de edad
         if tipo == 'MENOR':
