@@ -172,18 +172,42 @@
 
     <div class="col-md-3">
 
-        <button
-            type="button"
-            onclick="toggleYoutube()"
-            class="btn btn-danger w-100 py-4 fs-4">
+        {% if clase_confirmable %}
 
-            <i class="fa-brands fa-youtube"></i>
+            <a href="{% url 'cortesias:registrar_cortesia' clase_confirmable.id %}"
+            class="btn btn-outline-light w-100 py-4 fs-4">
 
-            <br>
+                <i class="fa-solid fa-gift"></i>
 
-            <span id="youtubeBtnText">Música</span>
+                <br>
 
-        </button>
+                Cortesía
+
+            </a>
+
+            <small class="text-success">
+                Para la clase actual
+            </small>
+
+        {% else %}
+
+            <button type="button"
+                    class="btn btn-secondary w-100 py-4 fs-4"
+                    disabled>
+
+                <i class="fa-solid fa-gift"></i>
+
+                <br>
+
+                Cortesía
+
+            </button>
+
+            <small class="text-warning">
+                No hay clase disponible
+            </small>
+
+        {% endif %}
 
     </div>
 
@@ -417,37 +441,7 @@
 
 <script>
 
-    let mostrandoPlaylist = false;
-
-    const promoUrl = "{{ promo_embed }}";
-
-    const playlistUrl = "{{ playlist_embed }}";
-
-    function toggleYoutube() {
-
-        const videoFrame = document.getElementById('videoFrame');
-
-        const btnText = document.getElementById('youtubeBtnText');
-
-        if (mostrandoPlaylist) {
-
-            videoFrame.src = promoUrl;
-
-            btnText.innerText = "Música";
-
-            mostrandoPlaylist = false;
-
-        } else {
-
-            videoFrame.src = playlistUrl;
-
-            btnText.innerText = "Promo";
-
-            mostrandoPlaylist = true;
-
-        }
-
-    }
+    
 
     function actualizarReloj() {
 
