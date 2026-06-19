@@ -110,123 +110,109 @@
 
 </div>
 
+
 <div class="row g-4 mt-4">
 
     <div class="col-md-3">
-
         {% if clase_confirmable %}
-
-        <button
-            type="button"
-            class="btn btn-outline-light w-100 py-4 fs-4"
-            data-bs-toggle="modal"
-            data-bs-target="#modalConfirmarClase">
-
-        {% else %}
-
-        <button
-            type="button"
-            class="btn btn-secondary w-100 py-4 fs-4"
-            disabled>
-
-        {% endif %}
-
-            <i class="fa-solid fa-user-check"></i>
-
-            <br>
-
-            Confirmar clase
-
-        </button>
-
-        {% if clase_confirmable %}
-            <small class="text-success">
-                {{ clase_confirmable.disciplina }}
-                - {{ clase_confirmable.hora_inicio }}
-            </small>
-        {% else %}
-            <small class="text-warning">
-                No hay clases próximas
-            </small>
-        {% endif %}
-
-    </div>
-
-    <div class="col-md-3">
-
-        <button
-            type="button"
-            class="btn btn-outline-light w-100 py-4 fs-4"
-            data-bs-toggle="modal"
-            data-bs-target="#modalRegistrarPago">
-
-            <i class="fa-solid fa-money-bill-wave"></i>
-
-            <br>
-
-            Registrar pago
-
-        </button>
-
-    </div>
-
-    <div class="col-md-3">
-
-        {% if clase_confirmable %}
-
-            <a href="{% url 'cortesias:registrar_cortesia' clase_confirmable.id %}"
-            class="btn btn-outline-light w-100 py-4 fs-4">
-
-                <i class="fa-solid fa-gift"></i>
-
-                <br>
-
-                Cortesía
-
-            </a>
-
-            <small class="text-success">
-                Para la clase actual
-            </small>
-
-        {% else %}
-
             <button type="button"
-                    class="btn btn-secondary w-100 py-4 fs-4"
+                    class="btn btn-outline-light w-100 py-4"
+                    style="height: 160px;"
+                    data-bs-toggle="modal"
+                    data-bs-target="#modalConfirmarClase">
+        {% else %}
+            <button type="button"
+                    class="btn btn-secondary w-100 py-4"
+                    style="height: 160px;"
                     disabled>
-
-                <i class="fa-solid fa-gift"></i>
-
-                <br>
-
-                Cortesía
-
-            </button>
-
-            <small class="text-warning">
-                No hay clase disponible
-            </small>
-
         {% endif %}
 
+            <i class="fa-solid fa-user-check fa-2x mb-2"></i>
+
+            <h4 class="mb-2">Confirmar clase</h4>
+
+            {% if clase_confirmable %}
+                <small class="text-success">
+                    {{ clase_confirmable.titulo|default:clase_confirmable.get_disciplina_display }}
+                    -
+                    {{ clase_confirmable.hora_inicio|time:"g:i a" }}
+                </small>
+            {% else %}
+                <small class="text-light">
+                    No hay clases disponibles
+                </small>
+            {% endif %}
+
+        </button>
     </div>
 
     <div class="col-md-3">
+        <button type="button"
+                class="btn btn-outline-light w-100 py-4"
+                style="height: 160px;"
+                data-bs-toggle="modal"
+                data-bs-target="#modalRegistrarPago">
 
-        <a href="#"
-           class="btn btn-outline-light w-100 py-4 fs-4">
+            <i class="fa-solid fa-money-bill-wave fa-2x mb-2"></i>
 
-            <i class="fa-solid fa-stopwatch"></i>
+            <h4 class="mb-2">Registrar pago</h4>
 
-            <br>
+            <small class="text-info">
+                Ingresar con usuario
+            </small>
 
-            Cronómetro
+        </button>
+    </div>
+
+    <div class="col-md-3">
+        {% if clase_confirmable %}
+            <a href="{% url 'cortesias:registrar_cortesia' clase_confirmable.id %}"
+               class="btn btn-outline-light w-100 py-4"
+               style="height: 160px;">
+        {% else %}
+            <a href="{% url 'gestion:horario_clases' %}"
+               class="btn btn-outline-light w-100 py-4"
+               style="height: 160px;">
+        {% endif %}
+
+            <i class="fa-solid fa-gift fa-2x mb-2"></i>
+
+            <h4 class="mb-2">Clase de cortesía</h4>
+
+            {% if clase_confirmable %}
+                <small class="text-success">
+                    {{ clase_confirmable.titulo|default:clase_confirmable.get_disciplina_display }}
+                    -
+                    {{ clase_confirmable.hora_inicio|time:"g:i a" }}
+                </small>
+            {% else %}
+                <small class="text-info">
+                    Ver horarios disponibles
+                </small>
+            {% endif %}
 
         </a>
+    </div>
 
+    <div class="col-md-3">
+        <a href="#"
+           class="btn btn-outline-light w-100 py-4"
+           style="height: 160px;">
+
+            <i class="fa-solid fa-stopwatch fa-2x mb-2"></i>
+
+            <h4 class="mb-2">Cronómetro</h4>
+
+            <small class="text-secondary">
+                Próximamente
+            </small>
+
+        </a>
     </div>
 
 </div>
+
+
 
 
 <div class="modal fade"

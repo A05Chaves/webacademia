@@ -113,14 +113,7 @@ def home_publica(request):
 
     ahora = timezone.localtime()
     hoy = ahora.date()
-
-    asistencias_hoy = AsistenciaClase.objects.filter(
-        fecha_clase=hoy,
-        estado=AsistenciaClase.Estados.CONFIRMADA
-    ).select_related(
-        'alumno__user',
-        'clase'
-    ).order_by('-fecha_confirmacion')[:10]
+    hora_actual = ahora.time()
 
     dias_semana = {
         0: 'LUNES',
@@ -138,6 +131,20 @@ def home_publica(request):
         activa=True,
         dia=dia_actual
     ).order_by('hora_inicio')
+
+    clase_en_ventana = clases_hoy.filter(
+        hora_inicio__lte=(ahora + timedelta(minutes=20)).time(),
+        hora_fin__gte=hora_actual,
+    )
+
+    asistencias_hoy = AsistenciaClase.objects.filter(
+        fecha_clase=hoy,
+        estado=AsistenciaClase.Estados.CONFIRMADA,
+        clase__in=clase_en_ventana,
+    ).select_related(
+        'alumno__user',
+        'clase'
+    ).order_by('-fecha_confirmacion')[:10]
 
     config_home = ConfiguracionHome.objects.filter(
         activo=True
