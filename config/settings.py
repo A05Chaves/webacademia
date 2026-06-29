@@ -28,6 +28,7 @@ DEBUG = True
 
 ALLOWED_HOSTS = [
     'alfredochaves.pythonanywhere.com',
+    'bjj.lu-a.com',
     '127.0.0.1',
     'localhost',
 ]
