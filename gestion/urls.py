@@ -119,4 +119,9 @@ urlpatterns = [
         views.crear_hora_horario,
         name='crear_hora_horario'
     ),
+    path(
+        'cronometro/',
+        views.cronometro_lucha,
+        name='cronometro_lucha'
+    ),
 ]

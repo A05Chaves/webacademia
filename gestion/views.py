@@ -1850,4 +1850,8 @@ def crear_hora_horario(request):
             form.save()
             messages.success(request, 'Hora agregada correctamente.')
 
-    return redirect('gestion:configurar_horario')
+
+# VISTA DE CRONOMETRO
+
+def cronometro_lucha(request):
+    return render(request, 'gestion/cronometro_lucha.html')

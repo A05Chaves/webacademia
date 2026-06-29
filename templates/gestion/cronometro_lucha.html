@@ -1,0 +1,709 @@
+{% extends 'gestion/base.html' %}
+{% load static %}
+
+{% block content %}
+
+<style>
+    .fight-timer-page {
+        min-height: calc(100vh - 80px);
+        padding: 24px;
+        background: var(--bg-main);
+        color: var(--text-main);
+    }
+
+    .fight-timer-shell {
+        min-height: calc(100vh - 130px);
+        border-radius: 28px;
+        overflow: hidden;
+        border: 1px solid var(--border-color);
+        background: #050505;
+        color: #ffffff;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, .35);
+        display: flex;
+        flex-direction: column;
+    }
+
+    .timer-state-stopped {
+        background: radial-gradient(circle at top, #202020, #000000 65%);
+    }
+
+    .timer-state-ready {
+        background: radial-gradient(circle at top, #157347, #03180d 70%);
+    }
+
+    .timer-state-round {
+        background: radial-gradient(circle at top, #0d6efd, #03152f 70%);
+    }
+
+    .timer-state-warning {
+        background: radial-gradient(circle at top, #ffc107, #5c4100 70%);
+        color: #111111;
+    }
+
+    .timer-state-rest {
+        background: radial-gradient(circle at top, #dc3545, #3b050a 70%);
+    }
+
+    .timer-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 22px 28px;
+        border-bottom: 1px solid rgba(255, 255, 255, .15);
+    }
+
+    .timer-clock {
+        font-size: 30px;
+        font-weight: 800;
+        opacity: .85;
+    }
+
+    .timer-mode {
+        font-size: 18px;
+        font-weight: 800;
+        letter-spacing: .18em;
+        text-transform: uppercase;
+        opacity: .85;
+    }
+
+    .fullscreen-btn {
+        border: 1px solid rgba(255, 255, 255, .35);
+        background: rgba(255, 255, 255, .08);
+        color: inherit;
+        border-radius: 14px;
+        padding: 10px 14px;
+        font-weight: 700;
+    }
+
+    .timer-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        padding: 35px 28px;
+    }
+
+    .round-label {
+        font-size: clamp(42px, 7vw, 92px);
+        line-height: 1;
+        font-weight: 950;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        margin-bottom: 18px;
+    }
+
+    .main-time {
+        font-size: clamp(120px, 23vw, 310px);
+        line-height: .86;
+        font-weight: 950;
+        letter-spacing: -.06em;
+        font-variant-numeric: tabular-nums;
+        text-shadow: 0 12px 38px rgba(0, 0, 0, .35);
+    }
+
+    .sub-status {
+        margin-top: 28px;
+        font-size: clamp(24px, 4vw, 52px);
+        font-weight: 850;
+        text-transform: uppercase;
+        letter-spacing: .08em;
+        opacity: .9;
+    }
+
+    .progress-wrap {
+        width: min(900px, 92%);
+        height: 18px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: rgba(255, 255, 255, .18);
+        margin-top: 30px;
+    }
+
+    .progress-bar-custom {
+        height: 100%;
+        width: 100%;
+        background: rgba(255, 255, 255, .92);
+        border-radius: 999px;
+        transition: width .25s linear;
+    }
+
+    .timer-controls {
+        padding: 24px 28px 30px;
+        border-top: 1px solid rgba(255, 255, 255, .15);
+        background: rgba(0, 0, 0, .28);
+    }
+
+    .settings-row {
+        display: flex;
+        justify-content: center;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 22px;
+    }
+
+    .setting-card {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 225px;
+        justify-content: center;
+        padding: 14px 16px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, .1);
+        border: 1px solid rgba(255, 255, 255, .18);
+    }
+
+    .setting-card strong {
+        font-size: 17px;
+    }
+
+    .setting-card span {
+        min-width: 58px;
+        font-size: 20px;
+        font-weight: 850;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .setting-card button {
+        width: 42px;
+        height: 38px;
+        border-radius: 12px !important;
+        font-size: 20px;
+        font-weight: 900;
+    }
+
+    .action-row {
+        display: flex;
+        justify-content: center;
+        gap: 16px;
+        flex-wrap: wrap;
+    }
+
+    .timer-action-btn {
+        min-width: 190px;
+        min-height: 66px;
+        border-radius: 20px !important;
+        font-size: 25px;
+        font-weight: 900;
+    }
+
+    .hint-row {
+        text-align: center;
+        font-size: 13px;
+        opacity: .72;
+        margin-top: 14px;
+    }
+
+    body[data-theme="light"] .fight-timer-shell {
+        box-shadow: 0 20px 45px rgba(0, 0, 0, .22);
+    }
+
+    @media (max-width: 768px) {
+        .fight-timer-page {
+            padding: 12px;
+        }
+
+        .timer-topbar {
+            padding: 16px;
+        }
+
+        .timer-clock {
+            font-size: 22px;
+        }
+
+        .timer-mode {
+            font-size: 13px;
+        }
+
+        .fullscreen-btn {
+            padding: 8px 10px;
+            font-size: 13px;
+        }
+
+        .timer-main {
+            padding: 28px 12px;
+        }
+
+        .timer-controls {
+            padding: 18px 14px 22px;
+        }
+
+        .setting-card {
+            width: 100%;
+        }
+
+        .timer-action-btn {
+            width: 100%;
+        }
+    }
+
+    .fight-timer-page:fullscreen,
+    .fight-timer-shell:fullscreen {
+        width: 100vw;
+        height: 100vh;
+        padding: 0;
+    }
+
+    .fight-timer-page:fullscreen {
+        border-radius: 0;
+    }
+
+    .fight-timer-page:fullscreen .timer-main {
+        padding: 18px 20px;
+    }
+
+    .fight-timer-page:fullscreen .main-time {
+        font-size: clamp(110px, 19vw, 260px);
+    }
+
+    .fight-timer-page:fullscreen .round-label {
+        font-size: clamp(34px, 5vw, 72px);
+    }
+
+    .fight-timer-page:fullscreen .sub-status {
+        font-size: clamp(20px, 3vw, 42px);
+    }
+
+    .fight-timer-page:fullscreen .timer-controls {
+        padding: 14px 20px 18px;
+    }
+
+    .fight-timer-page:fullscreen .settings-row {
+        margin-bottom: 12px;
+    }
+
+    .fight-timer-page:fullscreen .setting-card {
+        padding: 10px 14px;
+    }
+
+    .fight-timer-page:fullscreen .timer-action-btn {
+        min-height: 56px;
+    }
+</style>
+
+<div class="fight-timer-page">
+
+    <div id="timerShell" class="fight-timer-shell timer-state-stopped">
+
+        <div class="timer-topbar">
+
+            <div id="clockNow" class="timer-clock">
+                --:--
+            </div>
+
+            <div id="modeText" class="timer-mode">
+                Fight Timer
+            </div>
+
+            <button type="button"
+                    class="fullscreen-btn"
+                    onclick="toggleFullscreen()">
+                <i class="fa-solid fa-expand"></i>
+                Fullscreen
+            </button>
+
+        </div>
+
+        <div class="timer-main">
+
+            <div id="roundLabel" class="round-label">
+                Stopped
+            </div>
+
+            <div id="mainTime" class="main-time">
+                05:00
+            </div>
+
+            <div id="subStatus" class="sub-status">
+                Ready
+            </div>
+
+            <div class="progress-wrap">
+                <div id="progressBar" class="progress-bar-custom"></div>
+            </div>
+
+        </div>
+
+        <div class="timer-controls">
+
+            <div class="settings-row">
+
+                <div class="setting-card">
+                    <strong>Round</strong>
+                    <button class="btn btn-secondary btn-sm" onclick="changeDuration(-60)">−</button>
+                    <span id="durationLabel">05:00</span>
+                    <button class="btn btn-secondary btn-sm" onclick="changeDuration(60)">+</button>
+                </div>
+
+                <div class="setting-card">
+                    <strong>Rest</strong>
+                    <button class="btn btn-secondary btn-sm" onclick="changeRest(-10)">−</button>
+                    <span id="restLabel">00:20</span>
+                    <button class="btn btn-secondary btn-sm" onclick="changeRest(10)">+</button>
+                </div>
+
+                <div class="setting-card">
+                    <strong>Rounds</strong>
+                    <button class="btn btn-secondary btn-sm" onclick="changeRounds(-1)">−</button>
+                    <span id="roundsLabel">∞</span>
+                    <button class="btn btn-secondary btn-sm" onclick="changeRounds(1)">+</button>
+                </div>
+
+            </div>
+
+            <div class="action-row">
+
+                <button id="startBtn"
+                        class="btn btn-success timer-action-btn"
+                        onclick="toggleTimer()">
+                    <i class="fa-solid fa-play"></i>
+                    Start
+                </button>
+
+                <button id="resetBtn"
+                        class="btn btn-secondary timer-action-btn"
+                        onclick="resetTimer()">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    Reset
+                </button>
+
+            </div>
+
+            <div class="hint-row">
+                Espacio = iniciar / pausar · R = reiniciar · F = pantalla completa
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<audio id="bellSound"
+       src="{% static 'sonidos/campana.mp3' %}"
+       preload="auto">
+</audio>
+
+<script>
+    let duration = 300;
+    let rest = 20;
+    let rounds = 0;
+    let currentRound = 1;
+    let remaining = duration;
+    let running = false;
+    let resting = false;
+    let countdown = false;
+    let countdownRemaining = 5;
+    let interval = null;
+    let warningDone = false;
+
+    let currentTotal = duration;
+    let audioContext = null;
+
+    function formatTime(seconds) {
+        const safeSeconds = Math.max(0, seconds);
+        const m = Math.floor(safeSeconds / 60).toString().padStart(2, '0');
+        const s = (safeSeconds % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
+    }
+
+    function iniciarAudio() {
+        if (!audioContext) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        if (audioContext.state === 'suspended') {
+            audioContext.resume();
+        }
+
+        const bell = document.getElementById('bellSound');
+
+        if (bell) {
+            bell.load();
+            bell.volume = 1;
+        }
+    }
+
+    function campana() {
+        const bellOriginal = document.getElementById('bellSound');
+
+        if (!bellOriginal) {
+            console.log('No existe bellSound');
+            return;
+        }
+
+        const bell = bellOriginal.cloneNode(true);
+        bell.volume = 1;
+        bell.currentTime = 0;
+
+        bell.play().catch(function(error) {
+            console.log('No se pudo reproducir campana:', error);
+        });
+    }
+
+    function tonoCorto() {
+        const audio = new (window.AudioContext || window.webkitAudioContext)();
+
+        const oscillator = audio.createOscillator();
+        const gain = audio.createGain();
+
+        oscillator.type = 'square';
+        oscillator.frequency.value = 1800;
+
+        gain.gain.setValueAtTime(1, audio.currentTime);
+        gain.gain.exponentialRampToValueAtTime(
+            0.001,
+            audio.currentTime + 0.25
+        );
+
+        oscillator.connect(gain);
+        gain.connect(audio.destination);
+
+        oscillator.start(audio.currentTime);
+        oscillator.stop(audio.currentTime + 0.25);
+    }
+
+    function palmasTresVeces() {
+        tonoCorto();
+        setTimeout(function() {
+            tonoCorto();
+        }, 350);
+        setTimeout(function() {
+            tonoCorto();
+        }, 700);
+    }
+
+    function setVisualState(state) {
+        const shell = document.getElementById('timerShell');
+
+        shell.classList.remove(
+            'timer-state-stopped',
+            'timer-state-ready',
+            'timer-state-round',
+            'timer-state-warning',
+            'timer-state-rest'
+        );
+
+        shell.classList.add(`timer-state-${state}`);
+    }
+
+    function updateProgress() {
+        const progressBar = document.getElementById('progressBar');
+        let percent = 100;
+
+        if (countdown) {
+            percent = (countdownRemaining / 5) * 100;
+        } else if (currentTotal > 0) {
+            percent = (remaining / currentTotal) * 100;
+        }
+
+        progressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+    }
+
+    function updateDisplay() {
+        const mainTime = document.getElementById('mainTime');
+        const roundLabel = document.getElementById('roundLabel');
+        const subStatus = document.getElementById('subStatus');
+        const modeText = document.getElementById('modeText');
+
+        document.getElementById('durationLabel').innerText = formatTime(duration);
+        document.getElementById('restLabel').innerText = formatTime(rest);
+        document.getElementById('roundsLabel').innerText = rounds === 0 ? '∞' : rounds;
+
+        if (!running) {
+            mainTime.innerText = formatTime(duration);
+            roundLabel.innerText = 'Stopped';
+            subStatus.innerText = 'Ready';
+            modeText.innerText = 'Fight Timer';
+            setVisualState('stopped');
+        } else if (countdown) {
+            mainTime.innerText = `00:0${countdownRemaining}`;
+            roundLabel.innerText = 'Get Ready';
+            subStatus.innerText = 'Fight starts soon';
+            modeText.innerText = 'Preparation';
+            setVisualState('ready');
+        } else if (resting) {
+            mainTime.innerText = formatTime(remaining);
+            roundLabel.innerText = 'Rest';
+            subStatus.innerText = `Next Round ${currentRound + 1}`;
+            modeText.innerText = 'Rest Time';
+            setVisualState('rest');
+        } else {
+            mainTime.innerText = formatTime(remaining);
+            roundLabel.innerText = `Round ${currentRound}`;
+            subStatus.innerText = rounds === 0
+                ? 'Infinite rounds'
+                : `${currentRound} / ${rounds}`;
+            modeText.innerText = 'Fight';
+
+            if (remaining <= 10) {
+                setVisualState('warning');
+            } else {
+                setVisualState('round');
+            }
+        }
+
+        updateProgress();
+    }
+
+    function startInterval() {
+        clearInterval(interval);
+
+        interval = setInterval(function() {
+            if (countdown) {
+                countdownRemaining--;
+
+                if (countdownRemaining <= 0) {
+                    countdown = false;
+                    resting = false;
+                    remaining = duration;
+                    currentTotal = duration;
+                    warningDone = false;
+                    campana();
+                }
+
+                updateDisplay();
+                return;
+            }
+
+            remaining--;
+
+            if (!resting && remaining === 10 && !warningDone) {
+                warningDone = true;
+                palmasTresVeces();
+            }
+
+            if (remaining <= 0) {
+                campana();
+
+                if (!resting) {
+                    resting = true;
+                    remaining = rest;
+                    currentTotal = rest;
+                    warningDone = false;
+                } else {
+                    resting = false;
+                    currentRound++;
+                    warningDone = false;
+
+                    if (rounds !== 0 && currentRound > rounds) {
+                        resetTimer();
+                        campana();
+                        return;
+                    }
+
+                    remaining = duration;
+                    currentTotal = duration;
+                    campana();
+                }
+            }
+
+            updateDisplay();
+        }, 1000);
+    }
+
+    function toggleTimer() {
+        if (running) {
+            clearInterval(interval);
+            running = false;
+            document.getElementById('startBtn').innerHTML = '<i class="fa-solid fa-play"></i> Start';
+            updateDisplay();
+            return;
+        }
+
+        iniciarAudio();
+        running = true;
+        countdown = true;
+        countdownRemaining = 5;
+        resting = false;
+        currentRound = currentRound || 1;
+        currentTotal = 5;
+        warningDone = false;
+
+        document.getElementById('startBtn').innerHTML = '<i class="fa-solid fa-pause"></i> Pause';
+
+        startInterval();
+        updateDisplay();
+    }
+
+    function resetTimer() {
+        clearInterval(interval);
+        running = false;
+        resting = false;
+        countdown = false;
+        countdownRemaining = 5;
+        currentRound = 1;
+        remaining = duration;
+        currentTotal = duration;
+        warningDone = false;
+        document.getElementById('startBtn').innerHTML = '<i class="fa-solid fa-play"></i> Start';
+        updateDisplay();
+    }
+
+    function changeDuration(value) {
+        if (running) return;
+        duration = Math.max(60, duration + value);
+        remaining = duration;
+        currentTotal = duration;
+        updateDisplay();
+    }
+
+    function changeRest(value) {
+        if (running) return;
+        rest = Math.max(0, rest + value);
+        updateDisplay();
+    }
+
+    function changeRounds(value) {
+        if (running) return;
+        rounds = Math.max(0, rounds + value);
+        updateDisplay();
+    }
+
+    function updateClock() {
+        const now = new Date();
+        document.getElementById('clockNow').innerText = now.toLocaleTimeString('es-CO', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+        });
+    }
+
+    function toggleFullscreen() {
+        const element = document.querySelector('.fight-timer-page');
+
+        if (!document.fullscreenElement) {
+            element.requestFullscreen().catch(function(error) {
+                console.log('No se pudo activar pantalla completa:', error);
+            });
+        } else {
+            document.exitFullscreen();
+        }
+    }
+
+    document.addEventListener('keydown', function(event) {
+        const key = event.key.toLowerCase();
+
+        if (key === ' ') {
+            event.preventDefault();
+            toggleTimer();
+        }
+
+        if (key === 'r') {
+            resetTimer();
+        }
+
+        if (key === 'f') {
+            toggleFullscreen();
+        }
+    });
+
+    updateDisplay();
+    updateClock();
+    setInterval(updateClock, 1000);
+</script>
+
+{% endblock %}
