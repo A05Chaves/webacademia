@@ -387,6 +387,11 @@
        preload="auto">
 </audio>
 
+<audio id="clapSound"
+       src="{% static 'sonidos/palmas.mp3' %}"
+       preload="auto">
+</audio>
+
 <script>
     let duration = 300;
     let rest = 20;
@@ -423,7 +428,14 @@
 
         if (bell) {
             bell.load();
-            bell.volume = 1;
+            bell.volume = 3;
+        }
+
+        const clap = document.getElementById('clapSound');
+
+        if (clap) {
+            clap.load();
+            clap.volume = 3;
         }
     }
 
@@ -467,13 +479,20 @@
     }
 
     function palmasTresVeces() {
-        tonoCorto();
-        setTimeout(function() {
-            tonoCorto();
-        }, 350);
-        setTimeout(function() {
-            tonoCorto();
-        }, 700);
+        const clapOriginal = document.getElementById('clapSound');
+
+        if (!clapOriginal) {
+            console.log('No existe clapSound');
+            return;
+        }
+
+        const clap = clapOriginal.cloneNode(true);
+        clap.volume = 1;
+        clap.currentTime = 0;
+
+        clap.play().catch(function(error) {
+            console.log('No se pudo reproducir palmas:', error);
+        });
     }
 
     function setVisualState(state) {
