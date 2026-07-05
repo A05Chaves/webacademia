@@ -160,18 +160,29 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
 
         tipo = cleaned_data.get('tipo_estudiante')
 
-        # Campos obligatorios para cualquier estudiante
-        if not cleaned_data.get('foto'):
-            self.add_error(
-                'foto',
-                'Debe adjuntar una foto del estudiante.'
-            )
+        campos_obligatorios = [
+            'foto',
+            'plan_interes',
+            'nombres',
+            'apellidos',
+            'documento',
+            'fecha_nacimiento',
+            'direccion',
+            'celular',
+            'correo',
+            'fecha_ingreso',
+            'contacto_emergencia_nombre',
+            'contacto_emergencia_celular',
+            'eps',
+            'condicion_medica',
+        ]
 
-        if not cleaned_data.get('plan_interes'):
-            self.add_error(
-                'plan_interes',
-                'Debe seleccionar el plan de interés.'
-            )
+        for campo in campos_obligatorios:
+            if not cleaned_data.get(campo):
+                self.add_error(
+                    campo,
+                    'Este campo es obligatorio.'
+                )
 
         if not cleaned_data.get('acepta_reglamento'):
             self.add_error(
@@ -185,22 +196,29 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
                 'Debe aceptar los riesgos deportivos.'
             )
 
-        if not cleaned_data.get('firma_base64'):
+        if not cleaned_data.get('autoriza_imagen'):
             self.add_error(
-                'firma_base64',
-                'Debe adjuntar la firma del acudiente.'
+                'autoriza_imagen',
+                'Debe aceptar la autorización de imagen.'
             )
 
-        # Campos obligatorios solo para menores de edad
+        firma = cleaned_data.get('firma_base64')
+
+        if not firma or len(firma) < 100:
+            self.add_error(
+                'firma_base64',
+                'Debe realizar la firma antes de enviar el formulario.'
+            )
+
         if tipo == 'MENOR':
-            campos = [
+            campos_menor = [
                 'nombre_acudiente',
                 'documento_acudiente',
                 'parentesco_acudiente',
                 'celular_acudiente',
             ]
 
-            for campo in campos:
+            for campo in campos_menor:
                 if not cleaned_data.get(campo):
                     self.add_error(
                         campo,
@@ -212,7 +230,6 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
         celular = cleaned_data.get('celular')
 
         if documento:
-
             existe_registro = RegistroLegalEstudiante.objects.filter(
                 documento=documento
             ).exists()
@@ -226,33 +243,28 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
             ).exists()
 
             if existe_registro or existe_alumno or existe_usuario:
-
                 self.add_error(
                     'documento',
                     'Ya existe un estudiante o registro con este documento.'
                 )
 
         if correo:
-
             existe_correo = RegistroLegalEstudiante.objects.filter(
                 correo=correo
             ).exists()
 
             if existe_correo:
-
                 self.add_error(
                     'correo',
                     'Ya existe un registro con este correo.'
                 )
 
         if celular:
-
             existe_celular = RegistroLegalEstudiante.objects.filter(
                 celular=celular
             ).exists()
 
             if existe_celular:
-
                 self.add_error(
                     'celular',
                     'Ya existe un registro con este celular.'
