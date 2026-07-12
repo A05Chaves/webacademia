@@ -76,26 +76,64 @@ class PlanForm(forms.ModelForm):
             'descripcion',
             'precio',
             'duracion_dias',
+            'permite_jiu_jitsu',
+            'permite_muay_thai',
+            'permite_mma',
+            'clases_semana',
+            'asistencia_ilimitada',
             'clases_mes',
-            'disciplina',
             'activo',
         ]
+
         widgets = {
-            'nombre': forms.TextInput(attrs={'class': 'form-control'}),
+            'nombre': forms.TextInput(attrs={
+                'class': 'form-control'
+            }),
+
             'descripcion': forms.Textarea(attrs={
                 'class': 'form-control',
                 'rows': 3
             }),
-            'precio': forms.NumberInput(attrs={'class': 'form-control'}),
-            'duracion_dias': forms.NumberInput(attrs={'class': 'form-control'}),
-            'activo': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'clases_mes': forms.NumberInput(
-                attrs={'class': 'form-control'}
-            ),
 
-            'disciplina': forms.Select(
-                attrs={'class': 'form-select'}
-            ),
+            'precio': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'min': '0'
+            }),
+
+            'duracion_dias': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'min': '1'
+            }),
+
+            'permite_jiu_jitsu': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+
+            'permite_muay_thai': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+
+            'permite_mma': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+
+            'clases_semana': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'min': '1'
+            }),
+
+            'asistencia_ilimitada': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+
+            'clases_mes': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'min': '1'
+            }),
+
+            'activo': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
         }
 
 
@@ -109,7 +147,7 @@ class SuscripcionForm(forms.ModelForm):
             'fecha_vencimiento',
             'estado',
             'observaciones',
-            'clases_asignadas',
+
         ]
 
         widgets = {
@@ -132,7 +170,7 @@ class SuscripcionForm(forms.ModelForm):
                 'class': 'form-control',
                 'rows': 3
             }),
-            'clases_asignadas': forms.CheckboxSelectMultiple(),
+
         }
 
 

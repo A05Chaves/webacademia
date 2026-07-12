@@ -59,11 +59,62 @@
                 </div>
 
                 <div class="col-md-6 mb-3">
-                    <label class="form-label">Disciplina</label>
-                    {{ form.disciplina }}
+                    <label class="form-label">
+                        Clases permitidas por semana
+                    </label>
+
+                    {{ form.clases_semana }}
+
                     <div class="text-danger">
-                        {{ form.disciplina.errors }}
+                        {{ form.clases_semana.errors }}
                     </div>
+                </div>
+
+                <div class="col-md-6 mb-3">
+
+                    <label class="form-label d-block">
+                        Disciplinas incluidas
+                    </label>
+
+                    <div class="form-check mb-2">
+                        {{ form.permite_jiu_jitsu }}
+                        <label class="form-check-label">
+                            Jiu Jitsu
+                        </label>
+                    </div>
+
+                    <div class="form-check mb-2">
+                        {{ form.permite_muay_thai }}
+                        <label class="form-check-label">
+                            Muay Thai
+                        </label>
+                    </div>
+
+                    <div class="form-check mb-2">
+                        {{ form.permite_mma }}
+                        <label class="form-check-label">
+                            MMA
+                        </label>
+                    </div>
+
+                </div>
+
+                <div class="col-md-6 mb-3">
+
+                    <div class="form-check mt-4">
+
+                        {{ form.asistencia_ilimitada }}
+
+                        <label class="form-check-label">
+                            Asistencia ilimitada
+                        </label>
+
+                    </div>
+
+                    <small class="text-muted">
+                        Marque esta opción para planes premium sin límite semanal.
+                    </small>
+
                 </div>
 
                 <div class="col-md-12 mb-3">
