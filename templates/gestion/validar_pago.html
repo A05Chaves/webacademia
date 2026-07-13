@@ -41,7 +41,7 @@
 
             <div class="card-body text-center">
                 {% if pago.comprobante %}
-                    <a href="{{ pago.comprobante.url }}" target="_blank"
+                    <a href="{% url 'serve_media' pago.comprobante.name %}" target="_blank"
                        class="btn btn-outline-info">
                         <i class="fa-solid fa-file-invoice"></i>
                         Ver comprobante

@@ -10,6 +10,11 @@ academia_django/
 # Django
 db.sqlite3
 /media/
+staticfiles/
+comprobantes_pagos/
+qr_pagos/
+registros_estudiantes/
+videos_home/
 
 # Archivos sensibles
 .env

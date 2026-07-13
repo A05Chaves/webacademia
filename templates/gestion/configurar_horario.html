@@ -112,13 +112,15 @@
 
                             </a>
 
-                            <a href="{% url 'gestion:eliminar_clase' clase.id %}"
-                            class="btn btn-danger btn-sm"
-                            onclick="return confirm('¿Seguro que deseas eliminar esta clase? Esta acción no se puede deshacer.')">
-
-                                <i class="fa-solid fa-trash"></i>
-
-                            </a>
+                            <form method="post"
+                                  action="{% url 'gestion:eliminar_clase' clase.id %}"
+                                  class="d-inline"
+                                  onsubmit="return confirm('¿Seguro que deseas eliminar esta clase? Esta acción no se puede deshacer.')">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-danger btn-sm">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </form>
 
                         </td>
 

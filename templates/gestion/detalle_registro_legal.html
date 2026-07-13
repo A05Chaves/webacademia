@@ -12,11 +12,13 @@
     {% if registro.estado == 'PENDIENTE_VALIDACION' %}
         <div class="d-flex gap-2 mb-4 px-2">
 
-            <a href="{% url 'gestion:aprobar_registro_legal' registro.id %}"
-            class="btn btn-success">
-                <i class="fa-solid fa-check"></i>
-                Aprobar
-            </a>
+            <form method="post" action="{% url 'gestion:aprobar_registro_legal' registro.id %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-success">
+                    <i class="fa-solid fa-check"></i>
+                    Aprobar
+                </button>
+            </form>
 
             <a href="{% url 'gestion:rechazar_registro_legal' registro.id %}"
             class="btn btn-danger">
@@ -52,7 +54,7 @@
             <div class="col-md-3 text-center">
 
                 {% if registro.foto %}
-                    <img src="{{ registro.foto.url }}"
+                    <img src="{% url 'serve_media' registro.foto.name %}"
                          class="img-fluid rounded-4 border border-secondary">
                 {% endif %}
 

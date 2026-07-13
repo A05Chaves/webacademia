@@ -12,6 +12,7 @@ from finanzas.models import MovimientoFinanciero, PagoProgramado, CuentaFinancie
 from usuarios.models import Usuario
 from django.contrib.auth.forms import PasswordChangeForm
 from planes.models import Plan
+from config.file_validation import validate_payment_receipt
 Usuario = get_user_model()
 
 
@@ -191,7 +192,10 @@ class PagoForm(forms.ModelForm):
             'plan': forms.Select(attrs={'class': 'form-select'}),
             'metodo_qr': forms.Select(attrs={'class': 'form-select'}),
             'valor': forms.NumberInput(attrs={'class': 'form-control'}),
-            'comprobante': forms.ClearableFileInput(attrs={'class': 'form-control'}),
+            'comprobante': forms.ClearableFileInput(attrs={
+                'class': 'form-control',
+                'accept': '.pdf,.jpg,.jpeg,.png,.webp',
+            }),
             'referencia_pago': forms.TextInput(attrs={'class': 'form-control'}),
         }
 
@@ -205,6 +209,12 @@ class PagoForm(forms.ModelForm):
         self.fields['plan'].queryset = Plan.objects.filter(
             activo=True
         )
+
+    def clean_comprobante(self):
+        comprobante = self.cleaned_data.get('comprobante')
+        if comprobante:
+            validate_payment_receipt(comprobante)
+        return comprobante
 
 
 class ValidarPagoForm(forms.ModelForm):
@@ -280,7 +290,10 @@ class PagoAlumnoForm(forms.ModelForm):
             'plan': forms.Select(attrs={'class': 'form-select'}),
             'metodo_qr': forms.Select(attrs={'class': 'form-select'}),
             'valor': forms.NumberInput(attrs={'class': 'form-control'}),
-            'comprobante': forms.ClearableFileInput(attrs={'class': 'form-control'}),
+            'comprobante': forms.ClearableFileInput(attrs={
+                'class': 'form-control',
+                'accept': '.pdf,.jpg,.jpeg,.png,.webp',
+            }),
             'referencia_pago': forms.TextInput(attrs={'class': 'form-control'}),
         }
 
@@ -294,6 +307,12 @@ class PagoAlumnoForm(forms.ModelForm):
         self.fields['metodo_qr'].queryset = MetodoPagoQR.objects.filter(
             activo=True
         )
+
+    def clean_comprobante(self):
+        comprobante = self.cleaned_data.get('comprobante')
+        if comprobante:
+            validate_payment_receipt(comprobante)
+        return comprobante
 
 # FORMULARIO DE GASTOS
 

@@ -52,7 +52,7 @@ from .forms import ClaseProgramadaForm
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import logout
 from django.db.models import Count, Q
-from django.db import models
+from django.db import models, transaction
 
 from django.contrib.auth import authenticate
 from django.views.decorators.http import require_POST
@@ -421,8 +421,15 @@ def crear_pago(request):
 
 
 @staff_member_required
+@transaction.atomic
 def validar_pago(request, pago_id):
-    pago = get_object_or_404(Pago, id=pago_id)
+    pagos = Pago.objects.select_related(
+        'alumno__user', 'plan', 'metodo_qr__cuenta_financiera'
+    )
+    if request.method == 'POST':
+        pagos = pagos.select_for_update()
+
+    pago = get_object_or_404(pagos, id=pago_id)
 
     if pago.estado != 'PENDIENTE':
         messages.warning(request, 'Este pago ya fue validado.')
@@ -911,6 +918,7 @@ def editar_clase(request, clase_id):
 
 
 @staff_member_required
+@require_POST
 def eliminar_clase(request, clase_id):
 
     clase = get_object_or_404(
@@ -1136,6 +1144,7 @@ def crear_pago_programado(request):
 # VISTA DE PAGOS PROGRAMADOS
 
 @staff_member_required
+@require_POST
 def pagar_pago_programado(request, pago_id):
 
     pago_programado = get_object_or_404(
@@ -1285,21 +1294,22 @@ def registrar_transferencia(request):
             concepto = form.cleaned_data['concepto']
             observaciones = form.cleaned_data['observaciones']
 
-            MovimientoFinanciero.objects.create(
-                cuenta=origen,
-                tipo='EGRESO',
-                concepto=f'Transferencia salida - {concepto}',
-                valor=valor,
-                observaciones=f'Destino: {destino}. {observaciones}'
-            )
+            with transaction.atomic():
+                MovimientoFinanciero.objects.create(
+                    cuenta=origen,
+                    tipo='EGRESO',
+                    concepto=f'Transferencia salida - {concepto}',
+                    valor=valor,
+                    observaciones=f'Destino: {destino}. {observaciones}'
+                )
 
-            MovimientoFinanciero.objects.create(
-                cuenta=destino,
-                tipo='INGRESO',
-                concepto=f'Transferencia entrada - {concepto}',
-                valor=valor,
-                observaciones=f'Origen: {origen}. {observaciones}'
-            )
+                MovimientoFinanciero.objects.create(
+                    cuenta=destino,
+                    tipo='INGRESO',
+                    concepto=f'Transferencia entrada - {concepto}',
+                    valor=valor,
+                    observaciones=f'Origen: {origen}. {observaciones}'
+                )
 
             messages.success(
                 request, 'Transferencia registrada correctamente.')
@@ -1346,6 +1356,7 @@ def detalle_registro_legal(request, registro_id):
 
 
 @staff_member_required
+@require_POST
 def aprobar_registro_legal(request, registro_id):
 
     registro = get_object_or_404(

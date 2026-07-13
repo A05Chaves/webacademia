@@ -2,6 +2,7 @@ from django import forms
 from .models import RegistroLegalEstudiante
 from alumnos.models import Alumno
 from django.contrib.auth import get_user_model
+from config.file_validation import validate_base64_signature, validate_image
 
 User = get_user_model()
 
@@ -49,7 +50,8 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
             }),
 
             'foto': forms.FileInput(attrs={
-                'class': 'form-control'
+                'class': 'form-control',
+                'accept': '.jpg,.jpeg,.png,.webp'
             }),
 
             'nombres': forms.TextInput(attrs={
@@ -271,3 +273,15 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
                 )
 
         return cleaned_data
+
+    def clean_foto(self):
+        foto = self.cleaned_data.get('foto')
+        if foto:
+            validate_image(foto)
+        return foto
+
+    def clean_firma_base64(self):
+        firma = self.cleaned_data.get('firma_base64')
+        if firma:
+            validate_base64_signature(firma)
+        return firma
