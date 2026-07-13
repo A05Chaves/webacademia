@@ -28,11 +28,23 @@
                     </h2>
 
                     <form method="post"
+                          id="registroEstudianteForm"
                           enctype="multipart/form-data">
 
                         {% if form.errors %}
                             <div class="alert alert-danger">
-                                Revisa los campos marcados en rojo antes de continuar.
+                                <strong>No se pudo guardar el registro.</strong>
+                                Revisa los siguientes campos:
+                                <ul class="mb-0 mt-2">
+                                    {% for field in form %}
+                                        {% for error in field.errors %}
+                                            <li>{{ field.label }}: {{ error }}</li>
+                                        {% endfor %}
+                                    {% endfor %}
+                                    {% for error in form.non_field_errors %}
+                                        <li>{{ error }}</li>
+                                    {% endfor %}
+                                </ul>
                             </div>
                         {% endif %}
 
@@ -280,7 +292,7 @@
                                 Autorizo uso de imagen y datos personales
                             </label>
                             <div class="text-muted">
-                               
+                                {{ form.autoriza_imagen.errors }}
                             </div>
                         </div>
 
@@ -296,9 +308,7 @@
                                     height="220"
                                     style="width:100%; border-radius:12px;">
                             </canvas>
-                            <input type="hidden"
-                                name="firma_base64"
-                                id="firmaBase64">
+                            {{ form.firma_base64 }}
                             <div class="text-danger mt-2">
                                 {{ form.firma_base64.errors }}
                             </div>
@@ -367,22 +377,28 @@ tipoEstudiante.addEventListener('change', mostrarAcudiente);
 mostrarAcudiente();
 
 const canvas = document.getElementById('firmaCanvas');
+let signaturePad = null;
 
 function ajustarCanvas() {
-
+    const firmaAnterior = signaturePad
+        ? signaturePad.toData()
+        : [];
     const ratio = Math.max(window.devicePixelRatio || 1, 1);
 
     canvas.width = canvas.offsetWidth * ratio;
     canvas.height = canvas.offsetHeight * ratio;
 
     canvas.getContext("2d").scale(ratio, ratio);
+    if (firmaAnterior.length) {
+        signaturePad.fromData(firmaAnterior);
+    }
 }
 
 ajustarCanvas();
 
 window.addEventListener('resize', ajustarCanvas);
 
-const signaturePad = new SignaturePad(canvas, {
+signaturePad = new SignaturePad(canvas, {
     backgroundColor: 'rgb(255,255,255)'
 });
 
@@ -393,7 +409,7 @@ document.getElementById('limpiarFirma')
 
 });
 
-document.querySelector('form')
+document.getElementById('registroEstudianteForm')
 .addEventListener('submit', function (e) {
 
     if (signaturePad.isEmpty()) {
@@ -405,7 +421,7 @@ document.querySelector('form')
         return;
     }
 
-    document.getElementById('firmaBase64').value =
+    document.getElementById('id_firma_base64').value =
         signaturePad.toDataURL();
 
 });

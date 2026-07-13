@@ -1,5 +1,6 @@
 import base64
 import binascii
+from io import BytesIO
 from pathlib import Path
 
 from django.core.exceptions import ValidationError
@@ -61,3 +62,14 @@ def validate_base64_signature(signature):
         raise ValidationError('La firma no contiene una imagen PNG válida.')
     if len(decoded) > MAX_SIGNATURE_SIZE:
         raise ValidationError('La firma no puede superar 2 MB.')
+    try:
+        image = Image.open(BytesIO(decoded)).convert('RGBA')
+        image.load()
+        pixels_with_ink = sum(
+            1 for red, green, blue, alpha in image.getdata()
+            if alpha > 20 and min(red, green, blue) < 220
+        )
+    except (UnidentifiedImageError, OSError, SyntaxError) as error:
+        raise ValidationError('La firma no contiene una imagen válida.') from error
+    if pixels_with_ink < 20:
+        raise ValidationError('Debe realizar una firma visible antes de enviar.')

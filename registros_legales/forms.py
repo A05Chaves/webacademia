@@ -150,6 +150,8 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
             'contacto_emergencia_celular',
             'eps',
             'condicion_medica',
+            'acepta_reglamento',
+            'acepta_riesgos',
             'autoriza_imagen',
             'firma_base64',
         ]
@@ -282,6 +284,9 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
 
     def clean_firma_base64(self):
         firma = self.cleaned_data.get('firma_base64')
-        if firma:
-            validate_base64_signature(firma)
+        if not firma:
+            raise forms.ValidationError(
+                'Debe realizar la firma antes de enviar el formulario.'
+            )
+        validate_base64_signature(firma)
         return firma
