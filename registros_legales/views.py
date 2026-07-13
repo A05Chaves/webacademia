@@ -5,6 +5,7 @@ from django.views.decorators.http import require_POST
 from django.contrib.auth import get_user_model
 
 from alumnos.models import Alumno
+from instructores.models import Instructor
 
 from .forms import RegistroLegalEstudianteForm
 from .models import RegistroLegalEstudiante
@@ -20,9 +21,13 @@ def validar_datos_registro(request):
     if documento and (
         RegistroLegalEstudiante.objects.filter(documento=documento).exists()
         or Alumno.objects.filter(documento=documento).exists()
+        or Instructor.objects.filter(documento=documento).exists()
         or get_user_model().objects.filter(username=documento).exists()
     ):
-        errores['documento'] = 'Ya existe un estudiante o registro con este documento.'
+        errores['documento'] = (
+            'Ya existe un estudiante o registro con este documento, '
+            'o está asignado a un instructor.'
+        )
 
     if correo and RegistroLegalEstudiante.objects.filter(
         correo__iexact=correo

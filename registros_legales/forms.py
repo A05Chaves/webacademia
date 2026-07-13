@@ -3,6 +3,7 @@ from .models import RegistroLegalEstudiante
 from alumnos.models import Alumno
 from django.contrib.auth import get_user_model
 from config.file_validation import validate_base64_signature, validate_image
+from instructores.models import Instructor
 
 User = get_user_model()
 
@@ -246,10 +247,19 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
                 username=documento
             ).exists()
 
-            if existe_registro or existe_alumno or existe_usuario:
+            existe_instructor = Instructor.objects.filter(
+                documento=documento
+            ).exists()
+
+            if (
+                existe_registro
+                or existe_alumno
+                or existe_usuario
+                or existe_instructor
+            ):
                 self.add_error(
                     'documento',
-                    'Ya existe un estudiante o registro con este documento.'
+                    'Ya existe un estudiante o registro con este documento, o está asignado a un instructor.'
                 )
 
         if correo:

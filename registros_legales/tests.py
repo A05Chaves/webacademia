@@ -10,6 +10,7 @@ from PIL import Image, ImageDraw
 
 from planes.models import Plan
 from alumnos.models import Alumno
+from instructores.models import Instructor
 from .forms import RegistroLegalEstudianteForm
 from .models import RegistroLegalEstudiante
 
@@ -155,3 +156,30 @@ class RegistroLegalObligatorioTests(TestCase):
         self.assertEqual(
             set(resultado['errores']), {'documento', 'correo', 'celular'}
         )
+
+    def test_documento_de_instructor_no_puede_registrarse_como_estudiante(self):
+        usuario_instructor = get_user_model().objects.create_user(
+            username='cuenta_instructor', password='clave-instructor'
+        )
+        Instructor.objects.create(
+            user=usuario_instructor,
+            documento='DOC-INSTRUCTOR-1',
+            especialidad='Jiu Jitsu',
+        )
+
+        response = self.client.post(reverse('validar_datos_registro'), {
+            'documento': 'DOC-INSTRUCTOR-1',
+            'correo': 'nuevo@example.com',
+            'celular': '3110000000',
+        })
+        self.assertFalse(response.json()['valido'])
+        self.assertIn('documento', response.json()['errores'])
+
+        data = self.datos_validos()
+        data['documento'] = 'DOC-INSTRUCTOR-1'
+        form = RegistroLegalEstudianteForm(
+            data=data, files={'foto': self.foto_valida()}
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn('documento', form.errors)
+        self.assertEqual(RegistroLegalEstudiante.objects.count(), 0)
