@@ -2,13 +2,97 @@
 
 {% block content %}
 
+<style>
+    .home-action-card {
+        align-items: center;
+        background: rgba(255, 255, 255, .025);
+        border: 1px solid var(--border-color);
+        border-radius: 18px;
+        color: var(--text-main);
+        display: flex;
+        gap: 15px;
+        min-height: 112px;
+        padding: 18px;
+        text-align: left;
+        transition: transform .2s ease, border-color .2s ease, background .2s ease;
+    }
+
+    .home-action-card:not(:disabled):hover {
+        background: rgba(255, 255, 255, .08);
+        border-color: rgba(255, 255, 255, .45);
+        color: var(--text-main);
+        transform: translateY(-3px);
+    }
+
+    .home-action-card:disabled {
+        cursor: not-allowed;
+        opacity: .55;
+    }
+
+    .home-action-icon {
+        align-items: center;
+        background: rgba(255, 255, 255, .1);
+        border-radius: 15px;
+        display: inline-flex;
+        flex: 0 0 52px;
+        font-size: 1.35rem;
+        height: 52px;
+        justify-content: center;
+    }
+
+    .action-confirm .home-action-icon { color: #75b798; }
+    .action-payment .home-action-icon { color: #6edff6; }
+    .action-courtesy .home-action-icon { color: #ffda6a; }
+    .action-timer .home-action-icon { color: #c29ffa; }
+
+    .home-action-copy {
+        display: flex;
+        flex: 1 1 auto;
+        flex-direction: column;
+        min-width: 0;
+    }
+
+    .home-action-copy strong {
+        font-size: 1.05rem;
+        margin-bottom: 4px;
+    }
+
+    .home-action-copy small {
+        color: var(--text-secondary);
+        line-height: 1.35;
+    }
+
+    .home-action-arrow {
+        color: var(--text-secondary);
+        flex: 0 0 auto;
+    }
+
+    @media (min-width: 992px) {
+        .welcome-media-public {
+            --bs-aspect-ratio: 38%;
+        }
+    }
+
+    @media (max-width: 575.98px) {
+        .home-action-card {
+            min-height: 96px;
+            padding: 14px;
+        }
+
+        .home-action-icon {
+            flex-basis: 46px;
+            height: 46px;
+        }
+    }
+</style>
+
 <div class="row g-4">
 
-    <div class="col-lg-8">
+    <div class="{% if user.is_authenticated %}col-lg-8{% else %}col-12{% endif %}">
 
         <div class="card bg-dark text-light border-secondary h-100">
 
-            <div class="ratio ratio-16x9">
+            <div class="ratio ratio-16x9 {% if not user.is_authenticated %}welcome-media-public{% endif %}">
 
                 {% if config_home.video_promo_archivo %}
 
@@ -46,6 +130,7 @@
 
     </div>
 
+    {% if user.is_authenticated %}
     <div class="col-lg-4">
 
         <div class="card bg-dark text-light border-secondary h-100">
@@ -107,109 +192,117 @@
         </div>
 
     </div>
+    {% endif %}
 
 </div>
 
 
 <div class="row g-4 mt-4">
 
-    <div class="col-md-3">
+    <div class="{% if user.is_authenticated %}col-md-3{% else %}col-md-4{% endif %}">
         {% if clase_confirmable %}
             <button type="button"
-                    class="btn btn-outline-light w-100 py-4"
-                    style="height: 160px;"
+                    class="btn home-action-card action-confirm w-100"
                     data-bs-toggle="modal"
                     data-bs-target="#modalConfirmarClase">
         {% else %}
             <button type="button"
-                    class="btn btn-secondary w-100 py-4"
-                    style="height: 160px;"
+                    class="btn home-action-card action-confirm w-100"
                     disabled>
         {% endif %}
 
-            <i class="fa-solid fa-user-check fa-2x mb-2"></i>
-
-            <h4 class="mb-2">Confirmar clase</h4>
-
-            {% if clase_confirmable %}
-                <small class="text-success">
-                    {{ clase_confirmable.titulo|default:clase_confirmable.get_disciplina_display }}
-                    -
-                    {{ clase_confirmable.hora_inicio|time:"g:i a" }}
-                </small>
-            {% else %}
-                <small class="text-light">
-                    No hay clases disponibles
-                </small>
-            {% endif %}
+            <span class="home-action-icon"><i class="fa-solid fa-user-check"></i></span>
+            <span class="home-action-copy">
+                <strong>Confirmar clase</strong>
+                {% if clase_confirmable %}
+                    <small>
+                        {{ clase_confirmable.titulo|default:clase_confirmable.get_disciplina_display }}
+                        · {{ clase_confirmable.hora_inicio|time:"g:i a" }}
+                    </small>
+                {% else %}
+                    <small>No hay clases disponibles ahora</small>
+                {% endif %}
+            </span>
+            {% if clase_confirmable %}<i class="fa-solid fa-chevron-right home-action-arrow"></i>{% endif %}
 
         </button>
     </div>
 
-    <div class="col-md-3">
+    <div class="{% if user.is_authenticated %}col-md-3{% else %}col-md-4{% endif %}">
         <button type="button"
-                class="btn btn-outline-light w-100 py-4"
-                style="height: 160px;"
+                class="btn home-action-card action-payment w-100"
                 data-bs-toggle="modal"
                 data-bs-target="#modalRegistrarPago">
 
-            <i class="fa-solid fa-money-bill-wave fa-2x mb-2"></i>
-
-            <h4 class="mb-2">Registrar pago</h4>
-
-            <small class="text-info">
-                Ingresar con usuario
-            </small>
+            <span class="home-action-icon"><i class="fa-solid fa-money-bill-wave"></i></span>
+            <span class="home-action-copy">
+                <strong>Registrar pago</strong>
+                <small>Ingresa con tu usuario y adjunta el comprobante</small>
+            </span>
+            <i class="fa-solid fa-chevron-right home-action-arrow"></i>
 
         </button>
     </div>
 
-    <div class="col-md-3">
-        {% if clase_confirmable %}
-            <a href="{% url 'cortesias:registrar_cortesia' clase_confirmable.id %}"
-               class="btn btn-outline-light w-100 py-4"
-               style="height: 160px;">
-        {% else %}
-            <a href="{% url 'gestion:horario_clases' %}"
-               class="btn btn-outline-light w-100 py-4"
-               style="height: 160px;">
-        {% endif %}
+    <div class="{% if user.is_authenticated %}col-md-3{% else %}col-md-4{% endif %}">
+        <button type="button"
+                class="btn home-action-card action-courtesy w-100"
+                data-bs-toggle="modal"
+                data-bs-target="#modalTipoCortesia">
 
-            <i class="fa-solid fa-gift fa-2x mb-2"></i>
+            <span class="home-action-icon"><i class="fa-solid fa-gift"></i></span>
+            <span class="home-action-copy">
+                <strong>Clase de cortesía</strong>
+                <small>Elige participante, horario y completa el consentimiento</small>
+            </span>
+            <i class="fa-solid fa-chevron-right home-action-arrow"></i>
 
-            <h4 class="mb-2">Clase de cortesía</h4>
-
-            {% if clase_confirmable %}
-                <small class="text-success">
-                    {{ clase_confirmable.titulo|default:clase_confirmable.get_disciplina_display }}
-                    -
-                    {{ clase_confirmable.hora_inicio|time:"g:i a" }}
-                </small>
-            {% else %}
-                <small class="text-info">
-                    Ver horarios disponibles
-                </small>
-            {% endif %}
-
-        </a>
+        </button>
     </div>
-
+    {% if user.is_authenticated %}
     <div class="col-md-3">
         <a href="{% url 'gestion:cronometro_lucha' %}"
-           class="btn btn-outline-light w-100 py-4"
-           style="height: 160px;">
+           class="btn home-action-card action-timer w-100">
 
-            <i class="fa-solid fa-stopwatch fa-2x mb-2"></i>
-
-            <h4 class="mb-2">Cronómetro</h4>
-
-            <small class="text-secondary">
-                Ingresar
-            </small>
+            <span class="home-action-icon"><i class="fa-solid fa-stopwatch"></i></span>
+            <span class="home-action-copy">
+                <strong>Cronómetro</strong>
+                <small>Abrir herramienta de combate</small>
+            </span>
+            <i class="fa-solid fa-chevron-right home-action-arrow"></i>
 
         </a>
     </div>
+    {% endif %}
 
+</div>
+
+<div class="modal fade" id="modalTipoCortesia" tabindex="-1" aria-labelledby="tituloTipoCortesia" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-light">
+            <div class="modal-header">
+                <h5 class="modal-title" id="tituloTipoCortesia">¿Para quién es la clase?</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-secondary">
+                    Esta selección permite mostrar únicamente los horarios apropiados.
+                </p>
+                <div class="d-grid gap-3">
+                    <a href="{% url 'gestion:horario_clases' %}?cortesia=ADULTO"
+                       class="btn btn-outline-light py-3">
+                        <i class="fa-solid fa-person me-2"></i>
+                        Clase para adulto
+                    </a>
+                    <a href="{% url 'gestion:horario_clases' %}?cortesia=MENOR"
+                       class="btn btn-outline-warning py-3">
+                        <i class="fa-solid fa-child-reaching me-2"></i>
+                        Clase para menor de edad
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 
@@ -432,12 +525,13 @@
     function actualizarReloj() {
 
         const ahora = new Date();
+        const fechaActual = document.getElementById('fechaActual');
+        const horaActual = document.getElementById('horaActual');
 
-        document.getElementById('fechaActual').innerHTML =
-            ahora.toLocaleDateString('es-CO');
+        if (!fechaActual || !horaActual) return;
 
-        document.getElementById('horaActual').innerHTML =
-            ahora.toLocaleTimeString('es-CO');
+        fechaActual.innerHTML = ahora.toLocaleDateString('es-CO');
+        horaActual.innerHTML = ahora.toLocaleTimeString('es-CO');
 
     }
 

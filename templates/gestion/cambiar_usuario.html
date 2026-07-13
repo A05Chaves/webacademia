@@ -1,0 +1,49 @@
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-5">
+            <div class="card bg-dark text-light border-secondary rounded-4">
+                <div class="card-body p-4">
+                    <div class="text-center mb-4">
+                        <i class="fa-solid fa-user-pen fa-3x mb-3"></i>
+                        <h3>Cambiar nombre de usuario</h3>
+                        <p class="text-secondary">
+                            Usuario actual: <strong>{{ user.username }}</strong>.
+                            Podrás realizar este cambio una sola vez.
+                        </p>
+                    </div>
+
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="mb-4">
+                            <label class="form-label">Nuevo nombre de usuario</label>
+                            {{ form.username }}
+                            {% if form.username.help_text %}
+                                <div class="form-text text-secondary">
+                                    {{ form.username.help_text }}
+                                </div>
+                            {% endif %}
+                            <div class="text-danger">{{ form.username.errors }}</div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label">Contraseña actual</label>
+                            {{ form.password_actual }}
+                            <div class="text-danger">
+                                {{ form.password_actual.errors }}
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-outline-light w-100">
+                            <i class="fa-solid fa-floppy-disk"></i>
+                            Guardar cambio único
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

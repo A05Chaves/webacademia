@@ -7,12 +7,12 @@ from .models import Usuario
 class UsuarioAdmin(UserAdmin):
     model = Usuario
 
-    list_display = ('id', 'username', 'first_name', 'last_name', 'email', 'telefono', 'rol', 'is_active')
+    list_display = ('id', 'username', 'username_modificado', 'first_name', 'last_name', 'email', 'telefono', 'rol', 'is_active')
     list_filter = ('rol', 'is_active', 'is_staff', 'is_superuser')
 
     fieldsets = UserAdmin.fieldsets + (
         ('Información adicional', {
-            'fields': ('telefono', 'rol')
+            'fields': ('telefono', 'rol', 'username_modificado')
         }),
     )
 

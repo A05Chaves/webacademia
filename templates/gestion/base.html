@@ -31,11 +31,22 @@
             background: var(--bg-main);
             color: var(--text-main);
             min-height: 100vh;
+            max-width: 100%;
+            overflow-x: clip;
         }
 
         .navbar-custom {
             background: var(--bg-navbar) !important;
             border-bottom: 1px solid var(--border-color);
+            max-width: 100%;
+        }
+
+        .navbar-custom .container-fluid,
+        .navbar-collapse,
+        .navbar-nav,
+        .main-container,
+        .card-custom {
+            min-width: 0;
         }
 
         .navbar-brand {
@@ -68,6 +79,27 @@
         .menu-btn:hover {
             background: var(--text-main) !important;
             color: var(--bg-main) !important;
+        }
+
+        .guest-register-btn {
+            align-items: center;
+            display: inline-flex;
+            gap: 7px;
+            height: 40px;
+            justify-content: center;
+            white-space: nowrap;
+        }
+
+        @media (min-width: 992px) {
+            .menu-btn {
+                height: 40px;
+                min-width: 40px;
+                padding: 8px 10px !important;
+            }
+
+            .menu-btn .menu-label {
+                display: none;
+            }
         }
 
         .main-container {
@@ -141,7 +173,7 @@
             border-radius: 20px;
         }
 
-        @media (max-width: 991px) {
+        @media (max-width: 991.98px) {
             .navbar-collapse {
                 padding-top: 12px;
             }
@@ -158,8 +190,15 @@
 
             .menu-btn,
             .navbar-custom form button {
-                margin-bottom: 8px;
                 padding: 10px;
+            }
+
+            .navbar-collapse .navbar-nav {
+                gap: 8px !important;
+            }
+
+            .navbar-collapse > .navbar-nav.ms-auto {
+                margin-top: 8px !important;
             }
 
             .main-container {
@@ -168,6 +207,31 @@
 
             .card-body {
                 padding: 20px !important;
+            }
+        }
+
+        @media (min-width: 576px) and (max-width: 991.98px) {
+            .navbar-collapse .navbar-nav {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (min-width: 992px) {
+            .navbar-collapse {
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+
+            .navbar-collapse > .navbar-nav.me-auto {
+                flex: 1 1 760px;
+                flex-wrap: wrap;
+            }
+
+            .navbar-collapse > .navbar-nav.ms-auto {
+                flex: 0 1 auto;
+                flex-wrap: wrap;
+                justify-content: flex-end;
             }
         }
         body[data-theme="light"] .btn-outline-light {
@@ -188,10 +252,18 @@
 <nav class="navbar navbar-expand-lg navbar-custom px-3">
     <div class="container-fluid">
 
-        <a class="navbar-brand" href="{% url 'gestion:horario_clases' %}">
+        <a class="navbar-brand" href="{% if user.is_authenticated %}{% url 'gestion:horario_clases' %}{% else %}{% url 'gestion:home_publica' %}{% endif %}">
             <i class="fa-solid fa-user-ninja"></i>
             Academia
         </a>
+
+        {% if not user.is_authenticated %}
+            <a class="btn btn-warning btn-sm guest-register-btn ms-auto me-2 d-lg-none"
+               href="{% url 'registro_publico' %}">
+                <i class="fa-solid fa-user-plus"></i>
+                Regístrate
+            </a>
+        {% endif %}
 
         <button class="navbar-toggler"
                 type="button"
@@ -205,83 +277,112 @@
 
         <div class="collapse navbar-collapse" id="menuAcademia">
 
+            {% if user.is_authenticated %}
             <div class="navbar-nav me-auto gap-2 mt-3 mt-lg-0">
 
                 <a class="btn btn-outline-light btn-sm menu-btn"
-                    href="{% url 'gestion:home_publica' %}">
-                    <i class="fa-solid fa-house"></i> Home
+                    href="{% url 'gestion:home_publica' %}"
+                    aria-label="Home" data-nav-tooltip title="Home">
+                    <i class="fa-solid fa-house"></i><span class="menu-label">Home</span>
                 </a>
 
                 <a class="btn btn-outline-light btn-sm menu-btn"
-                    href="{% url 'gestion:horario_clases' %}">
+                    href="{% url 'gestion:horario_clases' %}"
+                    aria-label="Horario" data-nav-tooltip title="Horario">
                     <i class="fa-solid fa-calendar-days"></i>
-                    Horario
+                    <span class="menu-label">Horario</span>
                 </a>
 
-                <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'registro_publico' %}">
-                    <i class="fa-solid fa-user-plus"></i> Registro
+                <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'registro_publico' %}"
+                   aria-label="Registro" data-nav-tooltip title="Registro">
+                    <i class="fa-solid fa-user-plus"></i><span class="menu-label">Registro</span>
                 </a>
 
                 {% if user.is_authenticated and user.is_staff %}
 
-                    <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'gestion:dashboard' %}">
-                        <i class="fa-solid fa-chart-line"></i> Dashboard
+                    <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'gestion:dashboard' %}"
+                       aria-label="Dashboard" data-nav-tooltip title="Dashboard">
+                        <i class="fa-solid fa-chart-line"></i><span class="menu-label">Dashboard</span>
                     </a>
 
                     
 
-                    <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'gestion:lista_alumnos' %}">
-                        <i class="fa-solid fa-users"></i> Alumnos
+                    <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'gestion:lista_alumnos' %}"
+                       aria-label="Alumnos" data-nav-tooltip title="Alumnos">
+                        <i class="fa-solid fa-users"></i><span class="menu-label">Alumnos</span>
                     </a>
 
-                    <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'gestion:lista_planes' %}">
-                        <i class="fa-solid fa-layer-group"></i> Planes
+                    <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'gestion:lista_planes' %}"
+                       aria-label="Planes" data-nav-tooltip title="Planes">
+                        <i class="fa-solid fa-layer-group"></i><span class="menu-label">Planes</span>
                     </a>
 
-                    <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'gestion:lista_suscripciones' %}">
-                        <i class="fa-solid fa-id-card"></i> Suscripciones
+                    <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'gestion:lista_suscripciones' %}"
+                       aria-label="Suscripciones" data-nav-tooltip title="Suscripciones">
+                        <i class="fa-solid fa-id-card"></i><span class="menu-label">Suscripciones</span>
                     </a>
 
-                    <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'gestion:lista_pagos' %}">
-                        <i class="fa-solid fa-money-bill"></i> Pagos
+                    <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'gestion:lista_pagos' %}"
+                       aria-label="Pagos" data-nav-tooltip title="Pagos">
+                        <i class="fa-solid fa-money-bill"></i><span class="menu-label">Pagos</span>
                     </a>
 
-                    <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'gestion:lista_registros_legales' %}">
-                        <i class="fa-solid fa-file-signature"></i> Registros
+                    <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'gestion:lista_registros_legales' %}"
+                       aria-label="Registros" data-nav-tooltip title="Registros">
+                        <i class="fa-solid fa-file-signature"></i><span class="menu-label">Registros</span>
                     </a>
 
                     <a class="btn btn-outline-light btn-sm menu-btn"
-                        href="{% url 'gestion:configuraciones' %}">
+                        href="{% url 'gestion:configuraciones' %}"
+                        aria-label="Configuraciones" data-nav-tooltip title="Configuraciones">
                         <i class="fa-solid fa-gear"></i>
-                        Configuraciones
+                        <span class="menu-label">Configuraciones</span>
                     </a>
 
                 {% endif %}
 
                 
             </div>
+            {% endif %}
 
             <div class="navbar-nav ms-auto gap-2 mt-3 mt-lg-0">
 
                 <button type="button"
                         onclick="toggleTheme()"
-                        class="btn btn-outline-light btn-sm menu-btn">
-                    <i class="fa-solid fa-circle-half-stroke"></i> Modo
+                        class="btn btn-outline-light btn-sm menu-btn"
+                        aria-label="Cambiar modo" data-nav-tooltip title="Cambiar modo">
+                    <i class="fa-solid fa-circle-half-stroke"></i><span class="menu-label">Modo</span>
                 </button>
 
                 {% if user.is_authenticated %}
 
+                    {% if not user.username_modificado %}
+                        <a class="btn btn-outline-light btn-sm menu-btn"
+                           href="{% url 'gestion:cambiar_usuario' %}"
+                           aria-label="Cambiar usuario" data-nav-tooltip title="Cambiar usuario">
+                            <i class="fa-solid fa-user-pen"></i><span class="menu-label">Cambiar usuario</span>
+                        </a>
+                    {% endif %}
+
                     <form method="post" action="{% url 'logout' %}" class="m-0">
                         {% csrf_token %}
-                        <button type="submit" class="btn btn-danger btn-sm menu-btn">
-                            <i class="fa-solid fa-right-from-bracket"></i> Cerrar sesión
+                        <button type="submit" class="btn btn-danger btn-sm menu-btn"
+                                aria-label="Cerrar sesión" data-nav-tooltip title="Cerrar sesión">
+                            <i class="fa-solid fa-right-from-bracket"></i><span class="menu-label">Cerrar sesión</span>
                         </button>
                     </form>
 
                 {% else %}
 
-                    <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'login' %}">
-                        <i class="fa-solid fa-right-to-bracket"></i> Iniciar sesión
+                    <a class="btn btn-warning btn-sm guest-register-btn d-none d-lg-inline-flex"
+                       href="{% url 'registro_publico' %}">
+                        <i class="fa-solid fa-user-plus"></i>
+                        Regístrate
+                    </a>
+
+                    <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'login' %}"
+                       aria-label="Iniciar sesión" data-nav-tooltip title="Iniciar sesión">
+                        <i class="fa-solid fa-right-to-bracket"></i><span class="menu-label">Iniciar sesión</span>
                     </a>
 
                 {% endif %}
@@ -332,6 +433,17 @@
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    if (window.matchMedia('(min-width: 992px)').matches) {
+        document.querySelectorAll('[data-nav-tooltip]').forEach(function (element) {
+            new bootstrap.Tooltip(element, {
+                placement: 'bottom',
+                trigger: 'hover focus'
+            });
+        });
+    }
+</script>
 
 </body>
 </html>

@@ -19,6 +19,11 @@ class ClaseProgramada(models.Model):
         MMA_MUAYTHAI = 'MMA-MUAYTHAI', 'MMA & Muay Thai'
         OTRA = 'OTRA', 'Otra'
 
+    class PublicosObjetivo(models.TextChoices):
+        TODOS = 'TODOS', 'Adultos y menores'
+        ADULTO = 'ADULTO', 'Adultos'
+        MENOR = 'MENOR', 'Menores de edad'
+
     dia = models.CharField(
         max_length=20,
         choices=DiasSemana.choices
@@ -36,6 +41,12 @@ class ClaseProgramada(models.Model):
         max_length=100,
         blank=True,
         null=True
+    )
+    publico_objetivo = models.CharField(
+        max_length=10,
+        choices=PublicosObjetivo.choices,
+        default=PublicosObjetivo.TODOS,
+        verbose_name='Público objetivo',
     )
 
     instructor = models.ForeignKey(

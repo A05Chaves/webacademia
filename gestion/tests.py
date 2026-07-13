@@ -19,6 +19,101 @@ from config.file_validation import (
 import base64
 
 
+class CambioNombreUsuarioTests(TestCase):
+    def setUp(self):
+        self.User = get_user_model()
+        self.usuario = self.User.objects.create_user(
+            username='documento123',
+            password='ClaveTemporal123!',
+            debe_cambiar_password=True,
+        )
+        self.client.force_login(self.usuario)
+
+    def test_primer_acceso_puede_cambiar_usuario_y_password(self):
+        response = self.client.post(
+            reverse('gestion:cambio_password_obligatorio'),
+            {
+                'username': 'nuevo_usuario',
+                'old_password': 'ClaveTemporal123!',
+                'new_password1': 'NuevaClaveSegura456!',
+                'new_password2': 'NuevaClaveSegura456!',
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('gestion:horario_clases'),
+            fetch_redirect_response=False,
+        )
+        self.usuario.refresh_from_db()
+        self.assertEqual(self.usuario.username, 'nuevo_usuario')
+        self.assertTrue(self.usuario.username_modificado)
+        self.assertFalse(self.usuario.debe_cambiar_password)
+        self.assertTrue(self.usuario.check_password('NuevaClaveSegura456!'))
+
+    def test_rechaza_usuario_duplicado_sin_distinguir_mayusculas(self):
+        self.User.objects.create_user(
+            username='UsuarioOcupado',
+            password='OtraClave123!',
+        )
+
+        response = self.client.post(
+            reverse('gestion:cambio_password_obligatorio'),
+            {
+                'username': 'usuarioocupado',
+                'old_password': 'ClaveTemporal123!',
+                'new_password1': 'NuevaClaveSegura456!',
+                'new_password2': 'NuevaClaveSegura456!',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Este nombre de usuario ya está en uso')
+        self.usuario.refresh_from_db()
+        self.assertEqual(self.usuario.username, 'documento123')
+        self.assertTrue(self.usuario.debe_cambiar_password)
+
+    def test_cambio_independiente_solo_se_puede_usar_una_vez(self):
+        response = self.client.post(
+            reverse('gestion:cambiar_usuario'),
+            {
+                'username': 'usuario_definitivo',
+                'password_actual': 'ClaveTemporal123!',
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('gestion:horario_clases'),
+            fetch_redirect_response=False,
+        )
+        self.usuario.refresh_from_db()
+        self.assertEqual(self.usuario.username, 'usuario_definitivo')
+        self.assertTrue(self.usuario.username_modificado)
+
+        response = self.client.get(reverse('gestion:cambiar_usuario'))
+        self.assertRedirects(
+            response,
+            reverse('gestion:horario_clases'),
+            fetch_redirect_response=False,
+        )
+
+    def test_conservar_usuario_en_primer_acceso_no_consume_el_cambio(self):
+        response = self.client.post(
+            reverse('gestion:cambio_password_obligatorio'),
+            {
+                'username': 'documento123',
+                'old_password': 'ClaveTemporal123!',
+                'new_password1': 'NuevaClaveSegura456!',
+                'new_password2': 'NuevaClaveSegura456!',
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.usuario.refresh_from_db()
+        self.assertFalse(self.usuario.username_modificado)
+
+
 class SeguridadVistasGestionTests(TestCase):
     def setUp(self):
         self.usuario = get_user_model().objects.create_user(

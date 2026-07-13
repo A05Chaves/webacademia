@@ -10,11 +10,12 @@ class ClaseProgramadaAdmin(admin.ModelAdmin):
         'hora_inicio',
         'hora_fin',
         'disciplina',
+        'publico_objetivo',
         'instructor',
         'cupo_maximo',
         'activa',
     )
-    list_filter = ('dia', 'disciplina', 'activa')
+    list_filter = ('dia', 'disciplina', 'publico_objetivo', 'activa')
     search_fields = (
         'disciplina',
         'instructor__user__first_name',

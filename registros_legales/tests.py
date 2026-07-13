@@ -122,6 +122,25 @@ class RegistroLegalObligatorioTests(TestCase):
         )
         self.assertFalse(Alumno.objects.filter(documento='REG-001').exists())
 
+    def test_pantalla_exitosa_regresa_al_inicio_sin_restaurar_formulario(self):
+        response = self.client.get(reverse('registro_exitoso'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse('gestion:home_publica'))
+        self.assertContains(response, 'Ir al inicio')
+        self.assertContains(response, 'window.location.replace(homeUrl)')
+        self.assertContains(
+            response,
+            "sessionStorage.setItem('registroEstudianteFinalizado'",
+        )
+
+        response = self.client.get(reverse('registro_publico'))
+        self.assertContains(response, "navigation.type === 'back_forward'")
+        self.assertContains(
+            response,
+            'sessionStorage.removeItem',
+        )
+
     def test_datos_repetidos_no_crean_un_segundo_registro(self):
         primer_envio = self.datos_validos()
         primer_envio['foto'] = self.foto_valida()

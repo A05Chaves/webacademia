@@ -10,7 +10,7 @@ from pagos.models import MetodoPagoQR
 from clases.models import ClaseProgramada
 from finanzas.models import MovimientoFinanciero, PagoProgramado, CuentaFinanciera, CategoriaFinanciera
 from usuarios.models import Usuario
-from django.contrib.auth.forms import PasswordChangeForm
+from django.contrib.auth.forms import PasswordChangeForm, UsernameField
 from planes.models import Plan
 from config.file_validation import validate_payment_receipt
 Usuario = get_user_model()
@@ -247,6 +247,7 @@ class ClaseProgramadaForm(forms.ModelForm):
             'hora_fin',
             'disciplina',
             'titulo',
+            'publico_objetivo',
             'instructor',
             'cupo_maximo',
             'activa',
@@ -267,6 +268,7 @@ class ClaseProgramadaForm(forms.ModelForm):
                 'class': 'form-control',
                 'placeholder': 'Ej: Niños, Mujeres, Competencia'
             }),
+            'publico_objetivo': forms.Select(attrs={'class': 'form-select'}),
             'instructor': forms.Select(attrs={'class': 'form-select'}),
             'cupo_maximo': forms.NumberInput(attrs={'class': 'form-control'}),
             'activa': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
@@ -441,8 +443,106 @@ class TransferenciaForm(forms.Form):
 # CAMBIO DE CONTRASEÑA OBLIGATORIO
 
 
-class CambioPasswordObligatorioForm(PasswordChangeForm):
-    pass
+class UsernameUnicoMixin:
+    def clean_username(self):
+        username = self.cleaned_data['username'].strip()
+        queryset = Usuario.objects.filter(username__iexact=username)
+
+        if self.user.pk:
+            queryset = queryset.exclude(pk=self.user.pk)
+
+        if queryset.exists():
+            raise forms.ValidationError(
+                'Este nombre de usuario ya está en uso. Elige otro.'
+            )
+
+        return username
+
+
+class CambioPasswordObligatorioForm(UsernameUnicoMixin, PasswordChangeForm):
+    username = UsernameField(
+        label='Nombre de usuario',
+        max_length=150,
+        validators=Usuario._meta.get_field('username').validators,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'autocomplete': 'username',
+        }),
+        help_text='Puedes conservarlo o cambiarlo. Solo podrás cambiarlo una vez.',
+    )
+
+    field_order = ('username', 'old_password', 'new_password1', 'new_password2')
+
+    def __init__(self, user, *args, **kwargs):
+        super().__init__(user, *args, **kwargs)
+        self.fields['username'].initial = user.username
+        if user.username_modificado:
+            self.fields['username'].disabled = True
+            self.fields['username'].help_text = (
+                'Ya utilizaste el cambio único de nombre de usuario.'
+            )
+
+    def save(self, commit=True):
+        username_anterior = self.user.username
+        username_nuevo = self.cleaned_data['username']
+        self.user.username = username_nuevo
+
+        if username_nuevo != username_anterior:
+            self.user.username_modificado = True
+
+        return super().save(commit=commit)
+
+
+class CambiarUsuarioForm(UsernameUnicoMixin, forms.Form):
+    username = UsernameField(
+        label='Nuevo nombre de usuario',
+        max_length=150,
+        validators=Usuario._meta.get_field('username').validators,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'autocomplete': 'username',
+        }),
+        help_text='Este cambio solo se puede realizar una vez.',
+    )
+    password_actual = forms.CharField(
+        label='Contraseña actual',
+        strip=False,
+        widget=forms.PasswordInput(attrs={
+            'class': 'form-control',
+            'autocomplete': 'current-password',
+        }),
+    )
+
+    def __init__(self, user, *args, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+
+    def clean_username(self):
+        username = super().clean_username()
+
+        if self.user.username_modificado:
+            raise forms.ValidationError(
+                'Ya utilizaste el cambio de nombre de usuario disponible.'
+            )
+
+        if username == self.user.username:
+            raise forms.ValidationError(
+                'El nuevo nombre debe ser diferente al usuario actual.'
+            )
+
+        return username
+
+    def clean_password_actual(self):
+        password = self.cleaned_data['password_actual']
+        if not self.user.check_password(password):
+            raise forms.ValidationError('La contraseña actual es incorrecta.')
+        return password
+
+    def save(self):
+        self.user.username = self.cleaned_data['username']
+        self.user.username_modificado = True
+        self.user.save(update_fields=['username', 'username_modificado'])
+        return self.user
 
 # FORMULARIO PARA EDICION DE ALUMNO
 

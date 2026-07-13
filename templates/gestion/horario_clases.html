@@ -224,13 +224,29 @@
     {% endif %}
 
     
-    <button type="button"
-            class="btn btn-outline-light btn-sm"
-            onclick="abrirModalPago()">
-        <i class="fa-solid fa-money-bill-wave"></i>
-        Registrar pago
-    </button>
+    {% if not modo_cortesia %}
+        <button type="button"
+                class="btn btn-outline-light btn-sm"
+                onclick="abrirModalPago()">
+            <i class="fa-solid fa-money-bill-wave"></i>
+            Registrar pago
+        </button>
+    {% endif %}
 </div>
+
+{% if modo_cortesia %}
+    <div class="alert alert-info d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+        <div>
+            <strong>Selecciona la clase de cortesía que quieres tomar.</strong>
+            Solo estás viendo clases para
+            {% if modo_cortesia == 'MENOR' %}menores de edad{% else %}adultos{% endif %}.
+            Al elegir una clase abrirás directamente el consentimiento; no necesitas iniciar sesión.
+        </div>
+        <a href="{% url 'gestion:home_publica' %}" class="btn btn-outline-dark btn-sm text-nowrap">
+            Cambiar participante
+        </a>
+    </div>
+{% endif %}
 
 <div class="horario-wrapper">
 
@@ -264,7 +280,12 @@
 
                                 <button type="button"
                                         class="clase-card {{ item.clase.disciplina }}"
-                                        onclick="abrirModal('{{ item.clase.id }}', '{{ item.clase.get_disciplina_display }}')">
+                                        {% if modo_cortesia %}
+                                            data-cortesia-url="{% url 'cortesias:registrar_cortesia' item.clase.id %}?tipo={{ modo_cortesia }}"
+                                            onclick="window.location.href=this.dataset.cortesiaUrl"
+                                        {% else %}
+                                            onclick="abrirModal('{{ item.clase.id }}', '{{ item.clase.get_disciplina_display }}')"
+                                        {% endif %}>
 
                                     <div class="clase-disciplina">
                                         {{ item.clase.titulo|default:item.clase.get_disciplina_display }}
@@ -294,7 +315,11 @@
                                     </div>
 
                                     <div class="clase-footer">
-                                        Click para confirmar
+                                        {% if modo_cortesia %}
+                                            Seleccionar para cortesía
+                                        {% else %}
+                                            Click para confirmar
+                                        {% endif %}
                                     </div>
 
                                 </button>
@@ -321,6 +346,7 @@
 
 </div>
 
+{% if not modo_cortesia %}
 <div id="modalAsistencia" class="modal-overlay">
 
     <div class="modal-content-custom">
@@ -381,6 +407,7 @@
     </div>
 
 </div>
+{% endif %}
 
 <script>
 

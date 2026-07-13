@@ -15,7 +15,7 @@ from io import BytesIO
 import base64
 from reportlab.pdfgen import canvas
 from django.http import HttpResponse
-from .forms import CambioPasswordObligatorioForm
+from .forms import CambioPasswordObligatorioForm, CambiarUsuarioForm
 from django.contrib.auth import update_session_auth_hash
 import random
 from django.contrib.auth.hashers import make_password
@@ -52,7 +52,7 @@ from .forms import ClaseProgramadaForm
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import logout
 from django.db.models import Count, Q
-from django.db import models, transaction
+from django.db import IntegrityError, models, transaction
 
 from django.contrib.auth import authenticate
 from django.views.decorators.http import require_POST
@@ -732,6 +732,17 @@ def horario_clases(request):
                 'gestion:cambio_password_obligatorio'
             )
 
+    modo_cortesia = request.GET.get('cortesia', '').upper()
+    tipos_cortesia = {
+        ClaseProgramada.PublicosObjetivo.ADULTO,
+        ClaseProgramada.PublicosObjetivo.MENOR,
+    }
+    if modo_cortesia not in tipos_cortesia:
+        modo_cortesia = None
+
+    if not request.user.is_authenticated and not modo_cortesia:
+        return redirect('gestion:home_publica')
+
     hoy = timezone.now().date()
 
     clases = ClaseProgramada.objects.filter(
@@ -748,6 +759,12 @@ def horario_clases(request):
         )
     )
 
+    if modo_cortesia:
+        clases = clases.filter(publico_objetivo__in=[
+            ClaseProgramada.PublicosObjetivo.TODOS,
+            modo_cortesia,
+        ])
+
     orden_dias = {
         'LUNES': 1,
         'MARTES': 2,
@@ -760,9 +777,7 @@ def horario_clases(request):
 
     dias = sorted(
         set(
-            ClaseProgramada.objects.filter(
-                activa=True
-            ).values_list(
+            clases.values_list(
                 'dia',
                 flat=True
             )
@@ -771,10 +786,7 @@ def horario_clases(request):
     )
 
     horas = list(
-        ClaseProgramada.objects.filter(
-            activa=True
-        )
-        .values_list('hora_inicio', flat=True)
+        clases.values_list('hora_inicio', flat=True)
         .distinct()
         .order_by('hora_inicio')
     )
@@ -808,6 +820,7 @@ def horario_clases(request):
         'hora_actual': ahora,
         'metodos_pago': metodos_pago,
         'pago_form': pago_form,
+        'modo_cortesia': modo_cortesia,
     })
 
 
@@ -1444,20 +1457,66 @@ def cambio_password_obligatorio(request):
         )
 
         if form.is_valid():
-            user = form.save()
-            user.debe_cambiar_password = False
-            user.save()
-
-            update_session_auth_hash(request, user)
-
-            messages.success(request, 'Contraseña actualizada correctamente.')
-            return redirect('gestion:horario_clases')
+            try:
+                with transaction.atomic():
+                    user = form.save(commit=False)
+                    user.debe_cambiar_password = False
+                    user.save()
+            except IntegrityError:
+                form.add_error(
+                    'username',
+                    'Este nombre de usuario ya está en uso. Elige otro.'
+                )
+            else:
+                update_session_auth_hash(request, user)
+                messages.success(
+                    request,
+                    'Contraseña y datos de acceso actualizados correctamente.'
+                )
+                return redirect('gestion:horario_clases')
     else:
         form = CambioPasswordObligatorioForm(user=request.user)
 
     return render(request, 'gestion/cambio_password_obligatorio.html', {
         'form': form,
     })
+
+
+@login_required
+def cambiar_usuario(request):
+    if request.user.username_modificado:
+        messages.info(
+            request,
+            'Ya utilizaste el cambio único de nombre de usuario.'
+        )
+        return redirect('gestion:horario_clases')
+
+    if request.method == 'POST':
+        form = CambiarUsuarioForm(request.user, data=request.POST)
+
+        if form.is_valid():
+            try:
+                with transaction.atomic():
+                    user = form.save()
+            except IntegrityError:
+                form.add_error(
+                    'username',
+                    'Este nombre de usuario ya está en uso. Elige otro.'
+                )
+            else:
+                update_session_auth_hash(request, user)
+                messages.success(
+                    request,
+                    'Nombre de usuario actualizado. Este fue tu único cambio disponible.'
+                )
+                return redirect('gestion:horario_clases')
+    else:
+        form = CambiarUsuarioForm(
+            request.user,
+            initial={'username': request.user.username},
+        )
+
+    return render(request, 'gestion/cambiar_usuario.html', {'form': form})
 
 # VISTA PARA DESCARGAR PDF
 
@@ -1864,5 +1923,6 @@ def crear_hora_horario(request):
 
 # VISTA DE CRONOMETRO
 
+@login_required
 def cronometro_lucha(request):
     return render(request, 'gestion/cronometro_lucha.html')

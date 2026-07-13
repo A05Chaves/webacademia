@@ -88,6 +88,8 @@ urlpatterns = [
 
     path('cambiar-password-obligatorio/', views.cambio_password_obligatorio,
          name='cambio_password_obligatorio'),
+    path('mi-cuenta/cambiar-usuario/', views.cambiar_usuario,
+         name='cambiar_usuario'),
     path(
         'configurar-home/',
         views.configurar_home,
