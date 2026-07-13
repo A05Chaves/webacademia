@@ -3,11 +3,13 @@ from io import BytesIO
 from tempfile import TemporaryDirectory
 
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 from PIL import Image, ImageDraw
 
 from planes.models import Plan
+from alumnos.models import Alumno
 from .forms import RegistroLegalEstudianteForm
 from .models import RegistroLegalEstudiante
 
@@ -98,3 +100,58 @@ class RegistroLegalObligatorioTests(TestCase):
             data=self.datos_validos(), files={'foto': self.foto_valida()}
         )
         self.assertTrue(form.is_valid(), form.errors.as_json())
+
+    def test_administrador_no_aprueba_registro_automaticamente(self):
+        administrador = get_user_model().objects.create_user(
+            username='admin_registro',
+            password='clave-segura-pruebas',
+            is_staff=True,
+        )
+        self.client.force_login(administrador)
+        data = self.datos_validos()
+        data['foto'] = self.foto_valida()
+
+        response = self.client.post(reverse('registro_publico'), data)
+
+        self.assertRedirects(response, reverse('registro_exitoso'))
+        registro = RegistroLegalEstudiante.objects.get(documento='REG-001')
+        self.assertEqual(
+            registro.estado,
+            RegistroLegalEstudiante.Estados.PENDIENTE_VALIDACION,
+        )
+        self.assertFalse(Alumno.objects.filter(documento='REG-001').exists())
+
+    def test_datos_repetidos_no_crean_un_segundo_registro(self):
+        primer_envio = self.datos_validos()
+        primer_envio['foto'] = self.foto_valida()
+        response = self.client.post(reverse('registro_publico'), primer_envio)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(RegistroLegalEstudiante.objects.count(), 1)
+
+        segundo_envio = self.datos_validos()
+        segundo_envio['foto'] = self.foto_valida()
+        response = self.client.post(reverse('registro_publico'), segundo_envio)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Ya existe un estudiante o registro')
+        self.assertContains(response, 'Ya existe un registro con este correo')
+        self.assertContains(response, 'Ya existe un registro con este celular')
+        self.assertEqual(RegistroLegalEstudiante.objects.count(), 1)
+
+    def test_validacion_intermedia_detecta_datos_existentes(self):
+        data = self.datos_validos()
+        data['foto'] = self.foto_valida()
+        self.client.post(reverse('registro_publico'), data)
+
+        response = self.client.post(reverse('validar_datos_registro'), {
+            'documento': 'REG-001',
+            'correo': 'REGISTRO@example.com',
+            'celular': '3000000001',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        resultado = response.json()
+        self.assertFalse(resultado['valido'])
+        self.assertEqual(
+            set(resultado['errores']), {'documento', 'correo', 'celular'}
+        )

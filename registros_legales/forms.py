@@ -254,7 +254,7 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
 
         if correo:
             existe_correo = RegistroLegalEstudiante.objects.filter(
-                correo=correo
+                correo__iexact=correo
             ).exists()
 
             if existe_correo:

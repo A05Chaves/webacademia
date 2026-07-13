@@ -1,433 +1,353 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-
     <meta charset="UTF-8">
-
-    <title>Registro estudiante</title>
-
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-          rel="stylesheet">
-
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Registro de estudiante</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #f4f6f8; }
+        .wizard-step { display: none; }
+        .wizard-step.active { display: block; }
+        .progress { height: .65rem; }
+        .required { color: #dc3545; }
+        .field-error ul { margin: .35rem 0 0; padding-left: 1.2rem; }
+        #firmaCanvas { width: 100%; height: 220px; touch-action: none; cursor: crosshair; }
+        .signature-box { border: 2px dashed #adb5bd; transition: border-color .2s; }
+        .signature-box.ready { border-color: #198754; }
+        .summary-item { background: #f8f9fa; border-radius: .75rem; padding: .8rem; height: 100%; }
+        @media (max-width: 576px) {
+            .container { padding-left: .75rem; padding-right: .75rem; }
+            .card-body { padding: 1.25rem !important; }
+        }
+    </style>
 </head>
-
-<body class="bg-light">
-
-<div class="container py-5">
-
+<body>
+<main class="container py-4 py-md-5">
     <div class="row justify-content-center">
+        <div class="col-xl-9 col-lg-10">
+            <div class="card shadow-sm border-0 rounded-4">
+                <div class="card-body p-4 p-md-5">
+                    <h1 class="h2 mb-2">Registro de estudiante</h1>
+                    <p class="text-muted mb-4">Completa cada paso. Los campos con <span class="required">*</span> son obligatorios.</p>
 
-        <div class="col-lg-8">
+                    <div class="mb-4" aria-live="polite">
+                        <div class="d-flex justify-content-between gap-3 mb-2">
+                            <strong id="stepTitle">Datos personales</strong>
+                            <span id="stepCounter" class="text-nowrap">Paso 1 de 5</span>
+                        </div>
+                        <div class="progress" role="progressbar" aria-label="Progreso del registro">
+                            <div id="stepProgress" class="progress-bar bg-success" style="width:20%"></div>
+                        </div>
+                    </div>
 
-            <div class="card shadow border-0 rounded-4">
-
-                <div class="card-body p-4">
-
-                    <h2 class="mb-4">
-                        Registro de estudiante
-                    </h2>
-
-                    <form method="post"
-                          id="registroEstudianteForm"
-                          enctype="multipart/form-data">
+                    <form method="post" id="registroEstudianteForm" enctype="multipart/form-data">
+                        {% csrf_token %}
 
                         {% if form.errors %}
-                            <div class="alert alert-danger">
+                            <div class="alert alert-danger" id="formErrorSummary" tabindex="-1">
                                 <strong>No se pudo guardar el registro.</strong>
-                                Revisa los siguientes campos:
                                 <ul class="mb-0 mt-2">
-                                    {% for field in form %}
-                                        {% for error in field.errors %}
-                                            <li>{{ field.label }}: {{ error }}</li>
-                                        {% endfor %}
-                                    {% endfor %}
-                                    {% for error in form.non_field_errors %}
-                                        <li>{{ error }}</li>
-                                    {% endfor %}
+                                    {% for field in form %}{% for error in field.errors %}
+                                        <li data-error-field="{{ field.id_for_label }}">{{ field.label }}: {{ error }}</li>
+                                    {% endfor %}{% endfor %}
+                                    {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
                                 </ul>
                             </div>
                         {% endif %}
 
-                        {% csrf_token %}
-
-                        <div class="row g-3">
-
-                            <div class="col-md-6">
-                                <label class="form-label">Tipo estudiante</label>
-                                {{ form.tipo_estudiante }}
+                        <section class="wizard-step active" data-step="1" data-title="Datos personales">
+                            <h2 class="h4 mb-3">Datos personales</h2>
+                            <div class="row g-3">
+                                <div class="col-md-6"><label class="form-label" for="{{ form.tipo_estudiante.id_for_label }}">Tipo de estudiante <span class="required">*</span></label>{{ form.tipo_estudiante }}<div class="field-error text-danger">{{ form.tipo_estudiante.errors }}</div></div>
+                                <div class="col-md-6"><label class="form-label" for="{{ form.foto.id_for_label }}">Foto <span class="required">*</span></label>{{ form.foto }}<div class="form-text">JPG, PNG o WEBP. Máximo 5 MB.</div><div class="field-error text-danger">{{ form.foto.errors }}</div></div>
+                                <div class="col-md-6"><label class="form-label" for="{{ form.nombres.id_for_label }}">Nombres <span class="required">*</span></label>{{ form.nombres }}<div class="field-error text-danger">{{ form.nombres.errors }}</div></div>
+                                <div class="col-md-6"><label class="form-label" for="{{ form.apellidos.id_for_label }}">Apellidos <span class="required">*</span></label>{{ form.apellidos }}<div class="field-error text-danger">{{ form.apellidos.errors }}</div></div>
+                                <div class="col-md-6"><label class="form-label" for="{{ form.documento.id_for_label }}">Documento <span class="required">*</span></label>{{ form.documento }}<div class="field-error text-danger">{{ form.documento.errors }}</div></div>
+                                <div class="col-md-6"><label class="form-label" for="{{ form.fecha_nacimiento.id_for_label }}">Fecha de nacimiento <span class="required">*</span></label>{{ form.fecha_nacimiento }}<div class="field-error text-danger">{{ form.fecha_nacimiento.errors }}</div></div>
+                                <div class="col-12"><label class="form-label" for="{{ form.direccion.id_for_label }}">Dirección <span class="required">*</span></label>{{ form.direccion }}<div class="field-error text-danger">{{ form.direccion.errors }}</div></div>
+                                <div class="col-md-6"><label class="form-label" for="{{ form.celular.id_for_label }}">Celular <span class="required">*</span></label>{{ form.celular }}<div class="field-error text-danger">{{ form.celular.errors }}</div></div>
+                                <div class="col-md-6"><label class="form-label" for="{{ form.correo.id_for_label }}">Correo <span class="required">*</span></label>{{ form.correo }}<div class="field-error text-danger">{{ form.correo.errors }}</div></div>
                             </div>
+                        </section>
 
-                            <div class="col-md-6">
-                                <label class="form-label">Foto</label>
-                                {{ form.foto }}
-                            <div class="text-danger">
-                                {{ form.foto.errors }}
+                        <section class="wizard-step" data-step="2" data-title="Información médica y académica">
+                            <h2 class="h4 mb-3">Información médica y académica</h2>
+                            <div class="row g-3">
+                                <div class="col-md-6"><label class="form-label" for="{{ form.eps.id_for_label }}">EPS <span class="required">*</span></label>{{ form.eps }}<div class="field-error text-danger">{{ form.eps.errors }}</div></div>
+                                <div class="col-md-6"><label class="form-label" for="{{ form.fecha_ingreso.id_for_label }}">Fecha de ingreso <span class="required">*</span></label>{{ form.fecha_ingreso }}<div class="field-error text-danger">{{ form.fecha_ingreso.errors }}</div></div>
+                                <div class="col-md-6"><label class="form-label" for="{{ form.plan_interes.id_for_label }}">Plan de interés <span class="required">*</span></label>{{ form.plan_interes }}<div class="field-error text-danger">{{ form.plan_interes.errors }}</div></div>
+                                <div class="col-md-6"><label class="form-label" for="{{ form.contacto_emergencia_nombre.id_for_label }}">Contacto de emergencia <span class="required">*</span></label>{{ form.contacto_emergencia_nombre }}<div class="field-error text-danger">{{ form.contacto_emergencia_nombre.errors }}</div></div>
+                                <div class="col-md-6"><label class="form-label" for="{{ form.contacto_emergencia_celular.id_for_label }}">Celular de emergencia <span class="required">*</span></label>{{ form.contacto_emergencia_celular }}<div class="field-error text-danger">{{ form.contacto_emergencia_celular.errors }}</div></div>
+                                <div class="col-12"><label class="form-label" for="{{ form.condicion_medica.id_for_label }}">Condición médica <span class="required">*</span></label>{{ form.condicion_medica }}<div class="form-text">Si no tiene, escribe “NINGUNA”.</div><div class="field-error text-danger">{{ form.condicion_medica.errors }}</div></div>
                             </div>
+                        </section>
+
+                        <section class="wizard-step" data-step="3" data-title="Datos del acudiente">
+                            <h2 class="h4 mb-2">Datos del acudiente</h2>
+                            <div id="adultGuardianMessage" class="alert alert-info">Este paso no aplica para estudiantes adultos. Puedes continuar.</div>
+                            <div id="bloqueAcudiente" class="row g-3">
+                                <p class="text-muted mb-0">Todos estos datos son obligatorios para menores de edad.</p>
+                                <div class="col-md-6"><label class="form-label" for="{{ form.nombre_acudiente.id_for_label }}">Nombre del acudiente <span class="required">*</span></label>{{ form.nombre_acudiente }}<div class="field-error text-danger">{{ form.nombre_acudiente.errors }}</div></div>
+                                <div class="col-md-6"><label class="form-label" for="{{ form.documento_acudiente.id_for_label }}">Documento del acudiente <span class="required">*</span></label>{{ form.documento_acudiente }}<div class="field-error text-danger">{{ form.documento_acudiente.errors }}</div></div>
+                                <div class="col-md-6"><label class="form-label" for="{{ form.parentesco_acudiente.id_for_label }}">Parentesco <span class="required">*</span></label>{{ form.parentesco_acudiente }}<div class="field-error text-danger">{{ form.parentesco_acudiente.errors }}</div></div>
+                                <div class="col-md-6"><label class="form-label" for="{{ form.celular_acudiente.id_for_label }}">Celular del acudiente <span class="required">*</span></label>{{ form.celular_acudiente }}<div class="field-error text-danger">{{ form.celular_acudiente.errors }}</div></div>
                             </div>
+                        </section>
 
-                            <div class="col-md-6">
-                                <label class="form-label">Nombres</label>
-                                {{ form.nombres }}
+                        <section class="wizard-step" data-step="4" data-title="Consentimientos">
+                            <h2 class="h4 mb-3">Consentimientos</h2>
+                            <div class="accordion mb-4" id="acuerdosAccordion">
+                                <div class="accordion-item"><h3 class="accordion-header"><button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#reglamento">Reglamento interno</button></h3><div id="reglamento" class="accordion-collapse collapse show" data-bs-parent="#acuerdosAccordion"><div class="accordion-body">{% include 'registros_legales/acuerdos/reglamento.html' %}</div></div></div>
+                                <div class="accordion-item"><h3 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#riesgos">Responsabilidad médica y riesgos deportivos</button></h3><div id="riesgos" class="accordion-collapse collapse" data-bs-parent="#acuerdosAccordion"><div class="accordion-body">{% include 'registros_legales/acuerdos/riesgos.html' %}</div></div></div>
+                                <div class="accordion-item"><h3 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#imagen">Autorización de uso de imagen</button></h3><div id="imagen" class="accordion-collapse collapse" data-bs-parent="#acuerdosAccordion"><div class="accordion-body">{% include 'registros_legales/acuerdos/imagen.html' %}</div></div></div>
                             </div>
+                            <div class="form-check mb-3">{{ form.acepta_reglamento }} <label class="form-check-label" for="{{ form.acepta_reglamento.id_for_label }}">He leído y acepto el reglamento <span class="required">*</span></label><div class="field-error text-danger">{{ form.acepta_reglamento.errors }}</div></div>
+                            <div class="form-check mb-3">{{ form.acepta_riesgos }} <label class="form-check-label" for="{{ form.acepta_riesgos.id_for_label }}">Acepto los riesgos deportivos <span class="required">*</span></label><div class="field-error text-danger">{{ form.acepta_riesgos.errors }}</div></div>
+                            <div class="form-check">{{ form.autoriza_imagen }} <label class="form-check-label" for="{{ form.autoriza_imagen.id_for_label }}">Autorizo el uso de imagen y datos personales <span class="required">*</span></label><div class="field-error text-danger">{{ form.autoriza_imagen.errors }}</div></div>
+                        </section>
 
-                            <div class="col-md-6">
-                                <label class="form-label">Apellidos</label>
-                                {{ form.apellidos }}
+                        <section class="wizard-step" data-step="5" data-title="Revisión y firma">
+                            <h2 class="h4 mb-3">Revisión y firma</h2>
+                            <div class="row g-2 mb-4">
+                                <div class="col-md-6"><div class="summary-item"><small class="text-muted">Estudiante</small><div id="reviewName">—</div></div></div>
+                                <div class="col-md-6"><div class="summary-item"><small class="text-muted">Documento</small><div id="reviewDocument">—</div></div></div>
+                                <div class="col-md-6"><div class="summary-item"><small class="text-muted">Plan</small><div id="reviewPlan">—</div></div></div>
+                                <div class="col-md-6"><div class="summary-item"><small class="text-muted">Contacto</small><div id="reviewContact">—</div></div></div>
                             </div>
-
-                            <div class="col-md-6">
-                                <label class="form-label">Documento</label>
-                                {{ form.documento }}
-                            <div class="text-danger">
-                                {{ form.documento.errors }}
+                            <label class="form-label">Firma dentro del recuadro <span class="required">*</span></label>
+                            <div id="signatureBox" class="signature-box rounded-4 bg-white p-2">
+                                <canvas id="firmaCanvas"></canvas>
+                                {{ form.firma_base64 }}
                             </div>
-                            </div>
+                            <div id="signatureStatus" class="text-muted mt-2">Firma pendiente</div>
+                            <div class="field-error text-danger">{{ form.firma_base64.errors }}</div>
+                            <button type="button" id="limpiarFirma" class="btn btn-outline-danger mt-3">Limpiar firma</button>
+                        </section>
 
-                            <div class="col-md-6">
-                                <label class="form-label">Fecha nacimiento</label>
-                                {{ form.fecha_nacimiento }}
-                            </div>
-
-                            <div class="col-md-12">
-                                <label class="form-label">Dirección</label>
-                                {{ form.direccion }}
-                            </div>
-
-                            <div class="col-md-6">
-                                <label class="form-label">Celular</label>
-                                {{ form.celular }}
-                                <div class="text-danger">
-                                    {{ form.celular.errors }}
-                                </div>
-                            </div>
-
-                            <div class="col-md-6">
-                                <label class="form-label">Correo</label>
-                                {{ form.correo }}
-                                <div class="text-danger">
-                                    {{ form.correo.errors }}
-                                </div>
-                            </div>
-
-                            <div class="col-md-6">
-                                <label class="form-label">EPS</label>
-                                {{ form.eps }}
-                            </div>
-
-                            <div class="col-md-6">
-                                <label class="form-label">Fecha ingreso</label>
-                                {{ form.fecha_ingreso }}
-                            </div>
-
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">
-                                    Plan de interés
-                                </label>
-
-                                {{ form.plan_interes }}
-
-                                <div class="text-danger">
-                                    {{ form.plan_interes.errors }}
-                                </div>
-                            </div>
-
-                            <div class="col-md-6">
-                                <label class="form-label">
-                                    Contacto emergencia
-                                </label>
-                                {{ form.contacto_emergencia_nombre }}
-                            </div>
-
-                            <div class="col-md-6">
-                                <label class="form-label">
-                                    Celular emergencia
-                                </label>
-                                {{ form.contacto_emergencia_celular }}
-                            </div>
-
-                            <div class="col-md-12">
-                                <label class="form-label">
-                                    Condición médica
-                                </label>
-                                {{ form.condicion_medica }}
-                            </div>
-
-                            <div id="bloqueAcudiente" class="row g-3 mt-3">
-
-                                <h4 class="mb-2">
-                                    Datos del acudiente
-                                </h4>
-
-                                <div class="col-md-6">
-                                    <label class="form-label">Nombre acudiente</label>
-                                    {{ form.nombre_acudiente }}
-                                    <div class="text-danger">
-                                        {{ form.nombre_acudiente.errors }}
-                                    </div>
-                                </div>
-
-                                <div class="col-md-6">
-                                    <label class="form-label">Documento acudiente</label>
-                                    {{ form.documento_acudiente }}
-                                    <div class="text-danger">
-                                        {{ form.documento_acudiente.errors }}
-                                    </div>
-                                </div>
-
-                                <div class="col-md-6">
-                                    <label class="form-label">Parentesco</label>
-                                    {{ form.parentesco_acudiente }}
-                                    <div class="text-danger">
-                                        {{ form.parentesco_acudiente.errors }}
-                                    </div>
-                                </div>
-
-                                <div class="col-md-6">
-                                    <label class="form-label">Celular acudiente</label>
-                                    {{ form.celular_acudiente }}
-                                    <div class="text-danger">
-                                        {{ form.celular_acudiente.errors }}
-                                    </div>
-                                </div>
-
-                            </div>
-
-                        </div>
-
-                        <hr class="my-4">
-
-                        <h4 class="mb-3">
-                            Consentimientos
-                        </h4>
-
-                        <div class="accordion mb-4" id="acuerdosAccordion">
-
-                            <div class="accordion-item">
-                                <h2 class="accordion-header">
-                                    <button class="accordion-button"
-                                            type="button"
-                                            data-bs-toggle="collapse"
-                                            data-bs-target="#reglamento">
-                                        Reglamento interno
-                                    </button>
-                                </h2>
-
-                                <div id="reglamento"
-                                    class="accordion-collapse collapse show"
-                                    data-bs-parent="#acuerdosAccordion">
-                                    <div class="accordion-body">
-                                        {% include 'registros_legales/acuerdos/reglamento.html' %}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="accordion-item">
-                                <h2 class="accordion-header">
-                                    <button class="accordion-button collapsed"
-                                            type="button"
-                                            data-bs-toggle="collapse"
-                                            data-bs-target="#riesgos">
-                                        Responsabilidad médica y riesgos deportivos
-                                    </button>
-                                </h2>
-
-                                <div id="riesgos"
-                                    class="accordion-collapse collapse"
-                                    data-bs-parent="#acuerdosAccordion">
-                                    <div class="accordion-body">
-                                        {% include 'registros_legales/acuerdos/riesgos.html' %}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="accordion-item">
-                                <h2 class="accordion-header">
-                                    <button class="accordion-button collapsed"
-                                            type="button"
-                                            data-bs-toggle="collapse"
-                                            data-bs-target="#imagen">
-                                        Autorización de uso de imagen
-                                    </button>
-                                </h2>
-
-                                <div id="imagen"
-                                    class="accordion-collapse collapse"
-                                    data-bs-parent="#acuerdosAccordion">
-                                    <div class="accordion-body">
-                                        {% include 'registros_legales/acuerdos/imagen.html' %}
-                                    </div>
-                                </div>
-                            </div>
-
-                        </div>
-
-                        <p>     7. ACEPTACIÓN
-                            Declaro haber leído, comprendido y aceptado íntegramente el presente documento.
-
-                        </p>
-
-                        <div class="form-check mb-3">
-                            {{ form.acepta_reglamento }}
-                            <label class="form-check-label">
-                                Acepto reglamento interno
-                            </label>
-                            <div class="text-danger">
-                                {{ form.acepta_reglamento.errors }}
+                        <div class="d-flex flex-column flex-sm-row justify-content-between gap-2 mt-4">
+                            <a href="{% url 'gestion:horario_clases' %}" class="btn btn-outline-secondary">Cancelar</a>
+                            <div class="d-flex gap-2 justify-content-end">
+                                <button type="button" id="previousStep" class="btn btn-outline-primary" hidden>Anterior</button>
+                                <button type="button" id="nextStep" class="btn btn-primary">Continuar</button>
+                                <button type="submit" id="submitRegistration" class="btn btn-success" hidden>Finalizar registro</button>
                             </div>
                         </div>
-
-                        <div class="form-check mb-3">
-                            {{ form.acepta_riesgos }}
-                            <label class="form-check-label">
-                                Acepto riesgos deportivos
-                            </label>
-                            <div class="text-danger">
-                                {{ form.acepta_riesgos.errors }}
-                            </div>
-                        </div>
-
-                        <div class="form-check mb-4">
-                            {{ form.autoriza_imagen }}
-                            <label class="form-check-label">
-                                Autorizo uso de imagen y datos personales
-                            </label>
-                            <div class="text-muted">
-                                {{ form.autoriza_imagen.errors }}
-                            </div>
-                        </div>
-
-                        <hr class="my-4">
-
-                        <h4 class="mb-3">
-                            Firma
-                        </h4>
-
-                        <div class="border rounded-4 bg-white p-2">
-
-                            <canvas id="firmaCanvas"
-                                    height="220"
-                                    style="width:100%; border-radius:12px;">
-                            </canvas>
-                            {{ form.firma_base64 }}
-                            <div class="text-danger mt-2">
-                                {{ form.firma_base64.errors }}
-                            </div>
-
-                        </div>
-
-                        <div class="d-flex flex-column flex-md-row justify-content-end gap-3 mt-5">
-
-                            <button type="button"
-                                    id="limpiarFirma"
-                                    class="btn btn-outline-danger px-4 py-2">
-
-                                <i class="fa-solid fa-eraser"></i>
-                                Limpiar firma
-
-                            </button>
-
-                            <a href="{% url 'gestion:horario_clases' %}"
-                            class="btn btn-outline-secondary px-4 py-2">
-
-                                <i class="fa-solid fa-arrow-left"></i>
-                                Cancelar
-
-                            </a>
-
-                            <button type="submit"
-                                    class="btn btn-success px-4 py-2">
-
-                                <i class="fa-solid fa-floppy-disk"></i>
-                                Finalizar registro
-
-                            </button>
-
-                        </div>
-
                     </form>
-
                 </div>
-
             </div>
-
         </div>
-
     </div>
-
-</div>
+</main>
 
 <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
 <script>
-
-
+const form = document.getElementById('registroEstudianteForm');
+const steps = Array.from(document.querySelectorAll('.wizard-step'));
+const titles = steps.map(step => step.dataset.title);
+const previousButton = document.getElementById('previousStep');
+const nextButton = document.getElementById('nextStep');
+const submitButton = document.getElementById('submitRegistration');
 const tipoEstudiante = document.getElementById('id_tipo_estudiante');
 const bloqueAcudiente = document.getElementById('bloqueAcudiente');
+const adultGuardianMessage = document.getElementById('adultGuardianMessage');
+const guardianFields = ['id_nombre_acudiente', 'id_documento_acudiente', 'id_parentesco_acudiente', 'id_celular_acudiente'].map(id => document.getElementById(id));
+let currentStep = 0;
 
-function mostrarAcudiente() {
-    if (tipoEstudiante.value === 'MENOR') {
-        bloqueAcudiente.style.display = 'flex';
-    } else {
-        bloqueAcudiente.style.display = 'none';
+const serverErrors = Array.from(document.querySelectorAll('[data-error-field]'));
+serverErrors.forEach(errorItem => {
+    const field = document.getElementById(errorItem.dataset.errorField);
+    if (!field) return;
+    const message = errorItem.textContent.split(':').slice(1).join(':').trim();
+    field.setCustomValidity(message || 'Corrige este campo antes de continuar.');
+    field.classList.add('is-invalid');
+    const clearServerError = () => {
+        field.setCustomValidity('');
+        field.classList.remove('is-invalid');
+        errorItem.remove();
+    };
+    field.addEventListener('input', clearServerError, {once: true});
+    field.addEventListener('change', clearServerError, {once: true});
+});
+
+function showStep(index) {
+    currentStep = Math.max(0, Math.min(index, steps.length - 1));
+    steps.forEach((step, position) => step.classList.toggle('active', position === currentStep));
+    document.getElementById('stepTitle').textContent = titles[currentStep];
+    document.getElementById('stepCounter').textContent = `Paso ${currentStep + 1} de ${steps.length}`;
+    document.getElementById('stepProgress').style.width = `${((currentStep + 1) / steps.length) * 100}%`;
+    previousButton.hidden = currentStep === 0;
+    nextButton.hidden = currentStep === steps.length - 1;
+    submitButton.hidden = currentStep !== steps.length - 1;
+    if (currentStep === steps.length - 1) {
+        updateReview();
+        setTimeout(resizeCanvas, 0);
+    }
+    window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+function validateCurrentStep() {
+    const fields = Array.from(steps[currentStep].querySelectorAll('input, select, textarea'));
+    for (const field of fields) {
+        if (!field.checkValidity()) {
+            field.reportValidity();
+            field.focus();
+            return false;
+        }
+    }
+    return true;
+}
+
+function clearRemoteError(field) {
+    field.setCustomValidity('');
+    field.classList.remove('is-invalid');
+    const container = field.closest('[class*="col-"]')?.querySelector('.field-error');
+    if (container?.dataset.remoteError === 'true') {
+        container.textContent = '';
+        delete container.dataset.remoteError;
     }
 }
 
-tipoEstudiante.addEventListener('change', mostrarAcudiente);
-mostrarAcudiente();
+function showRemoteError(fieldName, message) {
+    const field = document.getElementById(`id_${fieldName}`);
+    if (!field) return;
+    field.setCustomValidity(message);
+    field.classList.add('is-invalid');
+    const container = field.closest('[class*="col-"]')?.querySelector('.field-error');
+    if (container) {
+        container.textContent = message;
+        container.dataset.remoteError = 'true';
+    }
+    const clear = () => clearRemoteError(field);
+    field.addEventListener('input', clear, {once: true});
+    field.addEventListener('change', clear, {once: true});
+}
+
+async function validateUniqueData() {
+    if (currentStep !== 0) return true;
+    const fields = ['documento', 'correo', 'celular'];
+    fields.forEach(name => clearRemoteError(document.getElementById(`id_${name}`)));
+    const body = new URLSearchParams({
+        documento: document.getElementById('id_documento').value,
+        correo: document.getElementById('id_correo').value,
+        celular: document.getElementById('id_celular').value,
+    });
+    try {
+        const response = await fetch('{% url "validar_datos_registro" %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': form.querySelector('[name="csrfmiddlewaretoken"]').value,
+                'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+            },
+            body,
+        });
+        if (!response.ok) throw new Error('No se pudo validar');
+        const result = await response.json();
+        Object.entries(result.errores).forEach(([name, message]) => showRemoteError(name, message));
+        if (!result.valido) {
+            const firstInvalid = document.querySelector('#registroEstudianteForm .is-invalid');
+            firstInvalid?.reportValidity();
+            firstInvalid?.focus();
+        }
+        return result.valido;
+    } catch (error) {
+        alert('No fue posible verificar los datos. Revisa tu conexión e intenta nuevamente.');
+        return false;
+    }
+}
+
+function updateGuardianFields() {
+    const isMinor = tipoEstudiante.value === 'MENOR';
+    bloqueAcudiente.hidden = !isMinor;
+    adultGuardianMessage.hidden = isMinor;
+    guardianFields.forEach(field => field.required = isMinor);
+}
+
+function valueOrDash(id) {
+    return document.getElementById(id)?.value?.trim() || '—';
+}
+
+function updateReview() {
+    document.getElementById('reviewName').textContent = `${valueOrDash('id_nombres')} ${valueOrDash('id_apellidos')}`;
+    document.getElementById('reviewDocument').textContent = valueOrDash('id_documento');
+    const plan = document.getElementById('id_plan_interes');
+    document.getElementById('reviewPlan').textContent = plan?.selectedOptions[0]?.text || '—';
+    document.getElementById('reviewContact').textContent = `${valueOrDash('id_celular')} · ${valueOrDash('id_correo')}`;
+}
+
+previousButton.addEventListener('click', () => showStep(currentStep - 1));
+nextButton.addEventListener('click', async () => {
+    if (!validateCurrentStep()) return;
+    nextButton.disabled = true;
+    const originalText = nextButton.textContent;
+    nextButton.textContent = currentStep === 0 ? 'Verificando…' : originalText;
+    const uniqueDataIsValid = await validateUniqueData();
+    nextButton.disabled = false;
+    nextButton.textContent = originalText;
+    if (uniqueDataIsValid) showStep(currentStep + 1);
+});
+tipoEstudiante.addEventListener('change', updateGuardianFields);
+updateGuardianFields();
 
 const canvas = document.getElementById('firmaCanvas');
 let signaturePad = null;
-
-function ajustarCanvas() {
-    const firmaAnterior = signaturePad
-        ? signaturePad.toData()
-        : [];
+function resizeCanvas() {
+    const data = signaturePad ? signaturePad.toData() : [];
     const ratio = Math.max(window.devicePixelRatio || 1, 1);
-
     canvas.width = canvas.offsetWidth * ratio;
-    canvas.height = canvas.offsetHeight * ratio;
-
-    canvas.getContext("2d").scale(ratio, ratio);
-    if (firmaAnterior.length) {
-        signaturePad.fromData(firmaAnterior);
-    }
+    canvas.height = 220 * ratio;
+    canvas.getContext('2d').scale(ratio, ratio);
+    if (signaturePad && data.length) signaturePad.fromData(data);
 }
+resizeCanvas();
+signaturePad = new SignaturePad(canvas, {backgroundColor: 'rgb(255,255,255)'});
+window.addEventListener('resize', resizeCanvas);
 
-ajustarCanvas();
-
-window.addEventListener('resize', ajustarCanvas);
-
-signaturePad = new SignaturePad(canvas, {
-    backgroundColor: 'rgb(255,255,255)'
-});
-
-document.getElementById('limpiarFirma')
-.addEventListener('click', function () {
-
+function updateSignatureStatus() {
+    const ready = !signaturePad.isEmpty();
+    document.getElementById('signatureBox').classList.toggle('ready', ready);
+    const status = document.getElementById('signatureStatus');
+    status.textContent = ready ? 'Firma registrada' : 'Firma pendiente';
+    status.className = ready ? 'text-success mt-2' : 'text-muted mt-2';
+}
+signaturePad.addEventListener('endStroke', updateSignatureStatus);
+document.getElementById('limpiarFirma').addEventListener('click', () => {
     signaturePad.clear();
-
+    document.getElementById('id_firma_base64').value = '';
+    updateSignatureStatus();
 });
 
-document.getElementById('registroEstudianteForm')
-.addEventListener('submit', function (e) {
-
-    if (signaturePad.isEmpty()) {
-
-        e.preventDefault();
-
-        alert('Debe registrar una firma.');
-
+form.addEventListener('submit', event => {
+    const invalidField = Array.from(form.elements).find(field =>
+        field.willValidate && !field.checkValidity()
+    );
+    if (invalidField) {
+        event.preventDefault();
+        const invalidStep = invalidField.closest('.wizard-step');
+        if (invalidStep) showStep(steps.indexOf(invalidStep));
+        invalidField.reportValidity();
+        invalidField.focus();
         return;
     }
-
-    document.getElementById('id_firma_base64').value =
-        signaturePad.toDataURL();
-
+    if (signaturePad.isEmpty()) {
+        event.preventDefault();
+        document.getElementById('signatureStatus').textContent = 'Debes realizar una firma antes de finalizar.';
+        document.getElementById('signatureStatus').className = 'text-danger mt-2';
+        return;
+    }
+    document.getElementById('id_firma_base64').value = signaturePad.toDataURL('image/png');
+    submitButton.disabled = true;
+    submitButton.textContent = 'Guardando registro…';
 });
 
+const firstError = serverErrors[0];
+if (firstError) {
+    const invalidField = document.getElementById(firstError.dataset.errorField);
+    const errorStep = invalidField?.closest('.wizard-step');
+    if (errorStep) showStep(steps.indexOf(errorStep));
+    document.getElementById('formErrorSummary')?.focus();
+}
 </script>
-
-
 </body>
 </html>

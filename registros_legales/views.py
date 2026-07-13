@@ -1,9 +1,40 @@
 from django.shortcuts import render, redirect
 from django.contrib import messages
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+from django.contrib.auth import get_user_model
+
+from alumnos.models import Alumno
 
 from .forms import RegistroLegalEstudianteForm
 from .models import RegistroLegalEstudiante
-from .services import crear_alumno_desde_registro
+
+
+@require_POST
+def validar_datos_registro(request):
+    documento = request.POST.get('documento', '').strip()
+    correo = request.POST.get('correo', '').strip()
+    celular = request.POST.get('celular', '').strip()
+    errores = {}
+
+    if documento and (
+        RegistroLegalEstudiante.objects.filter(documento=documento).exists()
+        or Alumno.objects.filter(documento=documento).exists()
+        or get_user_model().objects.filter(username=documento).exists()
+    ):
+        errores['documento'] = 'Ya existe un estudiante o registro con este documento.'
+
+    if correo and RegistroLegalEstudiante.objects.filter(
+        correo__iexact=correo
+    ).exists():
+        errores['correo'] = 'Ya existe un registro con este correo.'
+
+    if celular and RegistroLegalEstudiante.objects.filter(
+        celular=celular
+    ).exists():
+        errores['celular'] = 'Ya existe un registro con este celular.'
+
+    return JsonResponse({'valido': not errores, 'errores': errores})
 
 
 def registro_publico(request):
@@ -24,33 +55,13 @@ def registro_publico(request):
             )
 
             registro.ip_firma = get_client_ip(request)
-
+            registro.estado = RegistroLegalEstudiante.Estados.PENDIENTE_VALIDACION
             registro.save()
 
-            if request.user.is_authenticated and request.user.is_staff:
-
-                alumno, password_temporal, error = crear_alumno_desde_registro(
-                    registro
-                )
-
-                if error:
-                    messages.error(request, error)
-                    return redirect('registro_exitoso')
-
-                registro.estado = RegistroLegalEstudiante.Estados.APROBADO
-                registro.save()
-
-                messages.success(
-                    request,
-                    f'Alumno creado correctamente. Usuario: {registro.documento} | Clave temporal: {password_temporal}'
-                )
-
-            else:
-
-                messages.success(
-                    request,
-                    'Registro enviado correctamente. Quedará pendiente de validación.'
-                )
+            messages.success(
+                request,
+                'Registro enviado correctamente. Quedará pendiente de validación por un administrador.'
+            )
 
             return redirect('registro_exitoso')
 
