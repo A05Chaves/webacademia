@@ -763,70 +763,13 @@ def mi_asistencia(request):
         suscripcion.fecha_inicio for suscripcion in suscripciones
         if primer_dia <= suscripcion.fecha_inicio < siguiente_mes
     }
-    clases_programadas = list(ClaseProgramada.objects.filter(activa=True))
-    nombre_dia = {
-        0: ClaseProgramada.DiasSemana.LUNES,
-        1: ClaseProgramada.DiasSemana.MARTES,
-        2: ClaseProgramada.DiasSemana.MIERCOLES,
-        3: ClaseProgramada.DiasSemana.JUEVES,
-        4: ClaseProgramada.DiasSemana.VIERNES,
-        5: ClaseProgramada.DiasSemana.SABADO,
-        6: ClaseProgramada.DiasSemana.DOMINGO,
+    finales_mensualidad = {
+        suscripcion.fecha_vencimiento for suscripcion in suscripciones
+        if primer_dia <= suscripcion.fecha_vencimiento < siguiente_mes
     }
-
-    def clases_disponibles(fecha):
-        suscripcion = next((
-            item for item in reversed(suscripciones)
-            if item.fecha_inicio <= fecha <= item.fecha_vencimiento
-        ), None)
-        if not suscripcion:
-            return []
-
-        plan = suscripcion.plan
-        disciplinas = set()
-        if plan.permite_jiu_jitsu:
-            disciplinas.add(ClaseProgramada.Disciplinas.JIU_JITSU)
-        if plan.permite_muay_thai:
-            disciplinas.update({
-                ClaseProgramada.Disciplinas.MUAY_THAI,
-                ClaseProgramada.Disciplinas.MMA_MUAYTHAI,
-            })
-        if plan.permite_mma:
-            disciplinas.update({
-                ClaseProgramada.Disciplinas.MMA,
-                ClaseProgramada.Disciplinas.MMA_MUAYTHAI,
-            })
-
-        es_menor = False
-        if alumno.fecha_nacimiento:
-            edad = fecha.year - alumno.fecha_nacimiento.year - (
-                (fecha.month, fecha.day) < (
-                    alumno.fecha_nacimiento.month,
-                    alumno.fecha_nacimiento.day,
-                )
-            )
-            es_menor = edad < 18
-        publico = (
-            ClaseProgramada.PublicosObjetivo.MENOR
-            if es_menor else ClaseProgramada.PublicosObjetivo.ADULTO
-        )
-
-        return [
-            clase for clase in clases_programadas
-            if clase.dia == nombre_dia[fecha.weekday()]
-            and (
-                not disciplinas
-                or clase.disciplina in disciplinas
-            )
-            and clase.publico_objetivo in {
-                ClaseProgramada.PublicosObjetivo.TODOS,
-                publico,
-            }
-        ]
 
     calendario = calendar.Calendar(firstweekday=0)
     semanas = []
-    total_ausencias = 0
     for semana in calendario.monthdatescalendar(anio, mes):
         dias_semana = []
         for fecha in semana:
@@ -834,20 +777,13 @@ def mi_asistencia(request):
             asistencias_dia = (
                 asistencias_por_dia.get(fecha.day, []) if del_mes else []
             )
-            programadas = clases_disponibles(fecha) if del_mes else []
-            no_asistio = bool(
-                del_mes and fecha < hoy and programadas and not asistencias_dia
-            )
-            if no_asistio:
-                total_ausencias += 1
             dias_semana.append({
                 'fecha': fecha,
                 'del_mes': del_mes,
                 'es_hoy': fecha == hoy,
                 'asistencias': asistencias_dia,
                 'inicio_mensualidad': fecha in inicios_mensualidad,
-                'no_asistio': no_asistio,
-                'clases_programadas': programadas,
+                'fin_mensualidad': fecha in finales_mensualidad,
             })
         semanas.append(dias_semana)
 
@@ -868,7 +804,6 @@ def mi_asistencia(request):
         'siguiente': siguiente,
         'total_asistencias': asistencias.count(),
         'dias_asistidos': len(asistencias_por_dia),
-        'total_ausencias': total_ausencias,
     })
 
 

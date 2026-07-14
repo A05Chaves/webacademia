@@ -9,14 +9,14 @@
     .attendance-day { height: 105px; vertical-align: top; padding: .35rem !important; overflow: hidden; }
     .attendance-day.outside { opacity: .35; }
     .attendance-day.attended { background: rgba(25, 135, 84, .18); box-shadow: inset 0 0 0 2px #198754; }
-    .attendance-day.absent { background: rgba(220, 53, 69, .18); box-shadow: inset 0 0 0 2px #dc3545; }
     .attendance-day.subscription-start { outline: 3px solid #0d6efd; outline-offset: -3px; }
+    .attendance-day.subscription-end { outline: 3px solid #fd7e14; outline-offset: -3px; }
     .day-number { display: inline-grid; place-items: center; width: 1.7rem; height: 1.7rem; border-radius: 50%; font-weight: 700; font-size: .82rem; }
     .today .day-number { background: #0d6efd; color: white; }
     .class-pill { display: block; margin-top: .25rem; padding: .15rem .3rem; border-radius: .35rem; background: #198754; color: white; font-size: .65rem; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .status-pill { display: block; margin-top: .25rem; padding: .15rem .3rem; border-radius: .35rem; color: white; font-size: .65rem; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .status-pill.start { background: #0d6efd; }
-    .status-pill.absent { background: #dc3545; }
+    .status-pill.end { background: #fd7e14; }
     .calendar-legend { font-size: .78rem; }
     @media (max-width: 575.98px) {
         .calendar-card .card-body { padding: .2rem !important; }
@@ -52,9 +52,8 @@
 </div>
 
 <div class="row g-3 mb-4">
-    <div class="col-md-4"><div class="card h-100"><div class="card-body"><div class="text-secondary">Días asistidos</div><div class="display-6 fw-bold text-success">{{ dias_asistidos }}</div></div></div></div>
-    <div class="col-md-4"><div class="card h-100"><div class="card-body"><div class="text-secondary">Clases confirmadas</div><div class="display-6 fw-bold">{{ total_asistencias }}</div></div></div></div>
-    <div class="col-md-4"><div class="card h-100"><div class="card-body"><div class="text-secondary">Días sin asistencia</div><div class="display-6 fw-bold text-danger">{{ total_ausencias }}</div></div></div></div>
+    <div class="col-sm-6"><div class="card h-100"><div class="card-body"><div class="text-secondary">Días asistidos</div><div class="display-6 fw-bold text-success">{{ dias_asistidos }}</div></div></div></div>
+    <div class="col-sm-6"><div class="card h-100"><div class="card-body"><div class="text-secondary">Clases confirmadas</div><div class="display-6 fw-bold">{{ total_asistencias }}</div></div></div></div>
 </div>
 
 <div class="card calendar-card">
@@ -66,15 +65,15 @@
                 {% for semana in semanas %}
                     <tr>
                     {% for dia in semana %}
-                        <td class="attendance-day{% if not dia.del_mes %} outside{% endif %}{% if dia.es_hoy %} today{% endif %}{% if dia.asistencias %} attended{% elif dia.no_asistio %} absent{% endif %}{% if dia.inicio_mensualidad %} subscription-start{% endif %}">
+                        <td class="attendance-day{% if not dia.del_mes %} outside{% endif %}{% if dia.es_hoy %} today{% endif %}{% if dia.asistencias %} attended{% endif %}{% if dia.inicio_mensualidad %} subscription-start{% endif %}{% if dia.fin_mensualidad %} subscription-end{% endif %}">
                             <span class="day-number">{{ dia.fecha.day }}</span>
                             {% if dia.inicio_mensualidad %}<span class="status-pill start">Inicio mensualidad</span>{% endif %}
+                            {% if dia.fin_mensualidad %}<span class="status-pill end">Fin mensualidad</span>{% endif %}
                             {% for asistencia in dia.asistencias %}
                                 <span class="class-pill" title="{{ asistencia.clase.get_disciplina_display }}">
                                     {{ asistencia.clase.hora_inicio|time:'H:i' }} · {{ asistencia.clase.titulo|default:asistencia.clase.get_disciplina_display }}
                                 </span>
                             {% endfor %}
-                            {% if dia.no_asistio %}<span class="status-pill absent">No asistió</span>{% endif %}
                         </td>
                     {% endfor %}
                     </tr>
@@ -87,7 +86,7 @@
 
 <div class="calendar-legend mt-2 d-flex flex-wrap gap-2 text-secondary">
     <span><span class="badge bg-success">Verde</span> Asistencia confirmada</span>
-    <span><span class="badge bg-danger">Rojo</span> Clase programada sin asistencia</span>
     <span><span class="badge bg-primary">Azul</span> Inicio de mensualidad</span>
+    <span><span class="badge" style="background:#fd7e14">Naranja</span> Fin de mensualidad</span>
 </div>
 {% endblock %}

@@ -383,7 +383,7 @@ class CalendarioAsistenciaTests(TestCase):
         response = self.client.get(reverse('gestion:mi_asistencia'))
         self.assertEqual(response.status_code, 404)
 
-    def test_marca_inicio_mensualidad_y_dias_sin_asistencia(self):
+    def test_marca_inicio_y_fin_sin_inventar_ausencias(self):
         plan = Plan.objects.create(
             nombre='Plan calendario',
             precio='120000',
@@ -410,15 +410,19 @@ class CalendarioAsistenciaTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context['total_ausencias'], 3)
         dias = [dia for semana in response.context['semanas'] for dia in semana]
         inicio = next(dia for dia in dias if dia['fecha'] == date(2026, 6, 1))
+        fin = next(dia for dia in dias if dia['fecha'] == date(2026, 6, 30))
         asistido = next(dia for dia in dias if dia['fecha'] == date(2026, 6, 10))
-        ausencia = next(dia for dia in dias if dia['fecha'] == date(2026, 6, 17))
+        dia_sin_registro = next(
+            dia for dia in dias if dia['fecha'] == date(2026, 6, 17)
+        )
         self.assertTrue(inicio['inicio_mensualidad'])
-        self.assertFalse(inicio['no_asistio'])
+        self.assertTrue(fin['fin_mensualidad'])
         self.assertTrue(asistido['asistencias'])
-        self.assertFalse(asistido['no_asistio'])
-        self.assertTrue(ausencia['no_asistio'])
+        self.assertFalse(dia_sin_registro['asistencias'])
+        self.assertFalse(dia_sin_registro['inicio_mensualidad'])
+        self.assertFalse(dia_sin_registro['fin_mensualidad'])
         self.assertContains(response, 'Inicio mensualidad')
-        self.assertContains(response, 'No asistió')
+        self.assertContains(response, 'Fin mensualidad')
+        self.assertNotContains(response, 'No asistió')
