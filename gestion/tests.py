@@ -382,3 +382,43 @@ class CalendarioAsistenciaTests(TestCase):
         self.client.force_login(self.instructor.user)
         response = self.client.get(reverse('gestion:mi_asistencia'))
         self.assertEqual(response.status_code, 404)
+
+    def test_marca_inicio_mensualidad_y_dias_sin_asistencia(self):
+        plan = Plan.objects.create(
+            nombre='Plan calendario',
+            precio='120000',
+            duracion_dias=30,
+            permite_jiu_jitsu=True,
+        )
+        Suscripcion.objects.create(
+            alumno=self.alumno,
+            plan=plan,
+            fecha_inicio=date(2026, 6, 1),
+            fecha_vencimiento=date(2026, 6, 30),
+            estado=Suscripcion.Estados.FINALIZADA,
+        )
+        AsistenciaClase.objects.create(
+            alumno=self.alumno,
+            clase=self.clase,
+            fecha_clase=date(2026, 6, 10),
+            estado=AsistenciaClase.Estados.CONFIRMADA,
+        )
+        self.client.force_login(self.usuario)
+
+        response = self.client.get(
+            reverse('gestion:mi_asistencia'), {'mes': 6, 'anio': 2026}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['total_ausencias'], 3)
+        dias = [dia for semana in response.context['semanas'] for dia in semana]
+        inicio = next(dia for dia in dias if dia['fecha'] == date(2026, 6, 1))
+        asistido = next(dia for dia in dias if dia['fecha'] == date(2026, 6, 10))
+        ausencia = next(dia for dia in dias if dia['fecha'] == date(2026, 6, 17))
+        self.assertTrue(inicio['inicio_mensualidad'])
+        self.assertFalse(inicio['no_asistio'])
+        self.assertTrue(asistido['asistencias'])
+        self.assertFalse(asistido['no_asistio'])
+        self.assertTrue(ausencia['no_asistio'])
+        self.assertContains(response, 'Inicio mensualidad')
+        self.assertContains(response, 'No asistió')

@@ -4,14 +4,39 @@
 
 {% block content %}
 <style>
-    .attendance-calendar { table-layout: fixed; min-width: 720px; }
-    .attendance-calendar th { text-align: center; padding: .75rem .25rem; }
-    .attendance-day { height: 120px; vertical-align: top; padding: .5rem !important; }
+    .attendance-calendar { table-layout: fixed; width: 100%; min-width: 0; font-size: .88rem; }
+    .attendance-calendar th { text-align: center; padding: .5rem .15rem; font-size: .78rem; }
+    .attendance-day { height: 105px; vertical-align: top; padding: .35rem !important; overflow: hidden; }
     .attendance-day.outside { opacity: .35; }
     .attendance-day.attended { background: rgba(25, 135, 84, .18); box-shadow: inset 0 0 0 2px #198754; }
-    .day-number { display: inline-grid; place-items: center; width: 2rem; height: 2rem; border-radius: 50%; font-weight: 700; }
+    .attendance-day.absent { background: rgba(220, 53, 69, .18); box-shadow: inset 0 0 0 2px #dc3545; }
+    .attendance-day.subscription-start { outline: 3px solid #0d6efd; outline-offset: -3px; }
+    .day-number { display: inline-grid; place-items: center; width: 1.7rem; height: 1.7rem; border-radius: 50%; font-weight: 700; font-size: .82rem; }
     .today .day-number { background: #0d6efd; color: white; }
-    .class-pill { display: block; margin-top: .3rem; padding: .2rem .4rem; border-radius: .4rem; background: #198754; color: white; font-size: .75rem; line-height: 1.2; }
+    .class-pill { display: block; margin-top: .25rem; padding: .15rem .3rem; border-radius: .35rem; background: #198754; color: white; font-size: .65rem; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .status-pill { display: block; margin-top: .25rem; padding: .15rem .3rem; border-radius: .35rem; color: white; font-size: .65rem; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .status-pill.start { background: #0d6efd; }
+    .status-pill.absent { background: #dc3545; }
+    .calendar-legend { font-size: .78rem; }
+    @media (max-width: 575.98px) {
+        .calendar-card .card-body { padding: .2rem !important; }
+        .attendance-calendar { font-size: .68rem; }
+        .attendance-calendar th { padding: .3rem 0; font-size: .62rem; }
+        .attendance-day { height: 66px; padding: .12rem !important; }
+        .day-number { width: 1.35rem; height: 1.35rem; font-size: .68rem; }
+        .class-pill {
+            width: .55rem;
+            height: .55rem;
+            padding: 0;
+            margin: .15rem auto 0;
+            border-radius: 50%;
+            font-size: 0;
+        }
+        .status-pill { padding: .08rem; font-size: .48rem; text-align: center; }
+        .attendance-day.subscription-start { outline-width: 2px; outline-offset: -2px; }
+        .calendar-legend { font-size: .7rem; gap: .45rem !important; }
+        .calendar-legend .badge { font-size: .58rem; }
+    }
 </style>
 
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
@@ -27,11 +52,12 @@
 </div>
 
 <div class="row g-3 mb-4">
-    <div class="col-sm-6"><div class="card h-100"><div class="card-body"><div class="text-secondary">Días asistidos</div><div class="display-6 fw-bold text-success">{{ dias_asistidos }}</div></div></div></div>
-    <div class="col-sm-6"><div class="card h-100"><div class="card-body"><div class="text-secondary">Clases confirmadas</div><div class="display-6 fw-bold">{{ total_asistencias }}</div></div></div></div>
+    <div class="col-md-4"><div class="card h-100"><div class="card-body"><div class="text-secondary">Días asistidos</div><div class="display-6 fw-bold text-success">{{ dias_asistidos }}</div></div></div></div>
+    <div class="col-md-4"><div class="card h-100"><div class="card-body"><div class="text-secondary">Clases confirmadas</div><div class="display-6 fw-bold">{{ total_asistencias }}</div></div></div></div>
+    <div class="col-md-4"><div class="card h-100"><div class="card-body"><div class="text-secondary">Días sin asistencia</div><div class="display-6 fw-bold text-danger">{{ total_ausencias }}</div></div></div></div>
 </div>
 
-<div class="card">
+<div class="card calendar-card">
     <div class="card-body p-2 p-md-3">
         <div class="table-responsive">
             <table class="table table-bordered attendance-calendar mb-0">
@@ -40,13 +66,15 @@
                 {% for semana in semanas %}
                     <tr>
                     {% for dia in semana %}
-                        <td class="attendance-day{% if not dia.del_mes %} outside{% endif %}{% if dia.es_hoy %} today{% endif %}{% if dia.asistencias %} attended{% endif %}">
+                        <td class="attendance-day{% if not dia.del_mes %} outside{% endif %}{% if dia.es_hoy %} today{% endif %}{% if dia.asistencias %} attended{% elif dia.no_asistio %} absent{% endif %}{% if dia.inicio_mensualidad %} subscription-start{% endif %}">
                             <span class="day-number">{{ dia.fecha.day }}</span>
+                            {% if dia.inicio_mensualidad %}<span class="status-pill start">Inicio mensualidad</span>{% endif %}
                             {% for asistencia in dia.asistencias %}
                                 <span class="class-pill" title="{{ asistencia.clase.get_disciplina_display }}">
                                     {{ asistencia.clase.hora_inicio|time:'H:i' }} · {{ asistencia.clase.titulo|default:asistencia.clase.get_disciplina_display }}
                                 </span>
                             {% endfor %}
+                            {% if dia.no_asistio %}<span class="status-pill absent">No asistió</span>{% endif %}
                         </td>
                     {% endfor %}
                     </tr>
@@ -57,5 +85,9 @@
     </div>
 </div>
 
-<div class="mt-3 text-secondary"><span class="badge bg-success">Verde</span> Día con asistencia confirmada</div>
+<div class="calendar-legend mt-2 d-flex flex-wrap gap-2 text-secondary">
+    <span><span class="badge bg-success">Verde</span> Asistencia confirmada</span>
+    <span><span class="badge bg-danger">Rojo</span> Clase programada sin asistencia</span>
+    <span><span class="badge bg-primary">Azul</span> Inicio de mensualidad</span>
+</div>
 {% endblock %}
