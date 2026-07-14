@@ -293,6 +293,15 @@
                     <span class="menu-label">Horario</span>
                 </a>
 
+                {% if user.perfil_alumno %}
+                <a class="btn btn-outline-light btn-sm menu-btn"
+                    href="{% url 'gestion:mi_asistencia' %}"
+                    aria-label="Mi asistencia" data-nav-tooltip title="Mi asistencia">
+                    <i class="fa-solid fa-calendar-check"></i>
+                    <span class="menu-label">Mi asistencia</span>
+                </a>
+                {% endif %}
+
                 <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'registro_publico' %}"
                    aria-label="Registro" data-nav-tooltip title="Registro">
                     <i class="fa-solid fa-user-plus"></i><span class="menu-label">Registro</span>

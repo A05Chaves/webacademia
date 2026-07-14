@@ -5,6 +5,7 @@ from registros_legales.services import crear_alumno_desde_registro
 """
 
 from urllib.parse import urlparse, parse_qs
+import calendar
 from .forms import ConfiguracionHomeForm
 from registros_legales.services import (
     crear_alumno_desde_registro,
@@ -720,6 +721,72 @@ def eliminar_suscripcion(request, suscripcion_id):
 
 
 # VISTA PARA ASISTENCIA A CLASE
+
+@login_required
+def mi_asistencia(request):
+    alumno = get_object_or_404(Alumno, user=request.user)
+    hoy = timezone.localdate()
+
+    try:
+        anio = int(request.GET.get('anio', hoy.year))
+        mes = int(request.GET.get('mes', hoy.month))
+        if not 1 <= mes <= 12 or not 2000 <= anio <= 2100:
+            raise ValueError
+    except (TypeError, ValueError):
+        anio, mes = hoy.year, hoy.month
+
+    primer_dia = datetime(anio, mes, 1).date()
+    if mes == 12:
+        siguiente_mes = datetime(anio + 1, 1, 1).date()
+    else:
+        siguiente_mes = datetime(anio, mes + 1, 1).date()
+
+    asistencias = AsistenciaClase.objects.filter(
+        alumno=alumno,
+        estado=AsistenciaClase.Estados.CONFIRMADA,
+        fecha_clase__gte=primer_dia,
+        fecha_clase__lt=siguiente_mes,
+    ).select_related('clase').order_by('fecha_clase', 'clase__hora_inicio')
+
+    asistencias_por_dia = {}
+    for asistencia in asistencias:
+        asistencias_por_dia.setdefault(asistencia.fecha_clase.day, []).append(
+            asistencia
+        )
+
+    calendario = calendar.Calendar(firstweekday=0)
+    semanas = []
+    for semana in calendario.monthdatescalendar(anio, mes):
+        semanas.append([
+            {
+                'fecha': fecha,
+                'del_mes': fecha.month == mes,
+                'es_hoy': fecha == hoy,
+                'asistencias': asistencias_por_dia.get(fecha.day, [])
+                if fecha.month == mes else [],
+            }
+            for fecha in semana
+        ])
+
+    anterior = (primer_dia - timedelta(days=1))
+    siguiente = siguiente_mes
+    nombres_meses = [
+        '', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+        'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+    ]
+
+    return render(request, 'gestion/mi_asistencia.html', {
+        'alumno': alumno,
+        'semanas': semanas,
+        'nombre_mes': nombres_meses[mes],
+        'mes': mes,
+        'anio': anio,
+        'anterior': anterior,
+        'siguiente': siguiente,
+        'total_asistencias': asistencias.count(),
+        'dias_asistidos': len(asistencias_por_dia),
+    })
+
 
 # @login_required
 def horario_clases(request):

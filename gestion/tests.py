@@ -6,11 +6,14 @@ from django.test import TestCase
 from django.urls import reverse
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
+from datetime import date, time
 
 from alumnos.models import Alumno
 from finanzas.models import CuentaFinanciera, MovimientoFinanciero
 from pagos.models import MetodoPagoQR, Pago
 from planes.models import Plan, Suscripcion
+from clases.models import ClaseProgramada, AsistenciaClase
+from instructores.models import Instructor
 from config.file_validation import (
     validate_base64_signature,
     validate_image,
@@ -313,3 +316,69 @@ class ValidadoresArchivosTests(TestCase):
         firma = 'data:image/png;base64,' + base64.b64encode(b'falsa').decode()
         with self.assertRaises(ValidationError):
             validate_base64_signature(firma)
+
+
+class CalendarioAsistenciaTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.usuario = User.objects.create_user(
+            username='alumno_calendario', password='clave-alumno'
+        )
+        self.alumno = Alumno.objects.create(
+            user=self.usuario, documento='CAL-001'
+        )
+        usuario_instructor = User.objects.create_user(
+            username='instructor_calendario', password='clave-instructor'
+        )
+        self.instructor = Instructor.objects.create(
+            user=usuario_instructor,
+            documento='INS-CAL-001',
+            especialidad='Jiu Jitsu',
+        )
+        self.clase = ClaseProgramada.objects.create(
+            dia=ClaseProgramada.DiasSemana.MIERCOLES,
+            hora_inicio=time(18, 0),
+            hora_fin=time(19, 0),
+            disciplina=ClaseProgramada.Disciplinas.JIU_JITSU,
+            titulo='Clase técnica',
+            instructor=self.instructor,
+        )
+
+    def test_visitante_debe_iniciar_sesion(self):
+        response = self.client.get(reverse('gestion:mi_asistencia'))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(settings.LOGIN_URL, response.url)
+
+    def test_calendario_solo_marca_asistencias_confirmadas_del_alumno(self):
+        AsistenciaClase.objects.create(
+            alumno=self.alumno,
+            clase=self.clase,
+            fecha_clase=date(2026, 7, 8),
+            estado=AsistenciaClase.Estados.CONFIRMADA,
+        )
+        AsistenciaClase.objects.create(
+            alumno=self.alumno,
+            clase=self.clase,
+            fecha_clase=date(2026, 7, 9),
+            estado=AsistenciaClase.Estados.CANCELADA,
+        )
+        self.client.force_login(self.usuario)
+
+        response = self.client.get(
+            reverse('gestion:mi_asistencia'), {'mes': 7, 'anio': 2026}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['dias_asistidos'], 1)
+        self.assertEqual(response.context['total_asistencias'], 1)
+        dias = [dia for semana in response.context['semanas'] for dia in semana]
+        dia_ocho = next(dia for dia in dias if dia['fecha'] == date(2026, 7, 8))
+        dia_nueve = next(dia for dia in dias if dia['fecha'] == date(2026, 7, 9))
+        self.assertEqual(len(dia_ocho['asistencias']), 1)
+        self.assertFalse(dia_nueve['asistencias'])
+        self.assertContains(response, 'Clase técnica')
+
+    def test_usuario_sin_perfil_alumno_no_accede_al_calendario(self):
+        self.client.force_login(self.instructor.user)
+        response = self.client.get(reverse('gestion:mi_asistencia'))
+        self.assertEqual(response.status_code, 404)
