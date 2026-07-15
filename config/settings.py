@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'clases',
     'cortesias',
     'finanzas',
+    'tienda',
     'registros_legales',
 ]
 

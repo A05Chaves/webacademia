@@ -21,19 +21,30 @@
         <form method="post">
             {% csrf_token %}
 
+            {% if form.errors %}
+                <div class="alert alert-danger" role="alert">
+                    {% for field in form %}
+                        {% for error in field.errors %}
+                            <div><strong>{{ field.label }}:</strong> {{ error }}</div>
+                        {% endfor %}
+                    {% endfor %}
+                    {{ form.non_field_errors }}
+                </div>
+            {% endif %}
+
             <div class="row">
 
                 <div class="col-md-6 mb-3">
                     <label class="form-label">Cuenta de salida</label>
                     {{ form.cuenta }}
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Categoría</label>
-                        {{ form.categoria }}
-                    </div>
-                   
                 </div>
 
-                <div id="saldoCuenta" class="alert alert-info mt-2" style="display:none;">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Categoría</label>
+                    {{ form.categoria }}
+                </div>
+
+                <div id="saldoCuenta" class="alert alert-info mx-2" style="display:none;">
                     Saldo disponible: <strong id="valorSaldo"></strong>
                 </div>
 

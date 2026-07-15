@@ -16,44 +16,43 @@
 
 </style>
 
-<div class="d-flex justify-content-between align-items-center mb-5 px-2">
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4 px-2">
     <h2 class="mb-0">
         <i class="fa-solid fa-chart-line"></i>
         Dashboard
     </h2>
 
-    
-    <a href="{% url 'gestion:registrar_gasto' %}"
-        class="btn btn-outline-light btn-sm">
+    <div class="d-flex flex-wrap gap-2">
+        <a href="{% url 'gestion:registrar_gasto' %}"
+           class="btn btn-outline-light btn-sm">
             <i class="fa-solid fa-minus"></i>
             Registrar gasto
-    </a>
-    <a href="{% url 'gestion:crear_pago_programado' %}"
-        class="btn btn-outline-light btn-sm">
+        </a>
+        <a href="{% url 'gestion:crear_pago_programado' %}"
+           class="btn btn-outline-light btn-sm">
             <i class="fa-solid fa-calendar-plus"></i>
             Pago programado
-    </a>
-
-    <a href="{% url 'cortesias:lista_cortesias' %}"
-        class="btn btn-outline-light">
+        </a>
+        <a href="{% url 'cortesias:lista_cortesias' %}"
+           class="btn btn-outline-light btn-sm">
             <i class="fa-solid fa-user-plus"></i>
             Cortesías
-    </a>
-
-    <a href="{% url 'gestion:detalle_financiero' %}"
-        class="btn btn-outline-light btn-sm">
+        </a>
+        <a href="{% url 'gestion:detalle_financiero' %}"
+           class="btn btn-outline-light btn-sm">
             <i class="fa-solid fa-file-invoice-dollar"></i>
             Detalle financiero
-    </a>
-
-    <a href="{% url 'gestion:registrar_transferencia' %}"
-        class="btn btn-outline-light btn-sm">
+        </a>
+        <a href="{% url 'gestion:registrar_transferencia' %}"
+           class="btn btn-outline-light btn-sm">
             <i class="fa-solid fa-right-left"></i>
             Transferencia
-    </a>
+        </a>
+    </div>
 </div>
 
-<div class="col-md-3 mb-3">
+<div class="row mb-4">
+<div class="col-md-6 mb-3">
     <a href="{% url 'gestion:lista_registros_legales' %}"
        class="text-decoration-none">
         <div class="card bg-dark text-light border-warning h-100">
@@ -68,7 +67,7 @@
     </a>
 </div>
 
-<div class="col-md-3 mb-3">
+<div class="col-md-6 mb-3">
     <a href="{% url 'gestion:lista_pagos' %}"
        class="text-decoration-none">
 
@@ -92,6 +91,7 @@
         </div>
 
     </a>
+</div>
 </div>
 
 <div class="row mb-5">
@@ -143,15 +143,12 @@
     <div class="col-md-6 mb-3">
         <div class="card bg-dark text-light border-secondary">
             <div class="card-header">
-                Estado de alumnos
+                <i class="fa-solid fa-chart-line me-1"></i>
+                Ingresos vs. gastos — últimos 6 meses
             </div>
             <div class="card-body">
-                <div class="card-body">
-
-                    <div class="chart-container">
-                        <canvas id="graficoAlumnos"></canvas>
-                    </div>
-
+                <div class="chart-container">
+                    <canvas id="graficoFlujoCaja"></canvas>
                 </div>
             </div>
         </div>
@@ -160,15 +157,12 @@
     <div class="col-md-6 mb-3">
         <div class="card bg-dark text-light border-secondary">
             <div class="card-header">
-                Estado de pagos
+                <i class="fa-solid fa-wallet me-1"></i>
+                Saldo actual por cuenta
             </div>
             <div class="card-body">
-                <div class="card-body">
-
-                    <div class="chart-container">
-                        <canvas id="graficoPagos"></canvas>
-                    </div>
-
+                <div class="chart-container">
+                    <canvas id="graficoSaldosCuenta"></canvas>
                 </div>
             </div>
         </div>
@@ -218,13 +212,15 @@
         </div>
     </div>
 
+</div>
+
 <div class="row mb-4">
 
     <div class="col-md-3 mb-3">
         <div class="card bg-dark text-light border-success">
             <div class="card-body">
                 <h6>Saldo total</h6>
-                <h2>${{ saldo_total }}</h2>
+                <h2>${{ saldo_total|floatformat:0 }}</h2>
                 <small>Disponible en cuentas</small>
             </div>
         </div>
@@ -234,8 +230,8 @@
         <div class="card bg-dark text-light border-info">
             <div class="card-body">
                 <h6>Ingresos del mes</h6>
-                <h2>${{ ingresos_mes }}</h2>
-                <small>Pagos aprobados y otros ingresos</small>
+                <h2>${{ ingresos_mes|floatformat:0 }}</h2>
+                <small>Ingresos operativos, sin transferencias internas</small>
             </div>
         </div>
     </div>
@@ -244,8 +240,8 @@
         <div class="card bg-dark text-light border-danger">
             <div class="card-body">
                 <h6>Gastos del mes</h6>
-                <h2>${{ gastos_mes }}</h2>
-                <small>Egresos registrados</small>
+                <h2>${{ gastos_mes|floatformat:0 }}</h2>
+                <small>Egresos operativos, sin transferencias internas</small>
             </div>
         </div>
     </div>
@@ -254,7 +250,7 @@
         <div class="card bg-dark text-light border-warning">
             <div class="card-body">
                 <h6>Utilidad del mes</h6>
-                <h2>${{ utilidad_mes }}</h2>
+                <h2>${{ utilidad_mes|floatformat:0 }}</h2>
                 <small>Ingresos - gastos</small>
             </div>
         </div>
@@ -286,7 +282,7 @@
                     <tr>
                         <td>{{ cuenta.nombre }}</td>
                         <td>{{ cuenta.get_tipo_display }}</td>
-                        <td>${{ cuenta.saldo_actual }}</td>
+                        <td>${{ cuenta.saldo_calculado|floatformat:0 }}</td>
                     </tr>
                     {% empty %}
                     <tr>
@@ -332,11 +328,16 @@
 
                         <td>{{ pago.concepto }}</td>
 
-                        <td>${{ pago.valor }}</td>
+                        <td>${{ pago.valor|floatformat:0 }}</td>
 
-                        <td>{{ pago.fecha_vencimiento }}</td>
+                        <td>
+                            {{ pago.fecha_vencimiento }}
+                            {% if pago.fecha_vencimiento < hoy %}
+                                <span class="badge bg-danger ms-1">Vencido</span>
+                            {% endif %}
+                        </td>
 
-                        <td>{{ pago.cuenta_pago }}</td>
+                        <td>{{ pago.cuenta_pago|default:"Sin cuenta" }}</td>
 
                         <td>
 
@@ -373,50 +374,103 @@
     </div>
 </div>
 
-</div>
-
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-<script>
-    const graficoAlumnos = document.getElementById('graficoAlumnos');
+{{ labels_flujo|json_script:"labels-flujo-dashboard" }}
+{{ ingresos_flujo|json_script:"ingresos-flujo-dashboard" }}
+{{ gastos_flujo|json_script:"gastos-flujo-dashboard" }}
+{{ labels_cuentas|json_script:"labels-cuentas-dashboard" }}
+{{ saldos_cuentas|json_script:"saldos-cuentas-dashboard" }}
 
-    new Chart(graficoAlumnos, {
-        type: 'doughnut',
+<script>
+    const formatoMoneda = new Intl.NumberFormat('es-CO', {
+        style: 'currency',
+        currency: 'COP',
+        maximumFractionDigits: 0
+    });
+    const labelsFlujo = JSON.parse(document.getElementById('labels-flujo-dashboard').textContent);
+    const ingresosFlujo = JSON.parse(document.getElementById('ingresos-flujo-dashboard').textContent);
+    const gastosFlujo = JSON.parse(document.getElementById('gastos-flujo-dashboard').textContent);
+    const labelsCuentas = JSON.parse(document.getElementById('labels-cuentas-dashboard').textContent);
+    const saldosCuentas = JSON.parse(document.getElementById('saldos-cuentas-dashboard').textContent);
+
+    new Chart(document.getElementById('graficoFlujoCaja'), {
+        type: 'line',
         data: {
-            labels: ['Activos', 'Próximos', 'Vencidos', 'Suspendidos'],
-            datasets: [{
-                data: [
-                    {{ alumnos_activos }},
-                    {{ alumnos_proximos }},
-                    {{ alumnos_vencidos_total }},
-                    {{ alumnos_suspendidos }}
-                ]
-            }]
+            labels: labelsFlujo,
+            datasets: [
+                {
+                    label: 'Ingresos',
+                    data: ingresosFlujo,
+                    borderColor: '#198754',
+                    backgroundColor: 'rgba(25, 135, 84, 0.18)',
+                    tension: 0.3,
+                    fill: true
+                },
+                {
+                    label: 'Gastos',
+                    data: gastosFlujo,
+                    borderColor: '#dc3545',
+                    backgroundColor: 'rgba(220, 53, 69, 0.12)',
+                    tension: 0.3,
+                    fill: true
+                }
+            ]
         },
         options: {
             responsive: true,
-            maintainAspectRatio: false
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: valor => formatoMoneda.format(valor)
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: contexto => `${contexto.dataset.label}: ${formatoMoneda.format(contexto.parsed.y)}`
+                    }
+                }
+            }
         }
     });
 
-    const graficoPagos = document.getElementById('graficoPagos');
-
-    new Chart(graficoPagos, {
+    new Chart(document.getElementById('graficoSaldosCuenta'), {
         type: 'bar',
         data: {
-            labels: ['Aprobados', 'Pendientes', 'Rechazados'],
+            labels: labelsCuentas,
             datasets: [{
-                label: 'Pagos',
-                data: [
-                    {{ pagos_aprobados }},
-                    {{ pagos_pendientes_total }},
-                    {{ pagos_rechazados }}
-                ]
+                label: 'Saldo actual',
+                data: saldosCuentas,
+                backgroundColor: '#0dcaf0',
+                borderColor: '#087990',
+                borderWidth: 1
             }]
         },
         options: {
+            indexAxis: 'y',
             responsive: true,
-            maintainAspectRatio: false
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    ticks: {
+                        callback: valor => formatoMoneda.format(valor)
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: contexto => formatoMoneda.format(contexto.parsed.x)
+                    }
+                }
+            }
         }
     });
 </script>

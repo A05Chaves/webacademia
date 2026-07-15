@@ -66,7 +66,7 @@ from django.conf import settings
 
 from finanzas.models import CategoriaFinanciera, CuentaFinanciera, MovimientoFinanciero, PagoProgramado
 from .forms import GastoForm
-from .forms import PagoProgramadoForm, TransferenciaForm
+from .forms import CuentaFinancieraForm, PagoProgramadoForm, TransferenciaForm
 from django.db.models import Sum
 from registros_legales.models import RegistroLegalEstudiante
 from .models import ConfiguracionHome
@@ -269,13 +269,17 @@ def dashboard(request):
 
     hoy = timezone.now().date()
 
-    ingresos_mes = MovimientoFinanciero.objects.filter(
+    movimientos_operativos = MovimientoFinanciero.objects.exclude(
+        concepto__startswith='Transferencia '
+    )
+
+    ingresos_mes = movimientos_operativos.filter(
         tipo='INGRESO',
         fecha__month=hoy.month,
         fecha__year=hoy.year
     ).aggregate(total=Sum('valor'))['total'] or 0
 
-    gastos_mes = MovimientoFinanciero.objects.filter(
+    gastos_mes = movimientos_operativos.filter(
         tipo='EGRESO',
         fecha__month=hoy.month,
         fecha__year=hoy.year
@@ -283,9 +287,49 @@ def dashboard(request):
 
     utilidad_mes = ingresos_mes - gastos_mes
 
-    cuentas_financieras = CuentaFinanciera.objects.filter(activa=True)
+    nombres_meses = (
+        'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+        'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic',
+    )
+    labels_flujo = []
+    ingresos_flujo = []
+    gastos_flujo = []
 
-    saldo_total = sum(cuenta.saldo_actual for cuenta in cuentas_financieras)
+    mes_actual_absoluto = hoy.year * 12 + hoy.month - 1
+    for desplazamiento in range(5, -1, -1):
+        mes_absoluto = mes_actual_absoluto - desplazamiento
+        anio_flujo, indice_mes = divmod(mes_absoluto, 12)
+        mes_flujo = indice_mes + 1
+        labels_flujo.append(f'{nombres_meses[indice_mes]} {anio_flujo}')
+
+        ingreso = movimientos_operativos.filter(
+            tipo=MovimientoFinanciero.Tipos.INGRESO,
+            fecha__year=anio_flujo,
+            fecha__month=mes_flujo,
+        ).aggregate(total=Sum('valor'))['total'] or 0
+        gasto = movimientos_operativos.filter(
+            tipo=MovimientoFinanciero.Tipos.EGRESO,
+            fecha__year=anio_flujo,
+            fecha__month=mes_flujo,
+        ).aggregate(total=Sum('valor'))['total'] or 0
+
+        ingresos_flujo.append(float(ingreso))
+        gastos_flujo.append(float(gasto))
+
+    cuentas_financieras = list(
+        CuentaFinanciera.objects.filter(activa=True).order_by('nombre')
+    )
+    for cuenta in cuentas_financieras:
+        cuenta.saldo_calculado = cuenta.saldo_actual
+
+    saldo_total = sum(
+        (cuenta.saldo_calculado for cuenta in cuentas_financieras),
+        0,
+    )
+    labels_cuentas = [cuenta.nombre for cuenta in cuentas_financieras]
+    saldos_cuentas = [
+        float(cuenta.saldo_calculado) for cuenta in cuentas_financieras
+    ]
 
     pagos_programados_pendientes = PagoProgramado.objects.filter(
         estado='PENDIENTE'
@@ -316,6 +360,12 @@ def dashboard(request):
         'cuentas_financieras': cuentas_financieras,
         'pagos_programados_pendientes': pagos_programados_pendientes,
         'registros_pendientes': registros_pendientes,
+        'hoy': hoy,
+        'labels_flujo': labels_flujo,
+        'ingresos_flujo': ingresos_flujo,
+        'gastos_flujo': gastos_flujo,
+        'labels_cuentas': labels_cuentas,
+        'saldos_cuentas': saldos_cuentas,
     }
     return render(request, 'gestion/dashboard.html', context)
 
@@ -1268,35 +1318,38 @@ def crear_pago_programado(request):
 @staff_member_required
 @require_POST
 def pagar_pago_programado(request, pago_id):
-
-    pago_programado = get_object_or_404(
-        PagoProgramado,
-        id=pago_id
-    )
-
-    if pago_programado.estado == 'PAGADO':
-        messages.warning(request, 'Este pago ya fue registrado.')
-        return redirect('gestion:dashboard')
-
-    if not pago_programado.cuenta_pago:
-        messages.error(
-            request,
-            'El pago programado no tiene cuenta asignada.'
+    with transaction.atomic():
+        pago_programado = get_object_or_404(
+            PagoProgramado.objects.select_for_update(),
+            id=pago_id
         )
-        return redirect('gestion:dashboard')
 
-    MovimientoFinanciero.objects.create(
-        cuenta=pago_programado.cuenta_pago,
-        tipo='EGRESO',
-        concepto=f'Pago programado - {pago_programado.concepto}',
-        valor=pago_programado.valor,
-        fecha=timezone.now(),
-        observaciones='Generado automáticamente desde pago programado.'
-    )
+        if pago_programado.estado != PagoProgramado.Estados.PENDIENTE:
+            messages.warning(
+                request,
+                'Solo se pueden pagar obligaciones que estén pendientes.'
+            )
+            return redirect('gestion:dashboard')
 
-    pago_programado.estado = 'PAGADO'
-    pago_programado.fecha_pago = timezone.now()
-    pago_programado.save()
+        if not pago_programado.cuenta_pago:
+            messages.error(
+                request,
+                'El pago programado no tiene cuenta asignada.'
+            )
+            return redirect('gestion:dashboard')
+
+        MovimientoFinanciero.objects.create(
+            cuenta=pago_programado.cuenta_pago,
+            tipo=MovimientoFinanciero.Tipos.EGRESO,
+            concepto=f'Pago programado - {pago_programado.concepto}',
+            valor=pago_programado.valor,
+            fecha=timezone.now(),
+            observaciones='Generado automáticamente desde pago programado.'
+        )
+
+        pago_programado.estado = PagoProgramado.Estados.PAGADO
+        pago_programado.fecha_pago = timezone.now()
+        pago_programado.save(update_fields=['estado', 'fecha_pago'])
 
     messages.success(request, 'Pago registrado correctamente.')
 
@@ -1310,8 +1363,21 @@ def detalle_financiero(request):
 
     hoy = timezone.now().date()
 
-    mes = int(request.GET.get('mes', hoy.month))
-    anio = int(request.GET.get('anio', hoy.year))
+    try:
+        mes = int(request.GET.get('mes', hoy.month))
+    except (TypeError, ValueError):
+        mes = hoy.month
+
+    try:
+        anio = int(request.GET.get('anio', hoy.year))
+    except (TypeError, ValueError):
+        anio = hoy.year
+
+    if not 1 <= mes <= 12:
+        mes = hoy.month
+    if not 2000 <= anio <= 2100:
+        anio = hoy.year
+
     tipo = request.GET.get('tipo', '')
 
     movimientos = MovimientoFinanciero.objects.filter(
@@ -1322,13 +1388,17 @@ def detalle_financiero(request):
     if tipo in ['INGRESO', 'EGRESO']:
         movimientos = movimientos.filter(tipo=tipo)
 
-    total_ingresos = movimientos.filter(
+    movimientos_operativos = movimientos.exclude(
+        concepto__startswith='Transferencia '
+    )
+
+    total_ingresos = movimientos_operativos.filter(
         tipo='INGRESO'
     ).aggregate(
         total=Sum('valor')
     )['total'] or 0
 
-    total_egresos = movimientos.filter(
+    total_egresos = movimientos_operativos.filter(
         tipo='EGRESO'
     ).aggregate(
         total=Sum('valor')
@@ -1341,7 +1411,9 @@ def detalle_financiero(request):
 
     for m in range(1, 13):
 
-        ingresos = MovimientoFinanciero.objects.filter(
+        ingresos = MovimientoFinanciero.objects.exclude(
+            concepto__startswith='Transferencia '
+        ).filter(
             tipo='INGRESO',
             fecha__year=anio,
             fecha__month=m
@@ -1349,7 +1421,9 @@ def detalle_financiero(request):
             total=Sum('valor')
         )['total'] or 0
 
-        egresos = MovimientoFinanciero.objects.filter(
+        egresos = MovimientoFinanciero.objects.exclude(
+            concepto__startswith='Transferencia '
+        ).filter(
             tipo='EGRESO',
             fecha__year=anio,
             fecha__month=m
@@ -1999,6 +2073,36 @@ def confirmar_clase_home(request):
 @staff_member_required
 def configuraciones(request):
     return render(request, 'gestion/configuraciones.html')
+
+
+@staff_member_required
+def configurar_cuentas(request, cuenta_id=None):
+    cuenta = None
+    if cuenta_id is not None:
+        cuenta = get_object_or_404(CuentaFinanciera, id=cuenta_id)
+
+    if request.method == 'POST':
+        form = CuentaFinancieraForm(request.POST, instance=cuenta)
+        if form.is_valid():
+            cuenta_guardada = form.save()
+            accion = 'actualizada' if cuenta else 'creada'
+            messages.success(
+                request,
+                f'Cuenta "{cuenta_guardada.nombre}" {accion} correctamente.'
+            )
+            return redirect('gestion:configurar_cuentas')
+    else:
+        form = CuentaFinancieraForm(instance=cuenta)
+
+    cuentas = list(CuentaFinanciera.objects.all().order_by('-activa', 'nombre'))
+    for cuenta_financiera in cuentas:
+        cuenta_financiera.saldo_calculado = cuenta_financiera.saldo_actual
+
+    return render(request, 'gestion/configurar_cuentas.html', {
+        'form': form,
+        'cuentas': cuentas,
+        'cuenta_editando': cuenta,
+    })
 
 
 # VISTAS DE CONFIGURACION DE DIAS Y HORAS

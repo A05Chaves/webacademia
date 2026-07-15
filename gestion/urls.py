@@ -107,6 +107,16 @@ urlpatterns = [
         name='configuraciones'
     ),
     path(
+        'configuraciones/cuentas/',
+        views.configurar_cuentas,
+        name='configurar_cuentas'
+    ),
+    path(
+        'configuraciones/cuentas/<int:cuenta_id>/editar/',
+        views.configurar_cuentas,
+        name='editar_cuenta_financiera'
+    ),
+    path(
         'configurar-horario/',
         views.configurar_horario,
         name='configurar_horario'

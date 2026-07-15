@@ -319,6 +319,21 @@ class PagoAlumnoForm(forms.ModelForm):
 # FORMULARIO DE GASTOS
 
 
+class CuentaFinancieraForm(forms.ModelForm):
+    class Meta:
+        model = CuentaFinanciera
+        fields = ['nombre', 'tipo', 'saldo_inicial', 'activa']
+        widgets = {
+            'nombre': forms.TextInput(attrs={'class': 'form-control'}),
+            'tipo': forms.Select(attrs={'class': 'form-select'}),
+            'saldo_inicial': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+            }),
+            'activa': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+
 class GastoForm(forms.ModelForm):
     class Meta:
         model = MovimientoFinanciero
@@ -334,7 +349,11 @@ class GastoForm(forms.ModelForm):
         widgets = {
             'cuenta': forms.Select(attrs={'class': 'form-select'}),
             'concepto': forms.TextInput(attrs={'class': 'form-control'}),
-            'valor': forms.NumberInput(attrs={'class': 'form-control'}),
+            'valor': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'min': '0.01',
+                'step': '0.01',
+            }),
             'categoria': forms.Select(attrs={'class': 'form-select'}),
             'fecha': forms.DateTimeInput(attrs={
                 'type': 'datetime-local',
@@ -347,14 +366,27 @@ class GastoForm(forms.ModelForm):
 
         }
 
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-            self.fields['categoria'].queryset = CategoriaFinanciera.objects.filter(
-                activa=True
-            ).filter(
-                tipo__in=['EGRESO', 'AMBOS']
+        self.fields['cuenta'].queryset = CuentaFinanciera.objects.filter(
+            activa=True
+        )
+        self.fields['categoria'].queryset = CategoriaFinanciera.objects.filter(
+            activa=True,
+            tipo__in=[
+                CategoriaFinanciera.Tipos.EGRESO,
+                CategoriaFinanciera.Tipos.AMBOS,
+            ],
+        )
+
+    def clean_valor(self):
+        valor = self.cleaned_data['valor']
+        if valor <= 0:
+            raise forms.ValidationError(
+                'El valor del gasto debe ser mayor que cero.'
             )
+        return valor
 
 # PAGOS PROGRAMADOS
 
@@ -372,7 +404,11 @@ class PagoProgramadoForm(forms.ModelForm):
 
         widgets = {
             'concepto': forms.TextInput(attrs={'class': 'form-control'}),
-            'valor': forms.NumberInput(attrs={'class': 'form-control'}),
+            'valor': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'min': '0.01',
+                'step': '0.01',
+            }),
             'fecha_vencimiento': forms.DateInput(attrs={
                 'type': 'date',
                 'class': 'form-control'
@@ -383,6 +419,20 @@ class PagoProgramadoForm(forms.ModelForm):
                 'rows': 3
             }),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['cuenta_pago'].queryset = CuentaFinanciera.objects.filter(
+            activa=True
+        )
+
+    def clean_valor(self):
+        valor = self.cleaned_data['valor']
+        if valor <= 0:
+            raise forms.ValidationError(
+                'El valor del pago debe ser mayor que cero.'
+            )
+        return valor
 
 # TRANSFERENCAS ENTRE CUENTAS
 
@@ -403,7 +453,12 @@ class TransferenciaForm(forms.Form):
     valor = forms.DecimalField(
         max_digits=12,
         decimal_places=2,
-        widget=forms.NumberInput(attrs={'class': 'form-control'}),
+        min_value=0.01,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'min': '0.01',
+            'step': '0.01',
+        }),
         label='Valor'
     )
 

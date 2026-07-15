@@ -43,6 +43,8 @@
                 <input type="number"
                        name="anio"
                        value="{{ anio }}"
+                       min="2000"
+                       max="2100"
                        class="form-control">
             </div>
 
@@ -73,7 +75,7 @@
         <div class="card bg-dark text-light border-success">
             <div class="card-body">
                 <h6>Total ingresos</h6>
-                <h3>${{ total_ingresos }}</h3>
+                <h3>${{ total_ingresos|floatformat:0 }}</h3>
             </div>
         </div>
     </div>
@@ -82,7 +84,7 @@
         <div class="card bg-dark text-light border-danger">
             <div class="card-body">
                 <h6>Total gastos</h6>
-                <h3>${{ total_egresos }}</h3>
+                <h3>${{ total_egresos|floatformat:0 }}</h3>
             </div>
         </div>
     </div>
@@ -91,7 +93,8 @@
         <div class="card bg-dark text-light border-warning">
             <div class="card-body">
                 <h6>Resultado del mes</h6>
-                <h3>${{ saldo_mes }}</h3>
+                <h3>${{ saldo_mes|floatformat:0 }}</h3>
+                <small>Los indicadores no incluyen transferencias internas.</small>
             </div>
         </div>
     </div>
@@ -174,7 +177,7 @@
 
                         <td>{{ movimiento.cuenta }}</td>
                         <td>{{ movimiento.concepto }}</td>
-                        <td>${{ movimiento.valor }}</td>
+                        <td>${{ movimiento.valor|floatformat:0 }}</td>
 
                         <td>
                             {% if movimiento.pago %}
@@ -201,8 +204,17 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
+{{ ingresos_por_mes|json_script:"datos-ingresos-anuales" }}
+{{ egresos_por_mes|json_script:"datos-egresos-anuales" }}
+{{ labels_gastos_categoria|json_script:"etiquetas-gastos-categoria" }}
+{{ datos_gastos_categoria|json_script:"datos-gastos-categoria" }}
+
 <script>
 const ctxFinanciero = document.getElementById('graficoFinanciero');
+const ingresosAnuales = JSON.parse(document.getElementById('datos-ingresos-anuales').textContent);
+const egresosAnuales = JSON.parse(document.getElementById('datos-egresos-anuales').textContent);
+const etiquetasGastos = JSON.parse(document.getElementById('etiquetas-gastos-categoria').textContent);
+const datosGastos = JSON.parse(document.getElementById('datos-gastos-categoria').textContent);
 
 new Chart(ctxFinanciero, {
     type: 'line',
@@ -214,13 +226,13 @@ new Chart(ctxFinanciero, {
         datasets: [
             {
                 label: 'Ingresos',
-                data: {{ ingresos_por_mes|safe }},
+                data: ingresosAnuales,
                 tension: 0.3,
                 fill: false
             },
             {
                 label: 'Gastos',
-                data: {{ egresos_por_mes|safe }},
+                data: egresosAnuales,
                 tension: 0.3,
                 fill: false
             }
@@ -237,9 +249,9 @@ const ctxGastosCategoria = document.getElementById('graficoGastosCategoria');
 new Chart(ctxGastosCategoria, {
     type: 'doughnut',
     data: {
-        labels: {{ labels_gastos_categoria|safe }},
+        labels: etiquetasGastos,
         datasets: [{
-            data: {{ datos_gastos_categoria|safe }}
+            data: datosGastos
         }]
     },
     options: {

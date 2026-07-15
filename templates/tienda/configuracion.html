@@ -1,0 +1,158 @@
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <h2 class="mb-1">
+            <i class="fa-solid fa-store"></i>
+            Configuración de tienda
+        </h2>
+        <p class="text-secondary mb-0">
+            Administra cuentas, saldos iniciales, productos y disponibilidad.
+        </p>
+    </div>
+    <a href="{% url 'tienda:panel' %}" class="btn btn-outline-warning btn-sm">
+        <i class="fa-solid fa-chart-line"></i>
+        Dashboard de tienda
+    </a>
+</div>
+
+<div class="alert alert-info">
+    Las cuentas y movimientos de esta sección son exclusivos de la tienda y no se mezclan con la academia.
+</div>
+
+<div class="card bg-dark text-light border-secondary mb-4">
+    <div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <h5 class="mb-0"><i class="fa-solid fa-shirt"></i> Productos</h5>
+            <a href="{% url 'tienda:crear_producto' %}" class="btn btn-success btn-sm">
+                <i class="fa-solid fa-plus"></i> Nuevo producto
+            </a>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-dark table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th>Referencia</th>
+                        <th class="text-end">Costo</th>
+                        <th class="text-end">Precio</th>
+                        <th class="text-center">Stock / mínimo</th>
+                        <th>Estado</th>
+                        <th class="text-end">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for producto in productos %}
+                        <tr class="{% if not producto.activo %}opacity-50{% endif %}">
+                            <td>
+                                <strong>{{ producto.nombre }}</strong>
+                                {% if producto.descripcion %}<br><small class="text-secondary">{{ producto.descripcion|truncatechars:60 }}</small>{% endif %}
+                            </td>
+                            <td>{{ producto.referencia|default:"—" }}</td>
+                            <td class="text-end">${{ producto.costo_unitario|floatformat:0 }}</td>
+                            <td class="text-end">${{ producto.precio_venta|floatformat:0 }}</td>
+                            <td class="text-center">
+                                <span class="badge {% if producto.bajo_stock %}bg-warning text-dark{% else %}bg-info text-dark{% endif %}">
+                                    {{ producto.stock }} / {{ producto.stock_minimo }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if producto.activo %}
+                                    <span class="badge bg-success">Activo</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Obsoleto</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end text-nowrap">
+                                <a href="{% url 'tienda:editar_producto' producto.id %}"
+                                   class="btn btn-outline-info btn-sm" title="Editar producto">
+                                    <i class="fa-solid fa-pen"></i>
+                                </a>
+                                <form method="post"
+                                      action="{% url 'tienda:cambiar_estado_producto' producto.id %}"
+                                      class="d-inline"
+                                      onsubmit="return confirm('{% if producto.activo %}¿Marcar este producto como obsoleto?{% else %}¿Reactivar este producto?{% endif %}');">
+                                    {% csrf_token %}
+                                    <button type="submit"
+                                            class="btn btn-outline-{% if producto.activo %}warning{% else %}success{% endif %} btn-sm"
+                                            title="{% if producto.activo %}Marcar como obsoleto{% else %}Reactivar{% endif %}">
+                                        <i class="fa-solid {% if producto.activo %}fa-box-archive{% else %}fa-rotate-left{% endif %}"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center text-secondary py-4">
+                                Aún no hay productos configurados.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card bg-dark text-light border-secondary">
+    <div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <div>
+                <h5 class="mb-1"><i class="fa-solid fa-wallet"></i> Cuentas y saldos</h5>
+                <small class="text-secondary">Saldo actual = saldo inicial + ventas − compras y gastos.</small>
+            </div>
+            <a href="{% url 'tienda:crear_cuenta' %}" class="btn btn-success btn-sm">
+                <i class="fa-solid fa-plus"></i> Nueva cuenta
+            </a>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-dark table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Cuenta</th>
+                        <th>Tipo</th>
+                        <th class="text-end">Saldo inicial</th>
+                        <th class="text-end">Saldo actual</th>
+                        <th>Estado</th>
+                        <th class="text-end">Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cuenta in cuentas %}
+                        <tr class="{% if not cuenta.activa %}opacity-50{% endif %}">
+                            <td><strong>{{ cuenta.nombre }}</strong></td>
+                            <td>{{ cuenta.get_tipo_display }}</td>
+                            <td class="text-end">${{ cuenta.saldo_inicial|floatformat:0 }}</td>
+                            <td class="text-end">${{ cuenta.saldo_calculado|floatformat:0 }}</td>
+                            <td>
+                                {% if cuenta.activa %}
+                                    <span class="badge bg-success">Activa</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Inactiva</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <a href="{% url 'tienda:editar_cuenta' cuenta.id %}"
+                                   class="btn btn-outline-info btn-sm">
+                                    <i class="fa-solid fa-pen"></i> Editar
+                                </a>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center text-secondary py-4">
+                                Aún no hay cuentas de tienda configuradas.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

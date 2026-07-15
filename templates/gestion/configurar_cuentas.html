@@ -1,0 +1,148 @@
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <h2 class="mb-0">
+        <i class="fa-solid fa-building-columns"></i>
+        Cuentas financieras
+    </h2>
+
+    <a href="{% url 'gestion:configuraciones' %}"
+       class="btn btn-outline-light btn-sm">
+        <i class="fa-solid fa-arrow-left"></i>
+        Volver
+    </a>
+</div>
+
+<div class="alert alert-info">
+    <i class="fa-solid fa-circle-info me-1"></i>
+    El saldo actual se calcula como saldo inicial + ingresos − egresos.
+    Cambiar el saldo inicial recalcula el saldo actual, pero no modifica los movimientos registrados.
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="card bg-dark text-light border-secondary">
+            <div class="card-body">
+                <h5 class="mb-3">
+                    {% if cuenta_editando %}
+                        Editar {{ cuenta_editando.nombre }}
+                    {% else %}
+                        Nueva cuenta
+                    {% endif %}
+                </h5>
+
+                <form method="post">
+                    {% csrf_token %}
+
+                    {% if form.errors %}
+                        <div class="alert alert-danger" role="alert">
+                            {% for field in form %}
+                                {% for error in field.errors %}
+                                    <div><strong>{{ field.label }}:</strong> {{ error }}</div>
+                                {% endfor %}
+                            {% endfor %}
+                            {{ form.non_field_errors }}
+                        </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label for="{{ form.nombre.id_for_label }}" class="form-label">Nombre</label>
+                        {{ form.nombre }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.tipo.id_for_label }}" class="form-label">Tipo</label>
+                        {{ form.tipo }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.saldo_inicial.id_for_label }}" class="form-label">Saldo inicial</label>
+                        {{ form.saldo_inicial }}
+                        <div class="form-text text-secondary">
+                            Valor disponible en la cuenta antes del primer movimiento registrado.
+                        </div>
+                    </div>
+
+                    <div class="form-check mb-4">
+                        {{ form.activa }}
+                        <label for="{{ form.activa.id_for_label }}" class="form-check-label">
+                            Cuenta activa
+                        </label>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-success">
+                            <i class="fa-solid fa-floppy-disk"></i>
+                            {% if cuenta_editando %}Guardar cambios{% else %}Crear cuenta{% endif %}
+                        </button>
+
+                        {% if cuenta_editando %}
+                            <a href="{% url 'gestion:configurar_cuentas' %}"
+                               class="btn btn-outline-light">
+                                Cancelar
+                            </a>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        <div class="card bg-dark text-light border-secondary">
+            <div class="card-body">
+                <h5 class="mb-3">Cuentas configuradas</h5>
+
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Cuenta</th>
+                                <th>Tipo</th>
+                                <th class="text-end">Saldo inicial</th>
+                                <th class="text-end">Saldo actual</th>
+                                <th>Estado</th>
+                                <th class="text-end">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cuenta in cuentas %}
+                                <tr>
+                                    <td><strong>{{ cuenta.nombre }}</strong></td>
+                                    <td>{{ cuenta.get_tipo_display }}</td>
+                                    <td class="text-end">${{ cuenta.saldo_inicial|floatformat:0 }}</td>
+                                    <td class="text-end">${{ cuenta.saldo_calculado|floatformat:0 }}</td>
+                                    <td>
+                                        {% if cuenta.activa %}
+                                            <span class="badge bg-success">Activa</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Inactiva</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">
+                                        <a href="{% url 'gestion:editar_cuenta_financiera' cuenta.id %}"
+                                           class="btn btn-outline-info btn-sm"
+                                           title="Editar {{ cuenta.nombre }}">
+                                            <i class="fa-solid fa-pen"></i>
+                                            Editar
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center text-secondary py-4">
+                                        Aún no hay cuentas financieras configuradas.
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

@@ -73,6 +73,60 @@
 
     </div>
 
+    <div class="col-md-6 col-lg-3">
+
+        <a href="{% url 'gestion:configurar_cuentas' %}"
+           class="text-decoration-none">
+
+            <div class="card bg-dark text-light border-secondary h-100">
+
+                <div class="card-body text-center py-4">
+
+                    <i class="fa-solid fa-building-columns fa-2x mb-3 text-success"></i>
+
+                    <h5 class="mb-2">
+                        Cuentas financieras
+                    </h5>
+
+                    <p class="text-secondary small mb-0">
+                        Saldos iniciales, tipos y estado.
+                    </p>
+
+                </div>
+
+            </div>
+
+        </a>
+
+    </div>
+
+    <div class="col-md-6 col-lg-3">
+
+        <a href="{% url 'tienda:configuracion' %}"
+           class="text-decoration-none">
+
+            <div class="card bg-dark text-light border-success h-100">
+
+                <div class="card-body text-center py-4">
+
+                    <i class="fa-solid fa-store fa-2x mb-3 text-warning"></i>
+
+                    <h5 class="mb-2">
+                        Tienda
+                    </h5>
+
+                    <p class="text-secondary small mb-0">
+                        Productos, inventario y finanzas independientes.
+                    </p>
+
+                </div>
+
+            </div>
+
+        </a>
+
+    </div>
+
 </div>
 
 {% endblock %}
