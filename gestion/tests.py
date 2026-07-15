@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.urls import reverse
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
-from datetime import date, time
+from datetime import date, time, timedelta
 
 from alumnos.models import Alumno
 from finanzas.models import CuentaFinanciera, MovimientoFinanciero
@@ -143,6 +143,26 @@ class SeguridadVistasGestionTests(TestCase):
             reverse('gestion:aprobar_registro_legal', args=[999999])
         )
         self.assertEqual(response.status_code, 405)
+
+    def test_ficha_alumno_muestra_usuario_de_acceso(self):
+        usuario_alumno = get_user_model().objects.create_user(
+            username='usuario_visible_ficha',
+            password='clave-alumno-pruebas',
+            first_name='Alumno',
+            last_name='Visible',
+        )
+        alumno = Alumno.objects.create(
+            user=usuario_alumno,
+            documento='DOC-FICHA-1',
+        )
+
+        response = self.client.get(
+            reverse('gestion:editar_alumno', args=[alumno.id])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Usuario de acceso')
+        self.assertContains(response, 'usuario_visible_ficha')
 
 
 class ConfiguracionArchivosTests(TestCase):
@@ -348,6 +368,39 @@ class CalendarioAsistenciaTests(TestCase):
         response = self.client.get(reverse('gestion:mi_asistencia'))
         self.assertEqual(response.status_code, 302)
         self.assertIn(settings.LOGIN_URL, response.url)
+
+    def test_confirmacion_home_funciona_con_plan_legacy_sin_flags(self):
+        hoy = date.today()
+        plan = Plan.objects.create(
+            nombre='Plan legacy confirmación',
+            precio='100000',
+            duracion_dias=30,
+            clases_mes=8,
+        )
+        Suscripcion.objects.create(
+            alumno=self.alumno,
+            plan=plan,
+            fecha_inicio=hoy - timedelta(days=1),
+            fecha_vencimiento=hoy + timedelta(days=29),
+            estado=Suscripcion.Estados.ACTIVA,
+        )
+
+        response = self.client.post(
+            reverse('gestion:confirmar_clase_home'),
+            {
+                'clase_id': self.clase.id,
+                'username': 'alumno_calendario',
+                'password': 'clave-alumno',
+            },
+        )
+
+        self.assertRedirects(response, reverse('gestion:home_publica'))
+        self.assertTrue(AsistenciaClase.objects.filter(
+            alumno=self.alumno,
+            clase=self.clase,
+            fecha_clase=hoy,
+            estado=AsistenciaClase.Estados.CONFIRMADA,
+        ).exists())
 
     def test_calendario_solo_marca_asistencias_confirmadas_del_alumno(self):
         AsistenciaClase.objects.create(

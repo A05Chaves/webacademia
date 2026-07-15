@@ -74,6 +74,29 @@ from alumnos.models import Alumno
 from django.contrib.auth import get_user_model
 User = get_user_model()
 
+
+def plan_permite_disciplina(plan, disciplina):
+    """Valida la disciplina usando la configuración vigente del plan."""
+    permisos = {
+        ClaseProgramada.Disciplinas.JIU_JITSU: plan.permite_jiu_jitsu,
+        ClaseProgramada.Disciplinas.MUAY_THAI: plan.permite_muay_thai,
+        ClaseProgramada.Disciplinas.MMA: plan.permite_mma,
+        ClaseProgramada.Disciplinas.MMA_MUAYTHAI: (
+            plan.permite_mma or plan.permite_muay_thai
+        ),
+        ClaseProgramada.Disciplinas.OTRA: True,
+    }
+
+    # Los planes creados antes de estos indicadores quedaron con los tres
+    # valores en False durante la migración. Se conserva su acceso hasta que
+    # un administrador configure explícitamente sus disciplinas.
+    sin_configuracion = not any((
+        plan.permite_jiu_jitsu,
+        plan.permite_muay_thai,
+        plan.permite_mma,
+    ))
+    return sin_configuracion or permisos.get(disciplina, False)
+
 # CONVIERTE VIDEOS YOUTUBE
 
 
@@ -1904,19 +1927,19 @@ def confirmar_clase_home(request):
 
     plan = suscripcion.plan
 
-    if plan.disciplina == 'JIUJITSU' and clase.disciplina != 'JIU_JITSU':
+    if not plan_permite_disciplina(plan, clase.disciplina):
         messages.error(
             request,
-            'Tu plan solo permite confirmar clases de Jiu Jitsu.'
+            'La disciplina de esta clase no está incluida en tu plan.'
         )
         return redirect('gestion:home_publica')
 
-    if plan.disciplina == 'MUAY_THAI' and clase.disciplina != 'MUAY_THAI':
-        messages.error(
-            request,
-            'Tu plan solo permite confirmar clases de Muay Thai.'
-        )
-        return redirect('gestion:home_publica')
+    ya_confirmo = AsistenciaClase.objects.filter(
+        alumno=alumno,
+        clase=clase,
+        fecha_clase=hoy,
+        estado=AsistenciaClase.Estados.CONFIRMADA,
+    ).exists()
 
     clases_consumidas = AsistenciaClase.objects.filter(
         alumno=alumno,
@@ -1925,11 +1948,25 @@ def confirmar_clase_home(request):
         fecha_clase__lte=suscripcion.fecha_vencimiento
     ).count()
 
-    if clases_consumidas >= plan.clases_mes:
+    if (
+        not plan.asistencia_ilimitada
+        and not ya_confirmo
+        and clases_consumidas >= plan.clases_mes
+    ):
         messages.error(
             request,
             f'Ya consumiste tus {plan.clases_mes} clases disponibles de este plan.'
         )
+        return redirect('gestion:home_publica')
+
+    total_asistentes = AsistenciaClase.objects.filter(
+        clase=clase,
+        fecha_clase=hoy,
+        estado=AsistenciaClase.Estados.CONFIRMADA,
+    ).count()
+
+    if not ya_confirmo and total_asistentes >= clase.cupo_maximo:
+        messages.error(request, 'No hay cupos disponibles para esta clase.')
         return redirect('gestion:home_publica')
 
     asistencia, creada = AsistenciaClase.objects.get_or_create(
@@ -1943,12 +1980,14 @@ def confirmar_clase_home(request):
     )
 
     if creada:
-        restantes = plan.clases_mes - (clases_consumidas + 1)
-
-        messages.success(
-            request,
-            f'Clase confirmada correctamente. Te quedan {restantes} clases disponibles.'
-        )
+        if plan.asistencia_ilimitada:
+            messages.success(request, 'Clase confirmada correctamente.')
+        else:
+            restantes = plan.clases_mes - (clases_consumidas + 1)
+            messages.success(
+                request,
+                f'Clase confirmada correctamente. Te quedan {restantes} clases disponibles.'
+            )
     else:
         messages.info(request, 'Ya habías confirmado esta clase.')
 
