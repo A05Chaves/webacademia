@@ -282,9 +282,163 @@
     .fight-timer-page:fullscreen .timer-action-btn {
         min-height: 56px;
     }
+    .fight-tools-nav { display:flex; gap:10px; margin-bottom:16px; }
+    .fight-tools-nav button { border:1px solid var(--border-color); border-radius:14px; padding:11px 18px; background:var(--bg-card); color:var(--text-main); font-weight:800; }
+    .fight-tools-nav button.active { color:#fff; background:#0d6efd; border-color:#0d6efd; }
+    .tool-panel[hidden] { display:none !important; }
+    .bracket-shell { border:1px solid var(--border-color); border-radius:24px; padding:24px; background:var(--bg-card); min-height:calc(100vh - 180px); }
+    .bracket-header, .bracket-actions { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    .participant-grid { display:grid; grid-template-columns:repeat(2,minmax(220px,1fr)); gap:12px; margin:22px 0; }
+    .participant-input { border:1px solid var(--border-color); border-radius:12px; padding:12px 14px; background:var(--bg-main); color:var(--text-main); text-transform:uppercase; }
+    .bracket-board { display:flex; gap:28px; overflow-x:auto; padding:22px 4px 12px; align-items:stretch; }
+    .bracket-round { min-width:260px; flex:1; display:flex; flex-direction:column; justify-content:space-around; gap:18px; }
+    .round-title { text-align:center; font-size:14px; font-weight:900; text-transform:uppercase; color:var(--text-muted); }
+    .match-card { border:1px solid var(--border-color); border-radius:16px; padding:10px; background:var(--bg-main); box-shadow:0 8px 22px rgba(0,0,0,.08); }
+    .fighter-row { display:flex; justify-content:space-between; align-items:center; gap:8px; width:100%; padding:10px; border:0; border-radius:10px; color:var(--text-main); background:transparent; text-align:left; font-weight:700; text-transform:uppercase; }
+    .fighter-row + .fighter-row { border-top:1px solid var(--border-color); }
+    .fighter-row:not(:disabled):hover { background:rgba(13,110,253,.12); }
+    .fighter-row.winner { background:rgba(25,135,84,.18); color:#198754; }
+    .fighter-row.bye, .fighter-row.bye:disabled { color:#b8860b; background:rgba(255,193,7,.12); font-style:italic; opacity:1; }
+    .fighter-row:disabled { opacity:.5; cursor:not-allowed; }
+    .match-timer-btn { width:100%; margin-top:8px; border-radius:9px !important; font-weight:700; }
+    .champion-card { text-align:center; border:2px solid #ffc107; border-radius:18px; padding:22px 12px; background:rgba(255,193,7,.12); text-transform:uppercase; }
+    .current-fight { font-size:clamp(24px,4vw,50px); font-weight:900; margin-bottom:12px; }
+    .bjj-scoreboard { width:min(1050px,96%); display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:24px; }
+    .score-fighter { padding:14px; border:2px solid rgba(255,255,255,.35); border-radius:18px; background:rgba(0,0,0,.25); }
+    .score-fighter.blue { border-color:#4795ff; }
+    .score-fighter.red { border-color:#ff5d68; }
+    .score-name { font-size:clamp(18px,2.5vw,30px); font-weight:900; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-transform:uppercase; }
+    .score-points { font-size:clamp(54px,8vw,92px); line-height:1; font-weight:950; font-variant-numeric:tabular-nums; }
+    .score-buttons { display:flex; justify-content:center; gap:7px; flex-wrap:wrap; margin:10px 0; }
+    .score-buttons button { min-width:48px; min-height:40px; border-radius:10px !important; font-weight:900; }
+    .score-extras { display:flex; justify-content:center; gap:10px; flex-wrap:wrap; font-weight:800; }
+    .score-extra { border:1px solid rgba(255,255,255,.25); border-radius:10px; padding:7px 9px; background:rgba(255,255,255,.08); }
+    .score-extra button { border:0; background:transparent; color:inherit; font-weight:950; padding:0 4px; }
+    .victory-btn { width:100%; margin-top:10px; border-radius:10px !important; font-weight:900; }
+    .champion-overlay { position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center; padding:24px; background:radial-gradient(circle at center,#30445a 0,#101b25 62%,#05090d 100%); color:#fff; text-align:center; }
+    .champion-overlay[hidden] { display:none !important; }
+    .champion-celebration { width:min(950px,96vw); }
+    .champion-trophy { color:#ffc107; font-size:clamp(80px,15vw,190px); filter:drop-shadow(0 12px 30px rgba(255,193,7,.35)); }
+    .champion-title { margin:18px 0 4px; font-size:clamp(38px,7vw,92px); font-weight:950; letter-spacing:.12em; }
+    .champion-name { margin:0 0 30px; font-size:clamp(46px,10vw,145px); line-height:1; font-weight:950; text-transform:uppercase; overflow-wrap:anywhere; color:#ffc107; }
+    .champion-close { min-width:220px; min-height:58px; border-radius:18px !important; font-size:20px; font-weight:900; }
+    .fight-timer-shell.bjj-active { background:#152330 !important; color:#f4f7fb; }
+    .bjj-active .timer-main { justify-content:flex-start; padding:8px; }
+    .bjj-active .current-fight, .bjj-active .round-label { display:none; }
+    .bjj-active .bjj-scoreboard { order:-2; width:100%; grid-template-columns:1fr; gap:6px; margin:0; }
+    .bjj-active .score-fighter { display:grid; grid-template-columns:minmax(150px,18%) minmax(130px,14%) 1fr; grid-template-rows:1fr auto; min-height:165px; padding:0; overflow:hidden; border:0; border-radius:0; background:#172633; text-align:left; }
+    .bjj-active .score-points { grid-column:1; grid-row:1 / 3; display:flex; align-items:center; justify-content:center; font-size:clamp(90px,13vw,165px); color:#fff; }
+    .bjj-active .red .score-points { background:#d40b36; }
+    .bjj-active .blue .score-points { background:#1473b9; }
+    .bjj-active .score-name { grid-column:3; grid-row:1; align-self:end; padding:15px 28px 2px; font-size:clamp(30px,4vw,58px); font-weight:400; }
+    .bjj-active .score-extras { grid-column:2; grid-row:1 / 3; display:flex; flex-direction:column; gap:5px; padding:0; background:#eef0f2; color:#111; }
+    .bjj-active .score-extra { flex:1; display:flex; align-items:center; justify-content:center; gap:8px; border:0; border-radius:0; padding:6px; background:#fff; font-size:14px; }
+    .bjj-active .score-extra b { font-size:clamp(34px,5vw,68px); font-weight:500; }
+    .bjj-active .score-extra:last-child b { color:#dc3545; }
+    .bjj-active .score-extra button { color:#111; font-size:24px; }
+    .bjj-active .score-buttons { grid-column:3; grid-row:2; justify-content:flex-start; padding:5px 28px; margin:0; }
+    .bjj-active .victory-btn { grid-column:3; grid-row:2; width:auto; justify-self:end; align-self:center; margin:5px 28px 10px; }
+    .bjj-active .main-time { order:-1; align-self:flex-end; padding:12px 28px 0; font-size:clamp(90px,16vw,210px); line-height:.9; font-weight:400; letter-spacing:0; }
+    .bjj-active .sub-status { order:-1; align-self:flex-start; margin:-55px 0 20px 20px; font-size:clamp(18px,2vw,30px); }
+    .bjj-active .progress-wrap { order:-1; width:calc(100% - 40px); margin:10px 20px 0; height:8px; }
+    .fight-timer-page:fullscreen .fight-tools-nav { display:none; }
+    .fight-timer-page:fullscreen { overflow:hidden; background:#050b10; }
+    .fight-timer-page:fullscreen .fight-timer-shell { min-height:100vh; height:100vh; border:0; border-radius:0; }
+    .fight-timer-page:fullscreen .timer-topbar { padding:8px 18px; min-height:54px; }
+    .fight-timer-page:fullscreen .bjj-active .timer-main { min-height:0; overflow:hidden; padding:4px; }
+    .fight-timer-page:fullscreen .bjj-active .score-fighter { min-height:0; height:clamp(130px,25vh,220px); }
+    .fight-timer-page:fullscreen .bjj-active .score-points { font-size:clamp(78px,16vh,170px); }
+    .fight-timer-page:fullscreen .bjj-active .score-name { font-size:clamp(28px,5vh,54px); }
+    .fight-timer-page:fullscreen .bjj-active .main-time { font-size:clamp(72px,17vh,155px); padding-top:4px; }
+    .fight-timer-page:fullscreen .bjj-active .sub-status { margin:-38px 0 5px 18px; font-size:clamp(16px,3vh,28px); }
+    .fight-timer-page:fullscreen .bjj-active .timer-controls { padding:6px 12px 8px; }
+    .fight-timer-page:fullscreen .bjj-active .timer-controls .settings-row { display:none; }
+    .fight-timer-page:fullscreen .bjj-active .timer-controls .timer-action-btn { min-height:42px; font-size:18px; }
+    .fight-timer-page:fullscreen .bjj-active .timer-controls .hint-row { display:none; }
+    /* Distribución fullscreen: conserva siempre nombres y controles de puntos. */
+    .fight-timer-page:fullscreen .bjj-active { display:grid; grid-template-columns:100vw; grid-template-rows:50px minmax(0,1fr) auto; width:100vw !important; max-width:none !important; overflow:hidden; box-sizing:border-box; }
+    .fight-timer-page:fullscreen .bjj-active .timer-topbar { min-height:0; padding:4px 14px; }
+    .fight-timer-page:fullscreen .bjj-active .timer-clock { font-size:18px; }
+    .fight-timer-page:fullscreen .bjj-active .timer-mode { font-size:13px; }
+    .fight-timer-page:fullscreen .bjj-active .fullscreen-btn { padding:5px 10px; }
+    .fight-timer-page:fullscreen .bjj-active .timer-main { display:grid; grid-template-columns:100vw; grid-template-rows:minmax(0,1fr) auto auto; justify-self:stretch; align-self:stretch; width:100vw !important; min-width:100vw; max-width:none !important; min-height:0; overflow:visible; box-sizing:border-box; gap:4px; padding:4px; }
+    .fight-timer-page:fullscreen .bjj-active .bjj-scoreboard { grid-row:1; grid-column:1; display:grid; grid-template-columns:100%; grid-template-rows:repeat(2,minmax(0,1fr)); justify-self:stretch; width:calc(100vw - 8px) !important; max-width:none !important; min-height:0; height:100%; gap:4px; }
+    .fight-timer-page:fullscreen .bjj-active .score-fighter { justify-self:stretch; width:100% !important; max-width:none !important; min-height:0; height:auto; }
+    .fight-timer-page:fullscreen .bjj-active .score-name { align-self:center; padding:8px 28px 2px; font-size:clamp(26px,5vh,52px); line-height:1.05; }
+    .fight-timer-page:fullscreen .bjj-active .score-buttons { padding:4px 180px 6px 28px; flex-wrap:nowrap; }
+    .fight-timer-page:fullscreen .bjj-active .score-buttons button { min-height:34px; }
+    .fight-timer-page:fullscreen .bjj-active .victory-btn { margin:4px 20px 6px; }
+    .fight-timer-page:fullscreen .bjj-active .main-time { grid-row:2; grid-column:1; order:initial; justify-self:end; align-self:center; font-size:clamp(68px,15vh,140px); line-height:.82; padding:2px 24px; }
+    .fight-timer-page:fullscreen .bjj-active .sub-status { display:none; }
+    .fight-timer-page:fullscreen .bjj-active .progress-wrap { grid-row:3; grid-column:1; order:initial; width:calc(100vw - 24px); margin:2px 12px; height:6px; }
+    @media (max-width:768px) { .participant-grid { grid-template-columns:1fr; } .bracket-shell { padding:16px; } .bjj-scoreboard { width:100%; gap:8px; } .score-fighter { padding:9px 5px; } .score-buttons button { min-width:40px; padding:5px; } .bjj-active .score-fighter { grid-template-columns:90px 72px 1fr; min-height:145px; padding:0; } .bjj-active .score-points { font-size:76px; } .bjj-active .score-name { padding:10px 10px 2px; font-size:24px; } .bjj-active .score-buttons { padding:4px 10px; } .bjj-active .score-extra { font-size:0; gap:2px; } .bjj-active .score-extra b { font-size:30px; } .bjj-active .score-extra:first-child::before { content:'V'; font-size:12px; } .bjj-active .score-extra:last-child::before { content:'F'; font-size:12px; } .bjj-active .victory-btn { margin:3px 8px 8px; font-size:0; padding:8px; } .bjj-active .victory-btn i { font-size:14px; } .bjj-active .main-time { align-self:center; padding:12px 0 0; } .bjj-active .sub-status { align-self:center; margin:8px 0; } .fight-timer-page:fullscreen .bjj-active .score-buttons { padding:3px 48px 4px 8px; gap:3px; } .fight-timer-page:fullscreen .bjj-active .score-buttons button { min-width:34px; min-height:32px; } .fight-timer-page:fullscreen .bjj-active .score-name { padding:5px 8px 2px; } }
+    @media (max-width:768px) {
+        .fight-timer-page:fullscreen,
+        .fight-timer-page:fullscreen .fight-timer-shell,
+        .fight-timer-page:fullscreen .timer-main,
+        .fight-timer-page:fullscreen .bjj-scoreboard,
+        .fight-timer-page:fullscreen .score-fighter {
+            width:100%;
+            max-width:100%;
+            overflow-x:hidden;
+            box-sizing:border-box;
+        }
+
+        .fight-timer-page:fullscreen .bjj-active .score-fighter {
+            grid-template-columns:minmax(64px,27vw) minmax(58px,23vw) minmax(0,1fr);
+        }
+
+        .fight-timer-page:fullscreen .bjj-active .score-points {
+            min-width:0;
+            font-size:clamp(58px,24vw,90px);
+        }
+
+        .fight-timer-page:fullscreen .bjj-active .score-name {
+            min-width:0;
+            width:100%;
+            padding:4px 6px 2px 22px;
+            font-size:clamp(20px,8vw,30px);
+            overflow:hidden;
+            text-overflow:ellipsis;
+        }
+
+        .fight-timer-page:fullscreen .bjj-active .score-buttons {
+            min-width:0;
+            padding:3px 42px 4px 22px;
+            gap:4px;
+            flex-wrap:nowrap;
+            overflow:visible;
+        }
+
+        .fight-timer-page:fullscreen .bjj-active .score-buttons button {
+            min-width:30px;
+            width:30px;
+            padding:4px 2px;
+        }
+
+        .fight-timer-page:fullscreen .bjj-active .victory-btn {
+            margin:3px 5px 5px;
+            width:32px;
+            min-width:32px;
+        }
+
+        .fight-timer-page:fullscreen .bjj-active .score-extra button {
+            padding:0 2px;
+            font-size:19px;
+        }
+    }
 </style>
 
 <div class="fight-timer-page">
+
+    <div class="fight-tools-nav">
+        <button id="timerTab" class="active" type="button" onclick="showTool('timer')"><i class="fa-solid fa-stopwatch"></i> Cronómetro</button>
+        {% if request.user.is_superuser %}
+        <button id="bracketTab" type="button" onclick="showTool('bracket')"><i class="fa-solid fa-sitemap"></i> Llaves</button>
+        {% endif %}
+    </div>
+
+    <div id="timerPanel" class="tool-panel">
 
     <div id="timerShell" class="fight-timer-shell timer-state-stopped">
 
@@ -309,6 +463,8 @@
 
         <div class="timer-main">
 
+            <div id="currentFight" class="current-fight" hidden></div>
+
             <div id="roundLabel" class="round-label">
                 Stopped
             </div>
@@ -323,6 +479,35 @@
 
             <div class="progress-wrap">
                 <div id="progressBar" class="progress-bar-custom"></div>
+            </div>
+
+            <div id="bjjScoreboard" class="bjj-scoreboard" hidden>
+                <div class="score-fighter red">
+                    <div id="scoreNameA" class="score-name">Luchador rojo</div>
+                    <div id="pointsA" class="score-points">0</div>
+                    <div class="score-buttons">
+                        <button class="btn btn-light" type="button" onclick="addPoints('a', 1)">+1</button>
+                        <button class="btn btn-outline-light" type="button" onclick="addPoints('a', -1)">−1</button>
+                    </div>
+                    <div class="score-extras">
+                        <span class="score-extra">Ventajas <button type="button" onclick="changeExtra('a','advantages',-1)">−</button><b id="advantagesA">0</b><button type="button" onclick="changeExtra('a','advantages',1)">+</button></span>
+                        <span class="score-extra">Faltas <button type="button" onclick="changeExtra('a','penalties',-1)">−</button><b id="penaltiesA">0</b><button type="button" onclick="changeExtra('a','penalties',1)">+</button></span>
+                    </div>
+                    <button class="btn btn-danger victory-btn" type="button" onclick="finishFight('a')"><i class="fa-solid fa-trophy"></i> Dar victoria</button>
+                </div>
+                <div class="score-fighter blue">
+                    <div id="scoreNameB" class="score-name">Luchador azul</div>
+                    <div id="pointsB" class="score-points">0</div>
+                    <div class="score-buttons">
+                        <button class="btn btn-light" type="button" onclick="addPoints('b', 1)">+1</button>
+                        <button class="btn btn-outline-light" type="button" onclick="addPoints('b', -1)">−1</button>
+                    </div>
+                    <div class="score-extras">
+                        <span class="score-extra">Ventajas <button type="button" onclick="changeExtra('b','advantages',-1)">−</button><b id="advantagesB">0</b><button type="button" onclick="changeExtra('b','advantages',1)">+</button></span>
+                        <span class="score-extra">Faltas <button type="button" onclick="changeExtra('b','penalties',-1)">−</button><b id="penaltiesB">0</b><button type="button" onclick="changeExtra('b','penalties',1)">+</button></span>
+                    </div>
+                    <button class="btn btn-primary victory-btn" type="button" onclick="finishFight('b')"><i class="fa-solid fa-trophy"></i> Dar victoria</button>
+                </div>
             </div>
 
         </div>
@@ -379,6 +564,36 @@
         </div>
 
     </div>
+    </div>
+
+    {% if request.user.is_superuser %}
+    <div id="bracketPanel" class="tool-panel" hidden>
+        <div class="bracket-shell">
+            <div class="bracket-header">
+                <div><h2 class="mb-1">Llaves de lucha</h2><p class="text-muted mb-0">Crea los cruces y toca al ganador de cada combate.</p></div>
+                <select id="bracketSize" class="form-select" style="width:auto" onchange="buildParticipantInputs()"><option value="4">4 participantes</option><option value="8">8 participantes</option><option value="10">10 participantes</option><option value="12">12 participantes</option><option value="16">16 participantes</option></select>
+            </div>
+            <div id="bracketSetup">
+                <p class="text-muted mt-3 mb-0">Puedes dejar un campo vacío: se mostrará como BYE y el rival pasará automáticamente.</p>
+                <div id="participantInputs" class="participant-grid"></div>
+                <button class="btn btn-primary" type="button" onclick="createBracket()"><i class="fa-solid fa-sitemap"></i> Crear llaves</button>
+            </div>
+            <div id="bracketTournament" hidden>
+                <div class="bracket-actions"><p class="mb-0 text-muted">Selecciona un luchador para marcarlo como ganador.</p><button class="btn btn-outline-danger btn-sm" type="button" onclick="newBracket()">Nueva llave</button></div>
+                <div id="bracketBoard" class="bracket-board"></div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div id="championOverlay" class="champion-overlay" hidden>
+        <div class="champion-celebration">
+            <i class="fa-solid fa-trophy champion-trophy"></i>
+            <div class="champion-title">CAMPEÓN</div>
+            <div id="championName" class="champion-name"></div>
+            <button class="btn btn-warning champion-close" type="button" onclick="closeChampionScreen()">Ver llave completa</button>
+        </div>
+    </div>
 
 </div>
 
@@ -399,6 +614,8 @@
     let currentRound = 1;
     let remaining = duration;
     let running = false;
+    let paused = false;
+    let finished = false;
     let resting = false;
     let countdown = false;
     let countdownRemaining = 5;
@@ -532,7 +749,13 @@
         document.getElementById('restLabel').innerText = formatTime(rest);
         document.getElementById('roundsLabel').innerText = rounds === 0 ? '∞' : rounds;
 
-        if (!running) {
+        if (finished) {
+            mainTime.innerText = '00:00';
+            roundLabel.innerText = 'Finalizado';
+            subStatus.innerText = 'Selecciona al ganador';
+            modeText.innerText = 'Combate finalizado';
+            setVisualState('stopped');
+        } else if (!running && !paused) {
             mainTime.innerText = formatTime(duration);
             roundLabel.innerText = 'Stopped';
             subStatus.innerText = 'Ready';
@@ -563,6 +786,11 @@
             } else {
                 setVisualState('round');
             }
+        }
+
+        if (paused) {
+            subStatus.innerText = 'Pausado';
+            modeText.innerText = 'Pausa';
         }
 
         updateProgress();
@@ -598,6 +826,17 @@
             if (remaining <= 0) {
                 campana();
 
+                if (activeMatch && !resting) {
+                    clearInterval(interval);
+                    running = false;
+                    paused = false;
+                    finished = true;
+                    remaining = 0;
+                    document.getElementById('startBtn').innerHTML = '<i class="fa-solid fa-flag-checkered"></i> Finalizado';
+                    updateDisplay();
+                    return;
+                }
+
                 if (!resting) {
                     resting = true;
                     remaining = rest;
@@ -625,15 +864,28 @@
     }
 
     function toggleTimer() {
+        if (finished) return;
+
         if (running) {
             clearInterval(interval);
             running = false;
-            document.getElementById('startBtn').innerHTML = '<i class="fa-solid fa-play"></i> Start';
+            paused = true;
+            document.getElementById('startBtn').innerHTML = '<i class="fa-solid fa-play"></i> Continuar';
             updateDisplay();
             return;
         }
 
         iniciarAudio();
+
+        if (paused) {
+            running = true;
+            paused = false;
+            document.getElementById('startBtn').innerHTML = '<i class="fa-solid fa-pause"></i> Pausar';
+            startInterval();
+            updateDisplay();
+            return;
+        }
+
         running = true;
         countdown = true;
         countdownRemaining = 5;
@@ -651,6 +903,8 @@
     function resetTimer() {
         clearInterval(interval);
         running = false;
+        paused = false;
+        finished = false;
         resting = false;
         countdown = false;
         countdownRemaining = 5;
@@ -663,7 +917,7 @@
     }
 
     function changeDuration(value) {
-        if (running) return;
+        if (running || paused) return;
         duration = Math.max(60, duration + value);
         remaining = duration;
         currentTotal = duration;
@@ -671,13 +925,13 @@
     }
 
     function changeRest(value) {
-        if (running) return;
+        if (running || paused) return;
         rest = Math.max(0, rest + value);
         updateDisplay();
     }
 
     function changeRounds(value) {
-        if (running) return;
+        if (running || paused) return;
         rounds = Math.max(0, rounds + value);
         updateDisplay();
     }
@@ -703,7 +957,17 @@
         }
     }
 
+    document.addEventListener('fullscreenchange', function() {
+        const page = document.querySelector('.fight-timer-page');
+        window.scrollTo(0, 0);
+        if (page) {
+            page.scrollLeft = 0;
+            page.scrollTop = 0;
+        }
+    });
+
     document.addEventListener('keydown', function(event) {
+        if (event.target.matches('input, select, textarea')) return;
         const key = event.key.toLowerCase();
 
         if (key === ' ') {
@@ -720,8 +984,290 @@
         }
     });
 
+    let bracket = null;
+    const canManageBrackets = {{ request.user.is_superuser|yesno:"true,false" }};
+    const BYE = '__BYE__';
+    let activeMatch = null;
+    let score = {
+        a: {points: 0, advantages: 0, penalties: 0},
+        b: {points: 0, advantages: 0, penalties: 0}
+    };
+
+    function showTool(tool) {
+        if (tool === 'bracket' && !canManageBrackets) return;
+        document.getElementById('timerPanel').hidden = tool !== 'timer';
+        const bracketPanel = document.getElementById('bracketPanel');
+        const bracketTab = document.getElementById('bracketTab');
+        if (bracketPanel) bracketPanel.hidden = tool !== 'bracket';
+        document.getElementById('timerTab').classList.toggle('active', tool === 'timer');
+        if (bracketTab) bracketTab.classList.toggle('active', tool === 'bracket');
+    }
+
+    function buildParticipantInputs() {
+        const size = Number(document.getElementById('bracketSize').value);
+        const container = document.getElementById('participantInputs');
+        const previous = Array.from(container.querySelectorAll('input')).map(input => input.value);
+        container.innerHTML = '';
+
+        for (let index = 0; index < size; index++) {
+            const input = document.createElement('input');
+            input.className = 'participant-input';
+            input.placeholder = `Participante ${index + 1}`;
+            input.maxLength = 60;
+            input.value = (previous[index] || '').toUpperCase();
+            input.addEventListener('input', function() {
+                this.value = this.value.toUpperCase();
+            });
+            container.appendChild(input);
+        }
+    }
+
+    function createBracket() {
+        const configuredSize = Number(document.getElementById('bracketSize').value);
+        const names = Array.from(document.querySelectorAll('#participantInputs input'))
+            .map(input => input.value.trim().toUpperCase())
+            .filter(Boolean);
+
+        if (names.length < 2) {
+            alert('Escribe al menos dos participantes.');
+            return;
+        }
+
+        if (new Set(names.map(name => name.toLowerCase())).size !== names.length) {
+            alert('Los nombres de los participantes no pueden repetirse.');
+            return;
+        }
+
+        const rounds = [];
+        const bracketCapacity = 2 ** Math.ceil(Math.log2(configuredSize));
+        const byeCount = bracketCapacity - names.length;
+        const firstRound = [];
+        let nameIndex = 0;
+
+        for (let matchIndex = 0; matchIndex < bracketCapacity / 2; matchIndex++) {
+            const remainingByes = Math.max(0, byeCount - matchIndex);
+            const p1 = names[nameIndex++] || BYE;
+            const p2 = remainingByes > 0 ? BYE : (names[nameIndex++] || BYE);
+            firstRound.push({p1, p2, winner: null});
+        }
+
+        rounds.push(firstRound);
+        let matchCount = bracketCapacity / 2;
+
+        while (matchCount > 1) {
+            matchCount /= 2;
+            rounds.push(Array.from({length: matchCount}, () => ({p1: null, p2: null, winner: null})));
+        }
+
+        bracket = {names, configuredSize, capacity: bracketCapacity, rounds};
+        propagateBracket();
+        saveBracket();
+        renderBracket();
+    }
+
+    function resolveAutomaticWinner(match) {
+        if (!match.p1 || !match.p2) return null;
+        if (match.p1 === BYE && match.p2 === BYE) return BYE;
+        if (match.p1 === BYE) return match.p2;
+        if (match.p2 === BYE) return match.p1;
+        return match.winner === match.p1 || match.winner === match.p2 ? match.winner : null;
+    }
+
+    function propagateBracket() {
+        bracket.rounds[0].forEach(match => {
+            match.winner = resolveAutomaticWinner(match);
+        });
+
+        for (let roundIndex = 1; roundIndex < bracket.rounds.length; roundIndex++) {
+            bracket.rounds[roundIndex].forEach((match, matchIndex) => {
+                const sourceA = bracket.rounds[roundIndex - 1][matchIndex * 2];
+                const sourceB = bracket.rounds[roundIndex - 1][matchIndex * 2 + 1];
+                match.p1 = sourceA ? sourceA.winner : null;
+                match.p2 = sourceB ? sourceB.winner : null;
+                match.winner = resolveAutomaticWinner(match);
+            });
+        }
+    }
+
+    function chooseWinner(roundIndex, matchIndex, fighter) {
+        const match = bracket.rounds[roundIndex][matchIndex];
+        if (!fighter || fighter === BYE || (fighter !== match.p1 && fighter !== match.p2)) return;
+        match.winner = fighter;
+        propagateBracket();
+
+        saveBracket();
+        renderBracket();
+    }
+
+    function roundName(index) {
+        const remaining = bracket.rounds.length - index;
+        if (remaining === 1) return 'Final';
+        if (remaining === 2) return 'Semifinal';
+        if (remaining === 3) return 'Cuartos de final';
+        return 'Primera ronda';
+    }
+
+    function renderBracket() {
+        document.getElementById('bracketSetup').hidden = true;
+        document.getElementById('bracketTournament').hidden = false;
+        const board = document.getElementById('bracketBoard');
+        board.innerHTML = '';
+
+        bracket.rounds.forEach((round, roundIndex) => {
+            const column = document.createElement('section');
+            column.className = 'bracket-round';
+            const title = document.createElement('div');
+            title.className = 'round-title';
+            title.textContent = roundName(roundIndex);
+            column.appendChild(title);
+
+            round.forEach((match, matchIndex) => {
+                const card = document.createElement('div');
+                card.className = 'match-card';
+                [match.p1, match.p2].forEach((fighter, fighterIndex) => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    const isBye = fighter === BYE;
+                    button.className = `fighter-row${match.winner === fighter && fighter ? ' winner' : ''}${isBye ? ' bye' : ''}`;
+                    button.disabled = !fighter || isBye;
+                    button.textContent = isBye ? 'BYE' : (fighter || 'Por definir');
+                    if (match.winner === fighter && fighter && !isBye) button.innerHTML += ' <i class="fa-solid fa-check"></i>';
+                    button.onclick = () => chooseWinner(roundIndex, matchIndex, fighter);
+                    card.appendChild(button);
+                });
+
+                if (match.p1 && match.p2 && match.p1 !== BYE && match.p2 !== BYE) {
+                    const timerButton = document.createElement('button');
+                    timerButton.type = 'button';
+                    timerButton.className = 'btn btn-outline-primary btn-sm match-timer-btn';
+                    timerButton.innerHTML = '<i class="fa-solid fa-stopwatch"></i> Llevar al cronómetro';
+                    timerButton.onclick = () => loadFight(match.p1, match.p2, roundIndex, matchIndex);
+                    card.appendChild(timerButton);
+                }
+                column.appendChild(card);
+            });
+            board.appendChild(column);
+        });
+
+        const finalMatch = bracket.rounds[bracket.rounds.length - 1][0];
+        const championColumn = document.createElement('section');
+        championColumn.className = 'bracket-round';
+        const champion = finalMatch.winner && finalMatch.winner !== BYE ? finalMatch.winner : 'Por definir';
+        championColumn.innerHTML = `<div class="round-title">Campeón</div><div class="champion-card"><i class="fa-solid fa-trophy fa-2x text-warning mb-2"></i><h3>${champion}</h3></div>`;
+        board.appendChild(championColumn);
+    }
+
+    function loadFight(fighterA, fighterB, roundIndex, matchIndex) {
+        resetTimer();
+        activeMatch = {fighterA, fighterB, roundIndex, matchIndex};
+        score = {
+            a: {points: 0, advantages: 0, penalties: 0},
+            b: {points: 0, advantages: 0, penalties: 0}
+        };
+        const label = document.getElementById('currentFight');
+        label.textContent = `${fighterA}  VS  ${fighterB}`;
+        label.hidden = false;
+        document.getElementById('scoreNameA').textContent = fighterA;
+        document.getElementById('scoreNameB').textContent = fighterB;
+        document.getElementById('bjjScoreboard').hidden = false;
+        document.getElementById('timerShell').classList.add('bjj-active');
+        updateScoreboard();
+        showTool('timer');
+        window.scrollTo({top: 0, behavior: 'smooth'});
+    }
+
+    function addPoints(side, amount) {
+        if (!activeMatch) return;
+        score[side].points = Math.max(0, score[side].points + amount);
+        updateScoreboard();
+    }
+
+    function changeExtra(side, field, amount) {
+        if (!activeMatch) return;
+        score[side][field] = Math.max(0, score[side][field] + amount);
+        updateScoreboard();
+    }
+
+    function updateScoreboard() {
+        document.getElementById('pointsA').textContent = score.a.points;
+        document.getElementById('pointsB').textContent = score.b.points;
+        document.getElementById('advantagesA').textContent = score.a.advantages;
+        document.getElementById('advantagesB').textContent = score.b.advantages;
+        document.getElementById('penaltiesA').textContent = score.a.penalties;
+        document.getElementById('penaltiesB').textContent = score.b.penalties;
+    }
+
+    function finishFight(side) {
+        if (!activeMatch) return;
+        const winner = side === 'a' ? activeMatch.fighterA : activeMatch.fighterB;
+        const loser = side === 'a' ? activeMatch.fighterB : activeMatch.fighterA;
+        const isFinal = activeMatch.roundIndex === bracket.rounds.length - 1;
+        if (!confirm(`¿Confirmar la victoria de ${winner} sobre ${loser}?`)) return;
+
+        clearInterval(interval);
+        running = false;
+        paused = false;
+        finished = false;
+        chooseWinner(activeMatch.roundIndex, activeMatch.matchIndex, winner);
+        activeMatch = null;
+        document.getElementById('bjjScoreboard').hidden = true;
+        document.getElementById('currentFight').hidden = true;
+        document.getElementById('timerShell').classList.remove('bjj-active');
+        if (isFinal) {
+            showChampionScreen(winner);
+        } else {
+            showTool('bracket');
+        }
+    }
+
+    function showChampionScreen(winner) {
+        document.getElementById('championName').textContent = winner.toUpperCase();
+        document.getElementById('championOverlay').hidden = false;
+    }
+
+    function closeChampionScreen() {
+        document.getElementById('championOverlay').hidden = true;
+        showTool('bracket');
+    }
+
+    function saveBracket() {
+        localStorage.setItem('luchaBracket', JSON.stringify(bracket));
+    }
+
+    function newBracket() {
+        if (!confirm('¿Deseas borrar esta llave y crear una nueva?')) return;
+        document.getElementById('championOverlay').hidden = true;
+        bracket = null;
+        localStorage.removeItem('luchaBracket');
+        document.getElementById('bracketSetup').hidden = false;
+        document.getElementById('bracketTournament').hidden = true;
+        document.getElementById('currentFight').hidden = true;
+        document.getElementById('bjjScoreboard').hidden = true;
+        document.getElementById('timerShell').classList.remove('bjj-active');
+        activeMatch = null;
+        buildParticipantInputs();
+    }
+
+    function restoreBracket() {
+        if (!canManageBrackets) return;
+        buildParticipantInputs();
+        try {
+            const stored = JSON.parse(localStorage.getItem('luchaBracket'));
+            if (stored && Array.isArray(stored.rounds) && Array.isArray(stored.names)) {
+                bracket = stored;
+                bracket.configuredSize = stored.configuredSize || stored.names.length;
+                document.getElementById('bracketSize').value = String(bracket.configuredSize);
+                propagateBracket();
+                renderBracket();
+            }
+        } catch (error) {
+            localStorage.removeItem('luchaBracket');
+        }
+    }
+
     updateDisplay();
     updateClock();
+    restoreBracket();
     setInterval(updateClock, 1000);
 </script>
 

@@ -22,6 +22,42 @@ from config.file_validation import (
 import base64
 
 
+class CronometroLlavesPermisosTests(TestCase):
+    def setUp(self):
+        self.User = get_user_model()
+        self.usuario = self.User.objects.create_user(
+            username='usuario_cronometro',
+            password='Clave123!',
+        )
+        self.superusuario = self.User.objects.create_superuser(
+            username='admin_llaves',
+            password='Clave123!',
+            email='admin@example.com',
+        )
+
+    def test_usuario_normal_ve_cronometro_sin_modulo_de_llaves(self):
+        self.client.force_login(self.usuario)
+
+        response = self.client.get(reverse('gestion:cronometro_lucha'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="timerTab"')
+        self.assertNotContains(response, 'id="bracketTab"')
+        self.assertNotContains(response, 'id="bracketPanel"')
+
+    def test_superusuario_ve_llaves_y_tamanos_ampliados(self):
+        self.client.force_login(self.superusuario)
+
+        response = self.client.get(reverse('gestion:cronometro_lucha'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="bracketTab"')
+        self.assertContains(response, '10 participantes')
+        self.assertContains(response, '12 participantes')
+        self.assertContains(response, '16 participantes')
+        self.assertContains(response, 'BYE')
+
+
 class CambioNombreUsuarioTests(TestCase):
     def setUp(self):
         self.User = get_user_model()
