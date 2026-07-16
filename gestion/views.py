@@ -16,13 +16,17 @@ from io import BytesIO
 import base64
 from reportlab.pdfgen import canvas
 from django.http import HttpResponse
+from django.http import JsonResponse, Http404
 from .forms import CambioPasswordObligatorioForm, CambiarUsuarioForm
 from django.contrib.auth import update_session_auth_hash
 import random
+import json
+import secrets
 from django.contrib.auth.hashers import make_password
 from django.contrib.admin.views.decorators import staff_member_required
 from django.db.models.manager import BaseManager
 from django.shortcuts import render, redirect
+from django.urls import reverse
 from django.contrib import messages
 
 from alumnos.models import Alumno
@@ -57,7 +61,7 @@ from django.db import IntegrityError, models, transaction
 
 from django.contrib.auth import authenticate
 from django.views.decorators.http import require_POST
-from .models import DiaHorario, HoraHorario
+from .models import DiaHorario, HoraHorario, SesionTV, estado_tv_inicial
 from .forms import DiaHorarioForm, HoraHorarioForm
 
 from .forms import PagoAlumnoForm
@@ -156,10 +160,12 @@ def home_publica(request):
         dia=dia_actual
     ).order_by('hora_inicio')
 
+    # El panel "Entrenando ahora" solo muestra la clase que está ocurriendo.
+    # La ventana anticipada de 20 minutos se usa únicamente para confirmar.
     clase_en_ventana = clases_hoy.filter(
-        hora_inicio__lte=(ahora + timedelta(minutes=20)).time(),
-        hora_fin__gte=hora_actual,
-    )
+        hora_inicio__lte=hora_actual,
+        hora_fin__gt=hora_actual,
+    ).order_by('hora_inicio')[:1]
 
     asistencias_hoy = AsistenciaClase.objects.filter(
         fecha_clase=hoy,
@@ -1966,6 +1972,31 @@ def confirmar_clase_home(request):
     ahora = timezone.localtime()
     hoy = ahora.date()
 
+    dias_semana = {
+        0: ClaseProgramada.DiasSemana.LUNES,
+        1: ClaseProgramada.DiasSemana.MARTES,
+        2: ClaseProgramada.DiasSemana.MIERCOLES,
+        3: ClaseProgramada.DiasSemana.JUEVES,
+        4: ClaseProgramada.DiasSemana.VIERNES,
+        5: ClaseProgramada.DiasSemana.SABADO,
+        6: ClaseProgramada.DiasSemana.DOMINGO,
+    }
+    inicio_clase = timezone.make_aware(
+        datetime.combine(hoy, clase.hora_inicio),
+        timezone.get_current_timezone(),
+    )
+    ventana_inicio = inicio_clase - timedelta(minutes=20)
+    ventana_fin = inicio_clase + timedelta(minutes=30)
+
+    if clase.dia != dias_semana[ahora.weekday()] or not (
+        ventana_inicio <= ahora <= ventana_fin
+    ):
+        messages.error(
+            request,
+            'Esta clase ya no está disponible para confirmar. Actualiza la página y selecciona la clase vigente.',
+        )
+        return redirect('gestion:home_publica')
+
     suscripcion = Suscripcion.objects.filter(
         alumno=alumno,
         estado='ACTIVA'
@@ -2155,3 +2186,169 @@ def crear_hora_horario(request):
 @login_required
 def cronometro_lucha(request):
     return render(request, 'gestion/cronometro_lucha.html')
+
+
+def _clase_tv_payload():
+    ahora = timezone.localtime()
+    dias = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO', 'DOMINGO']
+    clases = ClaseProgramada.objects.filter(
+        activa=True,
+        dia=dias[ahora.weekday()],
+    ).select_related('instructor').order_by('hora_inicio')
+    clase = clases.filter(
+        hora_inicio__lte=(ahora + timedelta(minutes=20)).time(),
+        hora_fin__gte=ahora.time(),
+    ).first()
+    if not clase:
+        clase = clases.filter(hora_inicio__gt=ahora.time()).first()
+    if not clase:
+        return {'active': False, 'title': 'SIN CLASE PROGRAMADA', 'attendees': [], 'total': 0}
+
+    asistencias = AsistenciaClase.objects.filter(
+        clase=clase,
+        fecha_clase=ahora.date(),
+        estado=AsistenciaClase.Estados.CONFIRMADA,
+    ).select_related('alumno__user').order_by('alumno__user__first_name')
+    nombres = [str(asistencia.alumno).upper() for asistencia in asistencias]
+    return {
+        'active': clase.hora_inicio <= ahora.time() <= clase.hora_fin,
+        'title': (clase.titulo or clase.get_disciplina_display()).upper(),
+        'discipline': clase.get_disciplina_display().upper(),
+        'time': f'{clase.hora_inicio:%H:%M} - {clase.hora_fin:%H:%M}',
+        'instructor': str(clase.instructor).upper(),
+        'attendees': nombres,
+        'total': len(nombres),
+        'capacity': clase.cupo_maximo,
+    }
+
+
+def _estado_tv_actual(sesion, guardar=True):
+    estado = {**estado_tv_inicial(), **(sesion.estado or {})}
+    if estado['running'] and estado.get('started_at'):
+        inicio = datetime.fromisoformat(estado['started_at'])
+        if timezone.is_naive(inicio):
+            inicio = timezone.make_aware(inicio)
+        transcurrido = int((timezone.now() - inicio).total_seconds())
+        restante = max(0, int(estado['remaining']) - transcurrido)
+        if restante == 0:
+            estado['remaining'] = 0
+            estado['running'] = False
+            estado['started_at'] = None
+            if guardar:
+                sesion.estado = estado
+                sesion.save(update_fields=['estado', 'actualizada'])
+        else:
+            estado['display_remaining'] = restante
+    estado.setdefault('display_remaining', estado['remaining'])
+    return estado
+
+
+@staff_member_required
+def control_tv(request):
+    sesion = SesionTV.objects.filter(
+        propietario=request.user,
+        activa=True,
+        expira_en__gt=timezone.now(),
+    ).first()
+    if not sesion:
+        while True:
+            codigo = f'{secrets.randbelow(1000000):06d}'
+            if not SesionTV.objects.filter(codigo=codigo).exists():
+                break
+        sesion = SesionTV.objects.create(
+            propietario=request.user,
+            codigo=codigo,
+            expira_en=timezone.now() + timedelta(hours=12),
+        )
+    return render(request, 'gestion/control_tv.html', {
+        'sesion_tv': sesion,
+        'tv_url': request.build_absolute_uri(
+            reverse('gestion:pantalla_tv', kwargs={'token': sesion.token})
+        ),
+    })
+
+
+def vincular_tv(request):
+    error = None
+    if request.method == 'POST':
+        codigo = request.POST.get('codigo', '').strip()
+        sesion = SesionTV.objects.filter(
+            codigo=codigo,
+            activa=True,
+            expira_en__gt=timezone.now(),
+        ).first()
+        if sesion:
+            return redirect('gestion:pantalla_tv', token=sesion.token)
+        error = 'El código no existe o ya venció.'
+    return render(request, 'gestion/vincular_tv.html', {'error': error})
+
+
+def pantalla_tv(request, token):
+    sesion = get_object_or_404(SesionTV, token=token)
+    if not sesion.vigente:
+        raise Http404('Sesión TV vencida')
+    return render(request, 'gestion/pantalla_tv.html', {'sesion_tv': sesion})
+
+
+def estado_tv(request, token):
+    sesion = get_object_or_404(SesionTV, token=token)
+    if not sesion.vigente:
+        return JsonResponse({'error': 'Sesión vencida'}, status=410)
+    return JsonResponse({
+        'state': _estado_tv_actual(sesion),
+        'class': _clase_tv_payload(),
+        'server_time': timezone.localtime().isoformat(),
+    })
+
+
+@staff_member_required
+@require_POST
+def accion_tv(request, token):
+    sesion = get_object_or_404(SesionTV, token=token, propietario=request.user)
+    if not sesion.vigente:
+        return JsonResponse({'error': 'Sesión vencida'}, status=410)
+    estado = _estado_tv_actual(sesion, guardar=False)
+    estado['remaining'] = estado.pop('display_remaining', estado['remaining'])
+    accion = request.POST.get('action', '')
+
+    if accion == 'mode':
+        estado['mode'] = request.POST.get('value') if request.POST.get('value') in {'overview', 'timer'} else 'overview'
+    elif accion == 'start' and estado['remaining'] > 0:
+        estado['running'] = True
+        estado['started_at'] = timezone.now().isoformat()
+    elif accion == 'pause':
+        estado['running'] = False
+        estado['started_at'] = None
+    elif accion == 'reset':
+        estado['running'] = False
+        estado['started_at'] = None
+        estado['remaining'] = int(estado['duration'])
+    elif accion == 'duration':
+        minutos = max(1, min(60, int(request.POST.get('value', 5))))
+        estado['duration'] = minutos * 60
+        estado['remaining'] = estado['duration']
+        estado['running'] = False
+        estado['started_at'] = None
+    elif accion == 'names':
+        estado['red_name'] = request.POST.get('red_name', '')[:60].upper() or 'COMPETIDOR ROJO'
+        estado['blue_name'] = request.POST.get('blue_name', '')[:60].upper() or 'COMPETIDOR AZUL'
+    elif accion in {'red_points', 'blue_points', 'red_advantages', 'blue_advantages', 'red_penalties', 'blue_penalties'}:
+        delta = 1 if request.POST.get('delta') == '1' else -1
+        estado[accion] = max(0, int(estado.get(accion, 0)) + delta)
+
+    if estado['running'] and accion != 'start':
+        estado['started_at'] = timezone.now().isoformat()
+
+    sesion.estado = estado
+    sesion.save(update_fields=['estado', 'actualizada'])
+    return JsonResponse({'state': _estado_tv_actual(sesion, guardar=False)})
+
+
+@staff_member_required
+@require_POST
+def renovar_tv(request, token):
+    sesion = get_object_or_404(SesionTV, token=token, propietario=request.user)
+    sesion.expira_en = timezone.now() + timedelta(hours=12)
+    sesion.activa = True
+    sesion.save(update_fields=['expira_en', 'activa', 'actualizada'])
+    return JsonResponse({'ok': True, 'expires': sesion.expira_en.isoformat()})

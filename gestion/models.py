@@ -1,5 +1,8 @@
 from django.db import models
 from django.core.exceptions import ValidationError
+from django.conf import settings
+from django.utils import timezone
+import uuid
 
 # Create your models here.
 
@@ -107,3 +110,46 @@ class HoraHorario(models.Model):
 
     def __str__(self):
         return self.hora.strftime('%H:%M')
+
+
+def estado_tv_inicial():
+    return {
+        'mode': 'overview',
+        'duration': 300,
+        'remaining': 300,
+        'running': False,
+        'started_at': None,
+        'red_name': 'COMPETIDOR ROJO',
+        'blue_name': 'COMPETIDOR AZUL',
+        'red_points': 0,
+        'blue_points': 0,
+        'red_advantages': 0,
+        'blue_advantages': 0,
+        'red_penalties': 0,
+        'blue_penalties': 0,
+    }
+
+
+class SesionTV(models.Model):
+    propietario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='sesiones_tv',
+    )
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    codigo = models.CharField(max_length=6, unique=True)
+    estado = models.JSONField(default=estado_tv_inicial)
+    activa = models.BooleanField(default=True)
+    expira_en = models.DateTimeField()
+    creada = models.DateTimeField(auto_now_add=True)
+    actualizada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-creada']
+
+    @property
+    def vigente(self):
+        return self.activa and self.expira_en > timezone.now()
+
+    def __str__(self):
+        return f'Modo TV {self.codigo}'

@@ -4,9 +4,10 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
-from datetime import date, time, timedelta
+from datetime import date, datetime, time, timedelta
 
 from alumnos.models import Alumno
 from finanzas.models import CuentaFinanciera, MovimientoFinanciero
@@ -19,6 +20,7 @@ from config.file_validation import (
     validate_image,
     validate_payment_receipt,
 )
+from gestion.models import SesionTV
 import base64
 
 
@@ -56,6 +58,61 @@ class CronometroLlavesPermisosTests(TestCase):
         self.assertContains(response, '12 participantes')
         self.assertContains(response, '16 participantes')
         self.assertContains(response, 'BYE')
+
+
+class ModoTVTests(TestCase):
+    def setUp(self):
+        self.staff = get_user_model().objects.create_user(
+            username='profesor_tv', password='Clave123!', is_staff=True
+        )
+        self.otro_staff = get_user_model().objects.create_user(
+            username='otro_profesor', password='Clave123!', is_staff=True
+        )
+
+    def test_control_crea_sesion_temporal_para_staff(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(reverse('gestion:control_tv'))
+
+        self.assertEqual(response.status_code, 200)
+        sesion = SesionTV.objects.get(propietario=self.staff)
+        self.assertEqual(len(sesion.codigo), 6)
+        self.assertContains(response, sesion.codigo)
+
+    def test_tv_se_vincula_por_codigo_y_estado_es_publico(self):
+        sesion = SesionTV.objects.create(
+            propietario=self.staff,
+            codigo='123456',
+            expira_en=timezone.now() + timedelta(hours=1),
+        )
+        response = self.client.post(reverse('gestion:vincular_tv'), {'codigo': '123456'})
+        self.assertRedirects(response, reverse('gestion:pantalla_tv', args=[sesion.token]))
+
+        estado = self.client.get(reverse('gestion:estado_tv', args=[sesion.token]))
+        self.assertEqual(estado.status_code, 200)
+        self.assertIn('class', estado.json())
+        self.assertEqual(estado.json()['state']['mode'], 'overview')
+
+    def test_solo_propietario_puede_controlar_sesion(self):
+        sesion = SesionTV.objects.create(
+            propietario=self.staff,
+            codigo='654321',
+            expira_en=timezone.now() + timedelta(hours=1),
+        )
+        self.client.force_login(self.otro_staff)
+        response = self.client.post(
+            reverse('gestion:accion_tv', args=[sesion.token]),
+            {'action': 'red_points', 'delta': '1'},
+        )
+        self.assertEqual(response.status_code, 404)
+
+        self.client.force_login(self.staff)
+        response = self.client.post(
+            reverse('gestion:accion_tv', args=[sesion.token]),
+            {'action': 'red_points', 'delta': '1'},
+        )
+        self.assertEqual(response.status_code, 200)
+        sesion.refresh_from_db()
+        self.assertEqual(sesion.estado['red_points'], 1)
 
 
 class CambioNombreUsuarioTests(TestCase):
@@ -406,7 +463,7 @@ class CalendarioAsistenciaTests(TestCase):
         self.assertIn(settings.LOGIN_URL, response.url)
 
     def test_confirmacion_home_funciona_con_plan_legacy_sin_flags(self):
-        hoy = date.today()
+        hoy = date(2026, 7, 15)
         plan = Plan.objects.create(
             nombre='Plan legacy confirmación',
             precio='100000',
@@ -421,14 +478,16 @@ class CalendarioAsistenciaTests(TestCase):
             estado=Suscripcion.Estados.ACTIVA,
         )
 
-        response = self.client.post(
-            reverse('gestion:confirmar_clase_home'),
-            {
-                'clase_id': self.clase.id,
-                'username': 'alumno_calendario',
-                'password': 'clave-alumno',
-            },
-        )
+        momento_clase = timezone.make_aware(datetime(2026, 7, 15, 18, 5))
+        with patch('gestion.views.timezone.localtime', return_value=momento_clase):
+            response = self.client.post(
+                reverse('gestion:confirmar_clase_home'),
+                {
+                    'clase_id': self.clase.id,
+                    'username': 'alumno_calendario',
+                    'password': 'clave-alumno',
+                },
+            )
 
         self.assertRedirects(response, reverse('gestion:home_publica'))
         self.assertTrue(AsistenciaClase.objects.filter(
@@ -437,6 +496,55 @@ class CalendarioAsistenciaTests(TestCase):
             fecha_clase=hoy,
             estado=AsistenciaClase.Estados.CONFIRMADA,
         ).exists())
+
+    def test_panel_solo_muestra_asistentes_de_clase_realmente_activa(self):
+        siguiente = ClaseProgramada.objects.create(
+            dia=ClaseProgramada.DiasSemana.MIERCOLES,
+            hora_inicio=time(19, 0),
+            hora_fin=time(20, 0),
+            disciplina=ClaseProgramada.Disciplinas.JIU_JITSU,
+            titulo='Clase siguiente',
+            instructor=self.instructor,
+        )
+        hoy = date(2026, 7, 15)
+        asistencia_actual = AsistenciaClase.objects.create(
+            alumno=self.alumno,
+            clase=self.clase,
+            fecha_clase=hoy,
+            estado=AsistenciaClase.Estados.CONFIRMADA,
+        )
+        otro_usuario = get_user_model().objects.create_user(
+            username='alumno_siguiente', password='clave'
+        )
+        otro_alumno = Alumno.objects.create(user=otro_usuario, documento='CAL-002')
+        AsistenciaClase.objects.create(
+            alumno=otro_alumno,
+            clase=siguiente,
+            fecha_clase=hoy,
+            estado=AsistenciaClase.Estados.CONFIRMADA,
+        )
+
+        momento = timezone.make_aware(datetime(2026, 7, 15, 18, 45))
+        with patch('gestion.views.timezone.localtime', return_value=momento):
+            response = self.client.get(reverse('gestion:home_publica'))
+
+        ids = list(response.context['asistencias_hoy'].values_list('id', flat=True))
+        self.assertEqual(ids, [asistencia_actual.id])
+
+    def test_formulario_vencido_no_confirma_otra_clase(self):
+        momento = timezone.make_aware(datetime(2026, 7, 15, 20, 0))
+        with patch('gestion.views.timezone.localtime', return_value=momento):
+            response = self.client.post(
+                reverse('gestion:confirmar_clase_home'),
+                {
+                    'clase_id': self.clase.id,
+                    'username': 'alumno_calendario',
+                    'password': 'clave-alumno',
+                },
+            )
+
+        self.assertRedirects(response, reverse('gestion:home_publica'))
+        self.assertFalse(AsistenciaClase.objects.filter(alumno=self.alumno).exists())
 
     def test_calendario_solo_marca_asistencias_confirmadas_del_alumno(self):
         AsistenciaClase.objects.create(

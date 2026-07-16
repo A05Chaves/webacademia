@@ -137,4 +137,10 @@ urlpatterns = [
         views.cronometro_lucha,
         name='cronometro_lucha'
     ),
+    path('modo-tv/', views.vincular_tv, name='vincular_tv'),
+    path('modo-tv/control/', views.control_tv, name='control_tv'),
+    path('modo-tv/pantalla/<uuid:token>/', views.pantalla_tv, name='pantalla_tv'),
+    path('modo-tv/estado/<uuid:token>/', views.estado_tv, name='estado_tv'),
+    path('modo-tv/accion/<uuid:token>/', views.accion_tv, name='accion_tv'),
+    path('modo-tv/renovar/<uuid:token>/', views.renovar_tv, name='renovar_tv'),
 ]
