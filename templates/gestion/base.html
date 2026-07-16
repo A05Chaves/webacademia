@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -52,6 +53,24 @@
         .navbar-brand {
             color: var(--text-main) !important;
             font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 0;
+        }
+
+        .navbar-brand-logo {
+            display: block;
+            width: auto;
+            height: 44px;
+            max-width: 118px;
+            object-fit: contain;
+        }
+
+        @media (max-width: 575.98px) {
+            .navbar-brand-logo {
+                height: 38px;
+                max-width: 102px;
+            }
         }
 
         .navbar-toggler {
@@ -253,8 +272,9 @@
     <div class="container-fluid">
 
         <a class="navbar-brand" href="{% if user.is_authenticated %}{% url 'gestion:horario_clases' %}{% else %}{% url 'gestion:home_publica' %}{% endif %}">
-            <i class="fa-solid fa-user-ninja"></i>
-            Academia
+            <img src="{% static 'img/galeras-bjj-logo.png' %}"
+                 class="navbar-brand-logo"
+                 alt="Galeras BJJ">
         </a>
 
         {% if not user.is_authenticated %}
