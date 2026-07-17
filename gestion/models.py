@@ -119,6 +119,8 @@ def estado_tv_inicial():
         'remaining': 300,
         'running': False,
         'started_at': None,
+        'warning_done': False,
+        'sound_event': None,
         'red_name': 'COMPETIDOR ROJO',
         'blue_name': 'COMPETIDOR AZUL',
         'red_points': 0,
@@ -127,6 +129,7 @@ def estado_tv_inicial():
         'blue_advantages': 0,
         'red_penalties': 0,
         'blue_penalties': 0,
+        'bracket': None,
     }
 
 

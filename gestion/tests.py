@@ -114,6 +114,50 @@ class ModoTVTests(TestCase):
         sesion.refresh_from_db()
         self.assertEqual(sesion.estado['red_points'], 1)
 
+    def test_inicio_emite_campana_y_reinicio_limpia_marcador(self):
+        sesion = SesionTV.objects.create(
+            propietario=self.staff,
+            codigo='111111',
+            expira_en=timezone.now() + timedelta(hours=1),
+        )
+        self.client.force_login(self.staff)
+        url = reverse('gestion:accion_tv', args=[sesion.token])
+        inicio = self.client.post(url, {'action': 'start'})
+        self.assertEqual(inicio.json()['state']['sound_event']['type'], 'bell')
+        self.client.post(url, {'action': 'pause'})
+        self.client.post(url, {'action': 'red_points', 'delta': '1'})
+        self.client.post(url, {
+            'action': 'names', 'red_name': 'Carlos', 'blue_name': 'Miguel'
+        })
+        self.client.post(url, {'action': 'reset'})
+        sesion.refresh_from_db()
+        self.assertEqual(sesion.estado['red_points'], 0)
+        self.assertEqual(sesion.estado['red_name'], 'COMPETIDOR ROJO')
+        self.assertEqual(sesion.estado['remaining'], 300)
+
+    def test_llave_tv_se_crea_y_avanza_desde_control(self):
+        sesion = SesionTV.objects.create(
+            propietario=self.staff,
+            codigo='222222',
+            expira_en=timezone.now() + timedelta(hours=1),
+        )
+        self.client.force_login(self.staff)
+        url = reverse('gestion:accion_tv', args=[sesion.token])
+        response = self.client.post(url, {
+            'action': 'bracket_create',
+            'size': '4',
+            'names': 'ANA\nBEATRIZ\nCARLA',
+        })
+        self.assertEqual(response.status_code, 200)
+        bracket = response.json()['state']['bracket']
+        self.assertEqual(bracket['rounds'][0][0]['winner'], 'ANA')
+        response = self.client.post(url, {
+            'action': 'bracket_winner', 'round': '0', 'match': '1', 'winner': 'BEATRIZ'
+        })
+        final = response.json()['state']['bracket']['rounds'][1][0]
+        self.assertEqual(final['p1'], 'ANA')
+        self.assertEqual(final['p2'], 'BEATRIZ')
+
 
 class CambioNombreUsuarioTests(TestCase):
     def setUp(self):

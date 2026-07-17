@@ -2230,17 +2230,81 @@ def _estado_tv_actual(sesion, guardar=True):
             inicio = timezone.make_aware(inicio)
         transcurrido = int((timezone.now() - inicio).total_seconds())
         restante = max(0, int(estado['remaining']) - transcurrido)
+        cambio = False
+        if 0 < restante <= 10 and not estado.get('warning_done'):
+            estado['warning_done'] = True
+            estado['sound_event'] = {
+                'type': 'claps', 'id': timezone.now().isoformat()
+            }
+            cambio = True
         if restante == 0:
             estado['remaining'] = 0
             estado['running'] = False
             estado['started_at'] = None
-            if guardar:
-                sesion.estado = estado
-                sesion.save(update_fields=['estado', 'actualizada'])
+            estado['sound_event'] = {
+                'type': 'bell', 'id': timezone.now().isoformat()
+            }
+            cambio = True
         else:
             estado['display_remaining'] = restante
+        if cambio and guardar:
+            sesion.estado = estado
+            sesion.save(update_fields=['estado', 'actualizada'])
     estado.setdefault('display_remaining', estado['remaining'])
     return estado
+
+
+def _resolver_bye_tv(match):
+    p1, p2 = match.get('p1'), match.get('p2')
+    if not p1 or not p2:
+        return None
+    if p1 == '__BYE__' and p2 == '__BYE__':
+        return '__BYE__'
+    if p1 == '__BYE__':
+        return p2
+    if p2 == '__BYE__':
+        return p1
+    return match.get('winner') if match.get('winner') in {p1, p2} else None
+
+
+def _propagar_llave_tv(bracket):
+    for match in bracket['rounds'][0]:
+        match['winner'] = _resolver_bye_tv(match)
+    for round_index in range(1, len(bracket['rounds'])):
+        previous = bracket['rounds'][round_index - 1]
+        for match_index, match in enumerate(bracket['rounds'][round_index]):
+            match['p1'] = previous[match_index * 2]['winner']
+            match['p2'] = previous[match_index * 2 + 1]['winner']
+            match['winner'] = _resolver_bye_tv(match)
+
+
+def _crear_llave_tv(names, configured_size):
+    capacity = 1
+    while capacity < configured_size:
+        capacity *= 2
+    bye_count = capacity - len(names)
+    first_round = []
+    name_index = 0
+    for match_index in range(capacity // 2):
+        p1 = names[name_index] if name_index < len(names) else '__BYE__'
+        name_index += 1
+        if match_index < bye_count:
+            p2 = '__BYE__'
+        else:
+            p2 = names[name_index] if name_index < len(names) else '__BYE__'
+            name_index += 1
+        first_round.append({'p1': p1, 'p2': p2, 'winner': None})
+    rounds = [first_round]
+    match_count = capacity // 2
+    while match_count > 1:
+        match_count //= 2
+        rounds.append([
+            {'p1': None, 'p2': None, 'winner': None}
+            for _ in range(match_count)
+        ])
+    bracket = {'size': configured_size, 'names': names, 'rounds': rounds}
+    _propagar_llave_tv(bracket)
+    return bracket
 
 
 @staff_member_required
@@ -2312,17 +2376,25 @@ def accion_tv(request, token):
     accion = request.POST.get('action', '')
 
     if accion == 'mode':
-        estado['mode'] = request.POST.get('value') if request.POST.get('value') in {'overview', 'timer'} else 'overview'
+        estado['mode'] = request.POST.get('value') if request.POST.get('value') in {'overview', 'timer', 'bracket'} else 'overview'
     elif accion == 'start' and estado['remaining'] > 0:
+        inicio_nuevo = estado['remaining'] == estado['duration']
         estado['running'] = True
         estado['started_at'] = timezone.now().isoformat()
+        if inicio_nuevo:
+            estado['warning_done'] = False
+            estado['sound_event'] = {
+                'type': 'bell', 'id': timezone.now().isoformat()
+            }
     elif accion == 'pause':
         estado['running'] = False
         estado['started_at'] = None
     elif accion == 'reset':
-        estado['running'] = False
-        estado['started_at'] = None
-        estado['remaining'] = int(estado['duration'])
+        mode = estado.get('mode', 'timer')
+        bracket = estado.get('bracket')
+        estado = estado_tv_inicial()
+        estado['mode'] = mode
+        estado['bracket'] = bracket
     elif accion == 'duration':
         minutos = max(1, min(60, int(request.POST.get('value', 5))))
         estado['duration'] = minutos * 60
@@ -2335,6 +2407,34 @@ def accion_tv(request, token):
     elif accion in {'red_points', 'blue_points', 'red_advantages', 'blue_advantages', 'red_penalties', 'blue_penalties'}:
         delta = 1 if request.POST.get('delta') == '1' else -1
         estado[accion] = max(0, int(estado.get(accion, 0)) + delta)
+    elif accion == 'bracket_create':
+        try:
+            size = int(request.POST.get('size', 4))
+        except ValueError:
+            size = 4
+        size = size if size in {4, 8, 10, 12, 16} else 4
+        names = [
+            name.strip().upper()[:60]
+            for name in request.POST.get('names', '').splitlines()
+            if name.strip()
+        ][:size]
+        if len(names) < 2 or len(set(names)) != len(names):
+            return JsonResponse({'error': 'Ingresa al menos dos nombres diferentes.'}, status=400)
+        estado['bracket'] = _crear_llave_tv(names, size)
+        estado['mode'] = 'bracket'
+    elif accion == 'bracket_winner':
+        bracket = estado.get('bracket')
+        try:
+            round_index = int(request.POST.get('round'))
+            match_index = int(request.POST.get('match'))
+            winner = request.POST.get('winner', '')
+            match = bracket['rounds'][round_index][match_index]
+        except (TypeError, ValueError, IndexError, KeyError):
+            return JsonResponse({'error': 'Combate no válido.'}, status=400)
+        if winner not in {match.get('p1'), match.get('p2')} or winner == '__BYE__':
+            return JsonResponse({'error': 'Ganador no válido.'}, status=400)
+        match['winner'] = winner
+        _propagar_llave_tv(bracket)
 
     if estado['running'] and accion != 'start':
         estado['started_at'] = timezone.now().isoformat()
