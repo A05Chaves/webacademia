@@ -170,11 +170,13 @@ class ModoTVTests(TestCase):
         self.client.post(url, {
             'action': 'names', 'red_name': 'Carlos', 'blue_name': 'Miguel'
         })
+        self.client.post(url, {'action': 'duration', 'value': '7'})
         self.client.post(url, {'action': 'reset'})
         sesion.refresh_from_db()
         self.assertEqual(sesion.estado['red_points'], 0)
         self.assertEqual(sesion.estado['red_name'], 'COMPETIDOR ROJO')
-        self.assertEqual(sesion.estado['remaining'], 300)
+        self.assertEqual(sesion.estado['duration'], 420)
+        self.assertEqual(sesion.estado['remaining'], 420)
 
     def test_llave_tv_se_crea_y_avanza_desde_control(self):
         sesion = SesionTV.objects.create(
@@ -184,6 +186,7 @@ class ModoTVTests(TestCase):
         )
         self.client.force_login(self.staff)
         url = reverse('gestion:accion_tv', args=[sesion.token])
+        self.client.post(url, {'action': 'duration', 'value': '7'})
         response = self.client.post(url, {
             'action': 'bracket_create',
             'size': '4',
@@ -204,6 +207,8 @@ class ModoTVTests(TestCase):
         })
         state = response.json()['state']
         self.assertEqual(state['mode'], 'timer')
+        self.assertEqual(state['duration'], 420)
+        self.assertEqual(state['remaining'], 420)
         self.assertEqual(state['red_name'], 'ANA')
         self.assertEqual(state['blue_name'], 'BEATRIZ')
         self.assertIsNotNone(state['active_match'])

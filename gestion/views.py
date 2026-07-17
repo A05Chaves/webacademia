@@ -2436,9 +2436,12 @@ def accion_tv(request, token):
     elif accion == 'reset':
         mode = estado.get('mode', 'timer')
         bracket = estado.get('bracket')
+        duration = estado.get('duration', 300)
         estado = estado_tv_inicial()
         estado['mode'] = mode
         estado['bracket'] = bracket
+        estado['duration'] = duration
+        estado['remaining'] = duration
     elif accion == 'duration':
         minutos = max(1, min(60, int(request.POST.get('value', 5))))
         estado['duration'] = minutos * 60
@@ -2492,9 +2495,12 @@ def accion_tv(request, token):
             return JsonResponse({'error': 'Combate no válido.'}, status=400)
         if not p1 or not p2 or '__BYE__' in {p1, p2}:
             return JsonResponse({'error': 'Este combate aún no está listo.'}, status=400)
+        duration = estado.get('duration', 300)
         estado_nuevo = estado_tv_inicial()
         estado_nuevo['mode'] = 'timer'
         estado_nuevo['bracket'] = bracket
+        estado_nuevo['duration'] = duration
+        estado_nuevo['remaining'] = duration
         estado_nuevo['red_name'] = p1
         estado_nuevo['blue_name'] = p2
         estado_nuevo['active_match'] = {
