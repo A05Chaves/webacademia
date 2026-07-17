@@ -2435,6 +2435,44 @@ def accion_tv(request, token):
             return JsonResponse({'error': 'Ganador no válido.'}, status=400)
         match['winner'] = winner
         _propagar_llave_tv(bracket)
+    elif accion == 'bracket_load':
+        bracket = estado.get('bracket')
+        try:
+            round_index = int(request.POST.get('round'))
+            match_index = int(request.POST.get('match'))
+            match = bracket['rounds'][round_index][match_index]
+            p1, p2 = match.get('p1'), match.get('p2')
+        except (TypeError, ValueError, IndexError, KeyError):
+            return JsonResponse({'error': 'Combate no válido.'}, status=400)
+        if not p1 or not p2 or '__BYE__' in {p1, p2}:
+            return JsonResponse({'error': 'Este combate aún no está listo.'}, status=400)
+        estado_nuevo = estado_tv_inicial()
+        estado_nuevo['mode'] = 'timer'
+        estado_nuevo['bracket'] = bracket
+        estado_nuevo['red_name'] = p1
+        estado_nuevo['blue_name'] = p2
+        estado_nuevo['active_match'] = {
+            'round': round_index, 'match': match_index, 'p1': p1, 'p2': p2
+        }
+        estado = estado_nuevo
+    elif accion == 'fight_winner':
+        bracket = estado.get('bracket')
+        active = estado.get('active_match')
+        side = request.POST.get('side')
+        if not bracket or not active or side not in {'red', 'blue'}:
+            return JsonResponse({'error': 'No hay un combate de llave activo.'}, status=400)
+        winner = active['p1'] if side == 'red' else active['p2']
+        match = bracket['rounds'][active['round']][active['match']]
+        match['winner'] = winner
+        _propagar_llave_tv(bracket)
+        estado['active_match'] = None
+        estado['running'] = False
+        estado['started_at'] = None
+        estado['mode'] = 'bracket'
+    elif accion == 'bracket_reset':
+        estado['bracket'] = None
+        estado['active_match'] = None
+        estado['mode'] = 'bracket'
 
     if estado['running'] and accion != 'start':
         estado['started_at'] = timezone.now().isoformat()

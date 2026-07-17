@@ -130,6 +130,7 @@ def estado_tv_inicial():
         'red_penalties': 0,
         'blue_penalties': 0,
         'bracket': None,
+        'active_match': None,
     }
 
 

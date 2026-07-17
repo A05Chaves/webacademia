@@ -158,6 +158,25 @@ class ModoTVTests(TestCase):
         self.assertEqual(final['p1'], 'ANA')
         self.assertEqual(final['p2'], 'BEATRIZ')
 
+        response = self.client.post(url, {
+            'action': 'bracket_load', 'round': '1', 'match': '0'
+        })
+        state = response.json()['state']
+        self.assertEqual(state['mode'], 'timer')
+        self.assertEqual(state['red_name'], 'ANA')
+        self.assertEqual(state['blue_name'], 'BEATRIZ')
+        self.assertIsNotNone(state['active_match'])
+
+        response = self.client.post(url, {
+            'action': 'fight_winner', 'side': 'red'
+        })
+        state = response.json()['state']
+        self.assertEqual(state['mode'], 'bracket')
+        self.assertEqual(state['bracket']['rounds'][1][0]['winner'], 'ANA')
+
+        response = self.client.post(url, {'action': 'bracket_reset'})
+        self.assertIsNone(response.json()['state']['bracket'])
+
 
 class CambioNombreUsuarioTests(TestCase):
     def setUp(self):
