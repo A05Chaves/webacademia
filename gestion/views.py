@@ -2224,17 +2224,44 @@ def _clase_tv_payload():
 
 def _estado_tv_actual(sesion, guardar=True):
     estado = {**estado_tv_inicial(), **(sesion.estado or {})}
+    cambio = False
+    ahora = timezone.now()
+
+    if estado.get('preparing') and estado.get('preparation_started_at'):
+        inicio_preparacion = datetime.fromisoformat(estado['preparation_started_at'])
+        if timezone.is_naive(inicio_preparacion):
+            inicio_preparacion = timezone.make_aware(inicio_preparacion)
+        transcurrido = int((ahora - inicio_preparacion).total_seconds())
+        preparacion_restante = max(
+            0, int(estado.get('preparation_seconds', 5)) - transcurrido
+        )
+        if preparacion_restante > 0:
+            estado['display_remaining'] = preparacion_restante
+            estado['display_phase'] = 'preparation'
+        else:
+            estado['preparing'] = False
+            estado['preparation_started_at'] = None
+            estado['running'] = True
+            estado['started_at'] = ahora.isoformat()
+            estado['remaining'] = estado['duration']
+            estado['warning_done'] = False
+            estado['sound_event'] = {
+                'type': 'bell', 'id': ahora.isoformat()
+            }
+            estado['display_remaining'] = estado['duration']
+            estado['display_phase'] = 'round'
+            cambio = True
+
     if estado['running'] and estado.get('started_at'):
         inicio = datetime.fromisoformat(estado['started_at'])
         if timezone.is_naive(inicio):
             inicio = timezone.make_aware(inicio)
-        transcurrido = int((timezone.now() - inicio).total_seconds())
+        transcurrido = int((ahora - inicio).total_seconds())
         restante = max(0, int(estado['remaining']) - transcurrido)
-        cambio = False
         if 0 < restante <= 10 and not estado.get('warning_done'):
             estado['warning_done'] = True
             estado['sound_event'] = {
-                'type': 'claps', 'id': timezone.now().isoformat()
+                'type': 'claps', 'id': ahora.isoformat()
             }
             cambio = True
         if restante == 0:
@@ -2242,15 +2269,22 @@ def _estado_tv_actual(sesion, guardar=True):
             estado['running'] = False
             estado['started_at'] = None
             estado['sound_event'] = {
-                'type': 'bell', 'id': timezone.now().isoformat()
+                'type': 'bell', 'id': ahora.isoformat()
             }
+            estado['display_phase'] = 'ended'
             cambio = True
         else:
             estado['display_remaining'] = restante
-        if cambio and guardar:
-            sesion.estado = estado
-            sesion.save(update_fields=['estado', 'actualizada'])
+            estado['display_phase'] = 'round'
+    if cambio and guardar:
+        estado_guardado = {
+            key: value for key, value in estado.items()
+            if key not in {'display_remaining', 'display_phase'}
+        }
+        sesion.estado = estado_guardado
+        sesion.save(update_fields=['estado', 'actualizada'])
     estado.setdefault('display_remaining', estado['remaining'])
+    estado.setdefault('display_phase', 'stopped')
     return estado
 
 
@@ -2372,21 +2406,31 @@ def accion_tv(request, token):
     if not sesion.vigente:
         return JsonResponse({'error': 'Sesión vencida'}, status=410)
     estado = _estado_tv_actual(sesion, guardar=False)
-    estado['remaining'] = estado.pop('display_remaining', estado['remaining'])
+    display_remaining = estado.pop('display_remaining', estado['remaining'])
+    display_phase = estado.pop('display_phase', 'stopped')
+    if display_phase != 'preparation':
+        estado['remaining'] = display_remaining
     accion = request.POST.get('action', '')
 
     if accion == 'mode':
         estado['mode'] = request.POST.get('value') if request.POST.get('value') in {'overview', 'timer', 'bracket'} else 'overview'
-    elif accion == 'start' and estado['remaining'] > 0:
+    elif accion == 'start' and estado['remaining'] > 0 and not estado['running']:
         inicio_nuevo = estado['remaining'] == estado['duration']
-        estado['running'] = True
-        estado['started_at'] = timezone.now().isoformat()
         if inicio_nuevo:
+            estado['preparing'] = True
+            estado['preparation_started_at'] = timezone.now().isoformat()
+            estado['running'] = False
+            estado['started_at'] = None
             estado['warning_done'] = False
-            estado['sound_event'] = {
-                'type': 'bell', 'id': timezone.now().isoformat()
-            }
+            estado['sound_event'] = None
+        else:
+            estado['preparing'] = False
+            estado['preparation_started_at'] = None
+            estado['running'] = True
+            estado['started_at'] = timezone.now().isoformat()
     elif accion == 'pause':
+        estado['preparing'] = False
+        estado['preparation_started_at'] = None
         estado['running'] = False
         estado['started_at'] = None
     elif accion == 'reset':
@@ -2399,6 +2443,8 @@ def accion_tv(request, token):
         minutos = max(1, min(60, int(request.POST.get('value', 5))))
         estado['duration'] = minutos * 60
         estado['remaining'] = estado['duration']
+        estado['preparing'] = False
+        estado['preparation_started_at'] = None
         estado['running'] = False
         estado['started_at'] = None
     elif accion == 'names':

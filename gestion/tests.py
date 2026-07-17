@@ -114,7 +114,7 @@ class ModoTVTests(TestCase):
         sesion.refresh_from_db()
         self.assertEqual(sesion.estado['red_points'], 1)
 
-    def test_inicio_emite_campana_y_reinicio_limpia_marcador(self):
+    def test_alistamiento_sonidos_y_reinicio_limpia_marcador(self):
         sesion = SesionTV.objects.create(
             propietario=self.staff,
             codigo='111111',
@@ -123,7 +123,48 @@ class ModoTVTests(TestCase):
         self.client.force_login(self.staff)
         url = reverse('gestion:accion_tv', args=[sesion.token])
         inicio = self.client.post(url, {'action': 'start'})
-        self.assertEqual(inicio.json()['state']['sound_event']['type'], 'bell')
+        self.assertTrue(inicio.json()['state']['preparing'])
+        self.assertEqual(inicio.json()['state']['display_remaining'], 5)
+        self.assertIsNone(inicio.json()['state']['sound_event'])
+
+        sesion.refresh_from_db()
+        sesion.estado['preparation_started_at'] = (
+            timezone.now() - timedelta(seconds=6)
+        ).isoformat()
+        sesion.save(update_fields=['estado'])
+        estado_url = reverse('gestion:estado_tv', args=[sesion.token])
+        comienzo_round = self.client.get(estado_url).json()['state']
+        self.assertTrue(comienzo_round['running'])
+        self.assertEqual(comienzo_round['display_remaining'], 300)
+        self.assertEqual(comienzo_round['sound_event']['type'], 'bell')
+
+        sesion.refresh_from_db()
+        sesion.estado.update({
+            'remaining': 11,
+            'running': True,
+            'started_at': (timezone.now() - timedelta(seconds=1)).isoformat(),
+            'warning_done': False,
+            'sound_event': None,
+        })
+        sesion.save(update_fields=['estado'])
+        advertencia = self.client.get(estado_url).json()['state']
+        self.assertEqual(advertencia['display_remaining'], 10)
+        self.assertEqual(advertencia['sound_event']['type'], 'claps')
+
+        sesion.refresh_from_db()
+        sesion.estado.update({
+            'remaining': 1,
+            'running': True,
+            'started_at': (timezone.now() - timedelta(seconds=2)).isoformat(),
+            'warning_done': True,
+            'sound_event': None,
+        })
+        sesion.save(update_fields=['estado'])
+        final = self.client.get(estado_url).json()['state']
+        self.assertFalse(final['running'])
+        self.assertEqual(final['display_remaining'], 0)
+        self.assertEqual(final['sound_event']['type'], 'bell')
+
         self.client.post(url, {'action': 'pause'})
         self.client.post(url, {'action': 'red_points', 'delta': '1'})
         self.client.post(url, {
