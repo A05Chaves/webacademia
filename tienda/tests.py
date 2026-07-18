@@ -109,6 +109,48 @@ class TiendaTests(TestCase):
         self.assertFalse(MovimientoTienda.objects.exists())
         self.assertContains(response, 'No hay inventario suficiente')
 
+    def test_mensaje_de_venta_identifica_cada_producto_y_su_inventario(self):
+        segundo_producto = ProductoTienda.objects.create(
+            nombre='Rashguard pruebas',
+            referencia='RASH-TEST',
+            precio_venta=90000,
+            costo_unitario=45000,
+            stock=4,
+        )
+
+        primera_respuesta = self.client.post(
+            reverse('tienda:registrar_venta'),
+            {
+                'producto': self.producto.id,
+                'cantidad': '2',
+                'cuenta': self.cuenta.id,
+                'observaciones': '',
+            },
+            follow=True,
+        )
+        segunda_respuesta = self.client.post(
+            reverse('tienda:registrar_venta'),
+            {
+                'producto': segundo_producto.id,
+                'cantidad': '1',
+                'cuenta': self.cuenta.id,
+                'observaciones': '',
+            },
+            follow=True,
+        )
+
+        self.assertContains(
+            primera_respuesta,
+            'Venta registrada: Camiseta academia (2 unidades).',
+        )
+        self.assertContains(primera_respuesta, 'Inventario restante: 8.')
+        self.assertContains(
+            segunda_respuesta,
+            'Venta registrada: Rashguard pruebas (1 unidad).',
+        )
+        self.assertContains(segunda_respuesta, 'Inventario restante: 3.')
+        self.assertEqual(MovimientoTienda.objects.count(), 2)
+
     def test_compra_aumenta_inventario_y_registra_egreso(self):
         response = self.client.post(reverse('tienda:registrar_compra'), {
             'producto': self.producto.id,

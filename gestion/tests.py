@@ -76,7 +76,25 @@ class ModoTVTests(TestCase):
         self.assertEqual(response.status_code, 200)
         sesion = SesionTV.objects.get(propietario=self.staff)
         self.assertEqual(len(sesion.codigo), 6)
+        self.assertGreater(sesion.expira_en, timezone.now() + timedelta(days=3000))
         self.assertContains(response, sesion.codigo)
+
+    def test_codigo_tv_se_invalida_al_cerrar_sesion(self):
+        sesion = SesionTV.objects.create(
+            propietario=self.staff,
+            codigo='987654',
+            expira_en=timezone.now() + timedelta(days=3650),
+        )
+        self.client.force_login(self.staff)
+        self.client.logout()
+
+        sesion.refresh_from_db()
+        self.assertFalse(sesion.activa)
+        response = self.client.post(
+            reverse('gestion:vincular_tv'), {'codigo': sesion.codigo}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'venció')
 
     def test_tv_se_vincula_por_codigo_y_estado_es_publico(self):
         sesion = SesionTV.objects.create(
@@ -113,6 +131,38 @@ class ModoTVTests(TestCase):
         self.assertEqual(response.status_code, 200)
         sesion.refresh_from_db()
         self.assertEqual(sesion.estado['red_points'], 1)
+
+    def test_youtube_se_controla_y_se_conserva_al_reiniciar(self):
+        sesion = SesionTV.objects.create(
+            propietario=self.staff,
+            codigo='333333',
+            expira_en=timezone.now() + timedelta(hours=1),
+        )
+        self.client.force_login(self.staff)
+        url = reverse('gestion:accion_tv', args=[sesion.token])
+
+        invalido = self.client.post(url, {
+            'action': 'youtube_load', 'value': 'https://example.com/video'
+        })
+        self.assertEqual(invalido.status_code, 400)
+
+        cargado = self.client.post(url, {
+            'action': 'youtube_load',
+            'value': 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        }).json()['state']
+        self.assertEqual(cargado['youtube_video_id'], 'dQw4w9WgXcQ')
+        self.assertTrue(cargado['youtube_visible'])
+        self.assertEqual(cargado['youtube_command']['type'], 'load')
+
+        volumen = self.client.post(url, {
+            'action': 'youtube_volume', 'value': '62'
+        }).json()['state']
+        self.assertEqual(volumen['youtube_volume'], 62)
+
+        self.client.post(url, {'action': 'reset'})
+        sesion.refresh_from_db()
+        self.assertEqual(sesion.estado['youtube_video_id'], 'dQw4w9WgXcQ')
+        self.assertEqual(sesion.estado['youtube_volume'], 62)
 
     def test_alistamiento_sonidos_y_reinicio_limpia_marcador(self):
         sesion = SesionTV.objects.create(

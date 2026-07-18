@@ -2288,6 +2288,32 @@ def _estado_tv_actual(sesion, guardar=True):
     return estado
 
 
+def _youtube_video_id(value):
+    """Obtiene un identificador seguro desde enlaces comunes de YouTube."""
+    value = (value or '').strip()
+    parsed = urlparse(value if '://' in value else f'https://{value}')
+    host = parsed.netloc.lower().split(':')[0]
+    video_id = None
+    if host in {'youtu.be', 'www.youtu.be'}:
+        video_id = parsed.path.strip('/').split('/')[0]
+    elif host in {
+        'youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com'
+    }:
+        if parsed.path == '/watch':
+            video_id = parse_qs(parsed.query).get('v', [None])[0]
+        elif parsed.path.startswith(('/embed/', '/shorts/', '/live/')):
+            parts = parsed.path.strip('/').split('/')
+            video_id = parts[1] if len(parts) > 1 else None
+    allowed = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-'
+    if not video_id or len(video_id) != 11 or any(c not in allowed for c in video_id):
+        return None
+    return video_id
+
+
+def _youtube_event(command):
+    return {'type': command, 'id': timezone.now().isoformat()}
+
+
 def _resolver_bye_tv(match):
     p1, p2 = match.get('p1'), match.get('p2')
     if not p1 or not p2:
@@ -2356,7 +2382,9 @@ def control_tv(request):
         sesion = SesionTV.objects.create(
             propietario=request.user,
             codigo=codigo,
-            expira_en=timezone.now() + timedelta(hours=12),
+            # La vigencia real termina al cerrar sesión. Esta fecha lejana se
+            # conserva por compatibilidad con sesiones y migraciones anteriores.
+            expira_en=timezone.now() + timedelta(days=3650),
         )
     return render(request, 'gestion/control_tv.html', {
         'sesion_tv': sesion,
@@ -2437,11 +2465,16 @@ def accion_tv(request, token):
         mode = estado.get('mode', 'timer')
         bracket = estado.get('bracket')
         duration = estado.get('duration', 300)
+        youtube = {
+            key: value for key, value in estado.items()
+            if key.startswith('youtube_')
+        }
         estado = estado_tv_inicial()
         estado['mode'] = mode
         estado['bracket'] = bracket
         estado['duration'] = duration
         estado['remaining'] = duration
+        estado.update(youtube)
     elif accion == 'duration':
         minutos = max(1, min(60, int(request.POST.get('value', 5))))
         estado['duration'] = minutos * 60
@@ -2453,6 +2486,31 @@ def accion_tv(request, token):
     elif accion == 'names':
         estado['red_name'] = request.POST.get('red_name', '')[:60].upper() or 'COMPETIDOR ROJO'
         estado['blue_name'] = request.POST.get('blue_name', '')[:60].upper() or 'COMPETIDOR AZUL'
+    elif accion == 'youtube_load':
+        video_id = _youtube_video_id(request.POST.get('value'))
+        if not video_id:
+            return JsonResponse({'error': 'El enlace de YouTube no es válido.'}, status=400)
+        estado['youtube_video_id'] = video_id
+        estado['youtube_visible'] = True
+        estado['youtube_command'] = _youtube_event('load')
+    elif accion in {'youtube_play', 'youtube_pause', 'youtube_stop'}:
+        if not estado.get('youtube_video_id'):
+            return JsonResponse({'error': 'Primero carga un video de YouTube.'}, status=400)
+        estado['youtube_visible'] = True
+        estado['youtube_command'] = _youtube_event(accion.removeprefix('youtube_'))
+    elif accion == 'youtube_visibility':
+        estado['youtube_visible'] = not estado.get('youtube_visible', False)
+    elif accion == 'youtube_size':
+        estado['youtube_size'] = (
+            'large' if estado.get('youtube_size') == 'small' else 'small'
+        )
+    elif accion == 'youtube_volume':
+        try:
+            volume = int(request.POST.get('value', 35))
+        except ValueError:
+            volume = 35
+        estado['youtube_volume'] = max(0, min(100, volume))
+        estado['youtube_command'] = _youtube_event('volume')
     elif accion in {'red_points', 'blue_points', 'red_advantages', 'blue_advantages', 'red_penalties', 'blue_penalties'}:
         delta = 1 if request.POST.get('delta') == '1' else -1
         estado[accion] = max(0, int(estado.get(accion, 0)) + delta)
@@ -2496,11 +2554,16 @@ def accion_tv(request, token):
         if not p1 or not p2 or '__BYE__' in {p1, p2}:
             return JsonResponse({'error': 'Este combate aún no está listo.'}, status=400)
         duration = estado.get('duration', 300)
+        youtube = {
+            key: value for key, value in estado.items()
+            if key.startswith('youtube_')
+        }
         estado_nuevo = estado_tv_inicial()
         estado_nuevo['mode'] = 'timer'
         estado_nuevo['bracket'] = bracket
         estado_nuevo['duration'] = duration
         estado_nuevo['remaining'] = duration
+        estado_nuevo.update(youtube)
         estado_nuevo['red_name'] = p1
         estado_nuevo['blue_name'] = p2
         estado_nuevo['active_match'] = {
@@ -2538,7 +2601,7 @@ def accion_tv(request, token):
 @require_POST
 def renovar_tv(request, token):
     sesion = get_object_or_404(SesionTV, token=token, propietario=request.user)
-    sesion.expira_en = timezone.now() + timedelta(hours=12)
+    sesion.expira_en = timezone.now() + timedelta(days=3650)
     sesion.activa = True
     sesion.save(update_fields=['expira_en', 'activa', 'actualizada'])
     return JsonResponse({'ok': True, 'expires': sesion.expira_en.isoformat()})

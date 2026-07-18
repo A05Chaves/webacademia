@@ -134,6 +134,11 @@ def estado_tv_inicial():
         'blue_penalties': 0,
         'bracket': None,
         'active_match': None,
+        'youtube_video_id': None,
+        'youtube_visible': False,
+        'youtube_size': 'small',
+        'youtube_volume': 35,
+        'youtube_command': None,
     }
 
 

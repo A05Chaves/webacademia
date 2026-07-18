@@ -238,7 +238,15 @@ def registrar_venta(request):
                 )
                 producto_tienda.stock -= cantidad
                 producto_tienda.save(update_fields=['stock', 'actualizado'])
-                messages.success(request, f'Venta registrada por ${total:,.0f}.')
+                messages.success(
+                    request,
+                    (
+                        f'Venta registrada: {producto_tienda.nombre} '
+                        f'({cantidad} unidad{"es" if cantidad != 1 else ""}). '
+                        f'Total: ${total:,.0f}. '
+                        f'Inventario restante: {producto_tienda.stock}.'
+                    ),
+                )
                 return redirect('tienda:panel')
     return _render_formulario(
         request, form, 'Registrar venta', 'fa-cart-shopping',
