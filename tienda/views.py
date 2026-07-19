@@ -579,9 +579,9 @@ def _pdf_comprobante(venta):
         fontSize=8, textColor=colors.HexColor('#666666'),
     ))
     logo = Image(
-        str(settings.BASE_DIR / 'static' / 'img' / 'galeras-bjj-logo.png'),
-        width=45 * mm,
-        height=25 * mm,
+        str(settings.BASE_DIR / 'static' / 'img' / 'bross-fight-sport-logo.png'),
+        width=72 * mm,
+        height=17.84 * mm,
     )
     logo.hAlign = 'CENTER'
     historia = [
