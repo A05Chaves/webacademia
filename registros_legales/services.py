@@ -1,6 +1,6 @@
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
-from django.conf import settings
 
 from alumnos.models import Alumno
 
@@ -9,24 +9,24 @@ User = get_user_model()
 
 
 def crear_alumno_desde_registro(registro):
-    username = registro.documento
-    password_temporal = registro.documento
+    username = registro.usuario_solicitado
 
-    if User.objects.filter(username=username).exists():
-        return None, None, 'Ya existe un usuario con este documento.'
+    if User.objects.filter(username__iexact=username).exists():
+        return None, None, 'El nombre de usuario elegido ya no está disponible.'
 
     if Alumno.objects.filter(documento=registro.documento).exists():
         return None, None, 'Ya existe un alumno con este documento.'
 
-    user = User.objects.create_user(
+    user = User(
         username=username,
-        password=password_temporal,
+        password=registro.password_hash,
         first_name=registro.nombres,
         last_name=registro.apellidos,
         email=registro.correo or '',
         telefono=registro.celular,
-        debe_cambiar_password=True,
+        debe_cambiar_password=False,
     )
+    user.save()
 
     alumno = Alumno.objects.create(
         user=user,
@@ -38,12 +38,10 @@ def crear_alumno_desde_registro(registro):
         estado='PENDIENTE',
     )
 
-    return alumno, password_temporal, None
-
-# FUNCION PARA ENVIAR CORREOS A LOS ESTUDIANTES CON SUS CREDENCIALES DE ACCESO
+    return alumno, None, None
 
 
-def enviar_correo_bienvenida_alumno(registro, password_temporal):
+def enviar_correo_bienvenida_alumno(registro):
     if not registro.correo:
         return
 
@@ -51,14 +49,13 @@ def enviar_correo_bienvenida_alumno(registro, password_temporal):
         subject='Registro aprobado - Galeras BJJ',
         message=(
             f'Hola {registro.nombres},\n\n'
-            f'Tu registro en Galeras BJJ fue aprobado correctamente.\n\n'
-            f'Tus datos de acceso son:\n'
-            f'Usuario: {registro.documento}\n'
-            f'Contraseña temporal: {password_temporal}\n\n'
-            f'Ingresa al sistema y cambia tu contraseña al primer acceso.\n\n'
-            f'Link de acceso:\n'
-            f'http://127.0.0.1:8000/login/\n\n'
-            f'Bienvenido a la academia.'
+            'Tu registro en Galeras BJJ fue aprobado correctamente.\n\n'
+            'Tus datos de acceso son:\n'
+            f'Usuario: {registro.usuario_solicitado}\n'
+            'Utiliza la contraseña que elegiste durante el registro.\n\n'
+            'Link de acceso:\n'
+            'https://bjj.lu-a.com/\n\n'
+            'Bienvenido a la academia.'
         ),
         from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[registro.correo],

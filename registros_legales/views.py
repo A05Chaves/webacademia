@@ -16,13 +16,13 @@ def validar_datos_registro(request):
     documento = request.POST.get('documento', '').strip()
     correo = request.POST.get('correo', '').strip()
     celular = request.POST.get('celular', '').strip()
+    username = request.POST.get('usuario_solicitado', '').strip()
     errores = {}
 
     if documento and (
         RegistroLegalEstudiante.objects.filter(documento=documento).exists()
         or Alumno.objects.filter(documento=documento).exists()
         or Instructor.objects.filter(documento=documento).exists()
-        or get_user_model().objects.filter(username=documento).exists()
     ):
         errores['documento'] = (
             'Ya existe un estudiante o registro con este documento, '
@@ -38,6 +38,16 @@ def validar_datos_registro(request):
         celular=celular
     ).exists():
         errores['celular'] = 'Ya existe un registro con este celular.'
+
+    if username:
+        if get_user_model().objects.filter(username__iexact=username).exists():
+            errores['usuario_solicitado'] = 'Este nombre de usuario ya está en uso.'
+        elif RegistroLegalEstudiante.objects.filter(
+            usuario_solicitado__iexact=username,
+        ).exclude(estado=RegistroLegalEstudiante.Estados.RECHAZADO).exists():
+            errores['usuario_solicitado'] = (
+                'Este nombre de usuario ya está reservado por otro registro.'
+            )
 
     return JsonResponse({'valido': not errores, 'errores': errores})
 

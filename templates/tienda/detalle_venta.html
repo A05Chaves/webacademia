@@ -1,0 +1,69 @@
+{% extends 'gestion/base.html' %}{% load static %}{% block content %}
+<style>
+  .comprobante-toolbar {
+    align-items: center;
+    display: flex;
+    gap: 18px;
+    justify-content: space-between;
+    padding: 4px 6px 18px;
+  }
+  .comprobante-titulo {
+    align-items: center;
+    display: flex;
+    gap: 12px;
+    line-height: 1.2;
+    margin: 0;
+    min-width: 0;
+  }
+  .comprobante-titulo i {
+    flex: 0 0 auto;
+    padding: 3px 2px;
+  }
+  .comprobante-acciones {
+    align-items: stretch;
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .comprobante-acciones form {
+    display: flex;
+    margin: 0;
+  }
+  .comprobante-accion {
+    align-items: center;
+    display: inline-flex;
+    gap: 7px;
+    justify-content: center;
+    min-height: 46px;
+    padding: 9px 14px;
+    white-space: nowrap;
+  }
+  @media (max-width: 991.98px) {
+    .comprobante-toolbar { align-items: stretch; flex-direction: column; }
+    .comprobante-acciones { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .comprobante-acciones form, .comprobante-acciones form button, .comprobante-accion { width: 100%; }
+  }
+  @media (max-width: 575.98px) {
+    .comprobante-titulo { font-size: 1.45rem; }
+    .comprobante-acciones { grid-template-columns: 1fr; }
+  }
+</style>
+<div class="comprobante-toolbar mb-3">
+  <h2 class="comprobante-titulo"><i class="fa-solid fa-receipt"></i><span>Comprobante {{ venta.numero }}</span></h2>
+  <div class="comprobante-acciones">
+    <a href="{% url 'tienda:descargar_comprobante' venta.id %}" class="btn btn-primary comprobante-accion"><i class="fa-solid fa-download"></i><span>Descargar factura</span></a>
+    {% if venta.cliente.correo %}<form method="post" action="{% url 'tienda:enviar_comprobante_correo' venta.id %}">{% csrf_token %}<button class="btn btn-info comprobante-accion"><i class="fa-solid fa-envelope"></i><span>{% if venta.fecha_envio_correo %}Reenviar correo{% else %}Enviar por correo{% endif %}</span></button></form>{% endif %}
+    <a href="{% url 'tienda:panel' %}" class="btn btn-outline-warning comprobante-accion"><i class="fa-solid fa-arrow-left"></i><span>Volver</span></a>
+  </div>
+</div>
+{% if venta.cliente.correo %}<div class="alert {% if venta.fecha_envio_correo %}alert-success{% elif venta.error_envio_correo %}alert-warning{% else %}alert-secondary{% endif %}"><i class="fa-solid fa-envelope me-1"></i>{% if venta.fecha_envio_correo %}Correo enviado a <strong>{{ venta.email_enviado_a }}</strong> el {{ venta.fecha_envio_correo|date:'d/m/Y H:i' }}.{% elif venta.error_envio_correo %}El último envío a <strong>{{ venta.cliente.correo }}</strong> falló. Puede reintentarlo.{% else %}Comprobante pendiente de envío a <strong>{{ venta.cliente.correo }}</strong>.{% endif %}</div>{% endif %}
+<div class="card bg-white text-dark mx-auto" style="max-width:760px"><div class="card-body p-4 p-md-5"><div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3"><div class="d-flex align-items-center gap-3"><img src="{% static 'img/galeras-bjj-logo.png' %}" alt="Logo de la academia" style="width:90px;height:54px;object-fit:contain"><div><h3 class="mb-1">Bross Fight Sports</h3><div>Comprobante interno de venta</div></div></div><div class="text-end"><strong>{{ venta.numero }}</strong><br>{{ venta.fecha|date:'d/m/Y H:i' }}</div></div>
+{% if venta.cliente %}<p><strong>Comprador:</strong> {{ venta.cliente.nombres }}<br><strong>Documento:</strong> {{ venta.cliente.get_tipo_documento_display }} {{ venta.cliente.numero_documento }}<br><strong>Contacto:</strong> {{ venta.cliente.telefono_whatsapp|default:'—' }}</p>{% else %}<p><strong>Comprador:</strong> Consumidor final</p>{% endif %}
+<div class="table-responsive"><table class="table"><thead><tr><th>Producto</th><th class="text-center">Cant.</th><th class="text-end">Precio</th><th class="text-end">Total</th></tr></thead><tbody>{% for d in venta.detalles.all %}<tr><td>{{ d.descripcion }}</td><td class="text-center">{{ d.cantidad }}</td><td class="text-end">{{ d.precio_unitario|floatformat:2 }}</td><td class="text-end">{{ d.total|floatformat:2 }}</td></tr>{% endfor %}</tbody></table></div>
+<div class="row justify-content-end"><div class="col-sm-6"><div class="d-flex justify-content-between"><span>Subtotal</span><strong>{{ venta.subtotal|floatformat:2 }} {{ venta.moneda }}</strong></div><div class="d-flex justify-content-between"><span>Descuento</span><strong>{{ venta.descuento|floatformat:2 }} {{ venta.moneda }}</strong></div><div class="d-flex justify-content-between fs-5 border-top mt-2 pt-2"><span>Total</span><strong>{{ venta.total|floatformat:2 }} {{ venta.moneda }}</strong></div><div class="d-flex justify-content-between text-danger"><span>Saldo pendiente</span><strong>{{ venta.saldo_pendiente|floatformat:2 }} {{ venta.moneda }}</strong></div></div></div>
+{% if venta.movimientos.all %}<hr><h6>Pagos recibidos</h6>{% for m in venta.movimientos.all %}<div>{{ m.fecha|date:'d/m/Y H:i' }} · {{ m.cuenta.nombre }} · {{ m.valor|floatformat:2 }} {{ m.moneda }}</div>{% endfor %}{% endif %}
+{% if venta.modalidad == 'CREDITO' %}<hr><h6>Estado de las cuotas: {{ venta.progreso_cuotas }} pagadas</h6><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Cuota</th><th>Vencimiento</th><th>Estado</th><th class="text-end">Valor</th><th class="text-end">Saldo</th><th></th></tr></thead><tbody>{% for cuota in venta.cuotas.all %}<tr class="{% if cuota.esta_vencida %}table-danger{% elif cuota.estado == 'PAGADA' %}table-success{% endif %}"><td>{{ cuota.numero }} de {{ venta.numero_cuotas }}</td><td>{{ cuota.fecha_vencimiento|date:'d/m/Y' }}</td><td>{{ cuota.get_estado_display }}</td><td class="text-end">{{ cuota.valor|floatformat:2 }}</td><td class="text-end">{{ cuota.saldo|floatformat:2 }} {{ venta.moneda }}</td><td class="text-end">{% if cuota.saldo > 0 %}<a href="{% url 'tienda:registrar_abono' venta.id %}?cuota={{ cuota.id }}" class="btn btn-outline-success btn-sm">Abonar a esta cuota</a>{% endif %}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+<p class="small text-muted mt-4 mb-0">Este comprobante es un soporte interno y no reemplaza la factura electrónica cuando legalmente sea exigible.</p></div></div>
+<div class="d-print-none text-center mt-3">{% if venta.saldo_pendiente > 0 %}<a href="{% url 'tienda:registrar_abono' venta.id %}" class="btn btn-success">Registrar abono</a>{% elif venta.cliente %}<a href="{% url 'tienda:paz_y_salvo' venta.id %}" class="btn btn-outline-success">Generar paz y salvo</a>{% endif %}</div>
+{% endblock %}

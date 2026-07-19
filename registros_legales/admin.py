@@ -9,6 +9,7 @@ class RegistroLegalEstudianteAdmin(admin.ModelAdmin):
         'nombres',
         'apellidos',
         'documento',
+        'usuario_solicitado',
         'tipo_estudiante',
         'estado',
         'fecha_firma',
@@ -25,6 +26,7 @@ class RegistroLegalEstudianteAdmin(admin.ModelAdmin):
         'nombres',
         'apellidos',
         'documento',
+        'usuario_solicitado',
         'correo',
         'celular',
     )

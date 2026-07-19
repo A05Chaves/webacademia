@@ -2,15 +2,9 @@
 
 {% block content %}
 
-<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
-    <h2 class="mb-0">
-        <i class="fa-solid {{ icono }}"></i>
-        {{ titulo }}
-    </h2>
-    <a href="{% url volver_url %}" class="btn btn-outline-light btn-sm">
-        <i class="fa-solid fa-arrow-left"></i>
-        Volver a la tienda
-    </a>
+<div class="page-heading">
+    <div class="page-heading-main"><h2 class="page-heading-title"><i class="fa-solid {{ icono }}"></i><span>{{ titulo }}</span></h2></div>
+    <div class="page-heading-actions"><a href="{% url volver_url %}" class="btn btn-outline-light page-heading-action"><i class="fa-solid fa-arrow-left"></i><span>Volver a la tienda</span></a></div>
 </div>
 
 <div class="row justify-content-center">

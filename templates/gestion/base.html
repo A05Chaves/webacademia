@@ -146,6 +146,61 @@
             padding: 30px !important;
         }
 
+        .page-heading {
+            align-items: center;
+            display: flex;
+            gap: 18px;
+            justify-content: space-between;
+            padding: 6px 8px 20px;
+        }
+
+        .page-heading-main {
+            min-width: 0;
+        }
+
+        .page-heading-title {
+            align-items: center;
+            display: flex;
+            gap: 12px;
+            line-height: 1.2;
+            margin: 0;
+            min-width: 0;
+        }
+
+        .page-heading-title i {
+            flex: 0 0 auto;
+            min-width: 30px;
+            padding: 3px 2px;
+            text-align: center;
+        }
+
+        .page-heading-subtitle {
+            margin: 7px 0 0 44px;
+        }
+
+        .page-heading-actions {
+            align-items: stretch;
+            display: flex;
+            flex: 0 0 auto;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .page-heading-actions form {
+            display: flex;
+            margin: 0;
+        }
+
+        .page-heading-action {
+            align-items: center;
+            display: inline-flex;
+            gap: 7px;
+            justify-content: center;
+            min-height: 44px;
+            padding: 8px 14px;
+            white-space: nowrap;
+        }
+
         .text-secondary {
             color: var(--text-secondary) !important;
         }
@@ -227,6 +282,29 @@
             .card-body {
                 padding: 20px !important;
             }
+
+            .page-heading {
+                align-items: stretch;
+                flex-direction: column;
+                padding: 4px 4px 18px;
+            }
+
+            .page-heading-actions {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .page-heading-actions form,
+            .page-heading-actions form .page-heading-action,
+            .page-heading-action {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 575.98px) {
+            .page-heading-title { font-size: 1.45rem; }
+            .page-heading-subtitle { margin-left: 0; }
+            .page-heading-actions { grid-template-columns: 1fr; }
         }
 
         @media (min-width: 576px) and (max-width: 991.98px) {

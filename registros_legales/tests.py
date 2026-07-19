@@ -1,9 +1,11 @@
 import base64
 from io import BytesIO
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth import get_user_model
+from django.contrib.auth.hashers import check_password
 from django.test import TestCase
 from django.urls import reverse
 from PIL import Image, ImageDraw
@@ -13,6 +15,7 @@ from alumnos.models import Alumno
 from instructores.models import Instructor
 from .forms import RegistroLegalEstudianteForm
 from .models import RegistroLegalEstudiante
+from .services import crear_alumno_desde_registro
 
 
 def imagen_png(con_firma=False):
@@ -49,6 +52,9 @@ class RegistroLegalObligatorioTests(TestCase):
             'direccion': 'Dirección de prueba',
             'celular': '3000000001',
             'correo': 'registro@example.com',
+            'usuario_solicitado': 'estudiante_prueba',
+            'password1': 'ClaveRegistro789!',
+            'password2': 'ClaveRegistro789!',
             'fecha_ingreso': '2026-07-12',
             'plan_interes': self.plan.id,
             'contacto_emergencia_nombre': 'Contacto Prueba',
@@ -101,6 +107,82 @@ class RegistroLegalObligatorioTests(TestCase):
             data=self.datos_validos(), files={'foto': self.foto_valida()}
         )
         self.assertTrue(form.is_valid(), form.errors.as_json())
+
+    def test_registro_guarda_hash_y_no_contrasena_visible(self):
+        form = RegistroLegalEstudianteForm(
+            data=self.datos_validos(), files={'foto': self.foto_valida()}
+        )
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+
+        registro = form.save()
+
+        self.assertNotEqual(registro.password_hash, 'ClaveRegistro789!')
+        self.assertTrue(check_password('ClaveRegistro789!', registro.password_hash))
+
+    def test_rechaza_usuario_duplicado_sin_distinguir_mayusculas(self):
+        get_user_model().objects.create_user(
+            username='UsuarioElegido', password='OtraClave789!'
+        )
+        data = self.datos_validos()
+        data['usuario_solicitado'] = 'usuarioelegido'
+        form = RegistroLegalEstudianteForm(
+            data=data, files={'foto': self.foto_valida()}
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('usuario_solicitado', form.errors)
+
+    def test_rechaza_contrasenas_diferentes(self):
+        data = self.datos_validos()
+        data['password2'] = 'ClaveDistinta789!'
+        form = RegistroLegalEstudianteForm(
+            data=data, files={'foto': self.foto_valida()}
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('password2', form.errors)
+
+    def test_aprobacion_usa_credenciales_elegidas(self):
+        form = RegistroLegalEstudianteForm(
+            data=self.datos_validos(), files={'foto': self.foto_valida()}
+        )
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+        registro = form.save()
+
+        alumno, password_temporal, error = crear_alumno_desde_registro(registro)
+
+        self.assertIsNone(error)
+        self.assertIsNone(password_temporal)
+        self.assertEqual(alumno.user.username, 'estudiante_prueba')
+        self.assertTrue(alumno.user.check_password('ClaveRegistro789!'))
+        self.assertFalse(alumno.user.debe_cambiar_password)
+
+    @patch('gestion.views.enviar_correo_bienvenida_alumno')
+    def test_aprobacion_administrativa_activa_usuario_elegido(self, enviar_correo):
+        form = RegistroLegalEstudianteForm(
+            data=self.datos_validos(), files={'foto': self.foto_valida()}
+        )
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+        registro = form.save()
+        administrador = get_user_model().objects.create_user(
+            username='admin_aprobacion', password='AdminClave789!', is_staff=True
+        )
+        self.client.force_login(administrador)
+
+        response = self.client.post(
+            reverse('gestion:aprobar_registro_legal', args=[registro.id])
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('gestion:detalle_registro_legal', args=[registro.id]),
+        )
+        usuario = get_user_model().objects.get(username='estudiante_prueba')
+        self.assertTrue(usuario.check_password('ClaveRegistro789!'))
+        self.assertFalse(usuario.debe_cambiar_password)
+        registro.refresh_from_db()
+        self.assertEqual(registro.estado, RegistroLegalEstudiante.Estados.APROBADO)
+        enviar_correo.assert_called_once_with(registro)
 
     def test_administrador_no_aprueba_registro_automaticamente(self):
         administrador = get_user_model().objects.create_user(
@@ -175,6 +257,18 @@ class RegistroLegalObligatorioTests(TestCase):
         self.assertEqual(
             set(resultado['errores']), {'documento', 'correo', 'celular'}
         )
+
+    def test_validacion_intermedia_detecta_usuario_reservado(self):
+        data = self.datos_validos()
+        data['foto'] = self.foto_valida()
+        self.client.post(reverse('registro_publico'), data)
+
+        response = self.client.post(reverse('validar_datos_registro'), {
+            'usuario_solicitado': 'ESTUDIANTE_PRUEBA',
+        })
+
+        self.assertFalse(response.json()['valido'])
+        self.assertIn('usuario_solicitado', response.json()['errores'])
 
     def test_documento_de_instructor_no_puede_registrarse_como_estudiante(self):
         usuario_instructor = get_user_model().objects.create_user(

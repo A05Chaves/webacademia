@@ -84,6 +84,10 @@
                                 <div class="col-12"><label class="form-label" for="{{ form.direccion.id_for_label }}">Dirección <span class="required">*</span></label>{{ form.direccion }}<div class="field-error text-danger">{{ form.direccion.errors }}</div></div>
                                 <div class="col-md-6"><label class="form-label" for="{{ form.celular.id_for_label }}">Celular <span class="required">*</span></label>{{ form.celular }}<div class="field-error text-danger">{{ form.celular.errors }}</div></div>
                                 <div class="col-md-6"><label class="form-label" for="{{ form.correo.id_for_label }}">Correo <span class="required">*</span></label>{{ form.correo }}<div class="field-error text-danger">{{ form.correo.errors }}</div></div>
+                                <div class="col-12 mt-4"><h3 class="h5 mb-1">Datos de acceso</h3><p class="text-muted mb-0">Elige las credenciales que utilizarás cuando la academia apruebe tu registro.</p></div>
+                                <div class="col-12"><label class="form-label" for="{{ form.usuario_solicitado.id_for_label }}">Usuario <span class="required">*</span></label>{{ form.usuario_solicitado }}{% if form.usuario_solicitado.help_text %}<div class="form-text">{{ form.usuario_solicitado.help_text }}</div>{% endif %}<div class="field-error text-danger">{{ form.usuario_solicitado.errors }}</div></div>
+                                <div class="col-md-6"><label class="form-label" for="{{ form.password1.id_for_label }}">Contraseña <span class="required">*</span></label>{{ form.password1 }}{% if form.password1.help_text %}<div class="form-text small">{{ form.password1.help_text|safe }}</div>{% endif %}<div class="field-error text-danger">{{ form.password1.errors }}</div></div>
+                                <div class="col-md-6"><label class="form-label" for="{{ form.password2.id_for_label }}">Confirmar contraseña <span class="required">*</span></label>{{ form.password2 }}<div class="field-error text-danger">{{ form.password2.errors }}</div></div>
                             </div>
                         </section>
 
@@ -130,6 +134,7 @@
                                 <div class="col-md-6"><div class="summary-item"><small class="text-muted">Documento</small><div id="reviewDocument">—</div></div></div>
                                 <div class="col-md-6"><div class="summary-item"><small class="text-muted">Plan</small><div id="reviewPlan">—</div></div></div>
                                 <div class="col-md-6"><div class="summary-item"><small class="text-muted">Contacto</small><div id="reviewContact">—</div></div></div>
+                                <div class="col-md-6"><div class="summary-item"><small class="text-muted">Usuario de acceso</small><div id="reviewUsername">—</div></div></div>
                             </div>
                             <label class="form-label">Firma dentro del recuadro <span class="required">*</span></label>
                             <div id="signatureBox" class="signature-box rounded-4 bg-white p-2">
@@ -242,12 +247,13 @@ function showRemoteError(fieldName, message) {
 
 async function validateUniqueData() {
     if (currentStep !== 0) return true;
-    const fields = ['documento', 'correo', 'celular'];
+    const fields = ['documento', 'correo', 'celular', 'usuario_solicitado'];
     fields.forEach(name => clearRemoteError(document.getElementById(`id_${name}`)));
     const body = new URLSearchParams({
         documento: document.getElementById('id_documento').value,
         correo: document.getElementById('id_correo').value,
         celular: document.getElementById('id_celular').value,
+        usuario_solicitado: document.getElementById('id_usuario_solicitado').value,
     });
     try {
         const response = await fetch('{% url "validar_datos_registro" %}', {
@@ -290,6 +296,7 @@ function updateReview() {
     const plan = document.getElementById('id_plan_interes');
     document.getElementById('reviewPlan').textContent = plan?.selectedOptions[0]?.text || '—';
     document.getElementById('reviewContact').textContent = `${valueOrDash('id_celular')} · ${valueOrDash('id_correo')}`;
+    document.getElementById('reviewUsername').textContent = valueOrDash('id_usuario_solicitado');
 }
 
 previousButton.addEventListener('click', () => showStep(currentStep - 1));

@@ -1,4 +1,7 @@
 from django import forms
+from django.contrib.auth import password_validation
+from django.contrib.auth.forms import UsernameField
+from django.contrib.auth.hashers import make_password
 from .models import RegistroLegalEstudiante
 from alumnos.models import Alumno
 from django.contrib.auth import get_user_model
@@ -9,6 +12,33 @@ User = get_user_model()
 
 
 class RegistroLegalEstudianteForm(forms.ModelForm):
+    usuario_solicitado = UsernameField(
+        label='Usuario de acceso',
+        max_length=150,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'autocomplete': 'username',
+            'placeholder': 'Elige tu nombre de usuario',
+        }),
+        help_text='Este será el usuario con el que ingresarás al sistema.',
+    )
+    password1 = forms.CharField(
+        label='Contraseña',
+        strip=False,
+        widget=forms.PasswordInput(attrs={
+            'class': 'form-control',
+            'autocomplete': 'new-password',
+        }),
+        help_text=password_validation.password_validators_help_text_html(),
+    )
+    password2 = forms.CharField(
+        label='Confirmar contraseña',
+        strip=False,
+        widget=forms.PasswordInput(attrs={
+            'class': 'form-control',
+            'autocomplete': 'new-password',
+        }),
+    )
 
     class Meta:
         model = RegistroLegalEstudiante
@@ -25,6 +55,9 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
             'direccion',
             'celular',
             'correo',
+            'usuario_solicitado',
+            'password1',
+            'password2',
             'fecha_ingreso',
             'plan_interes',
             'contacto_emergencia_nombre',
@@ -145,6 +178,9 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
             'direccion',
             'celular',
             'correo',
+            'usuario_solicitado',
+            'password1',
+            'password2',
             'fecha_ingreso',
             'plan_interes',
             'contacto_emergencia_nombre',
@@ -243,10 +279,6 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
                 documento=documento
             ).exists()
 
-            existe_usuario = User.objects.filter(
-                username=documento
-            ).exists()
-
             existe_instructor = Instructor.objects.filter(
                 documento=documento
             ).exists()
@@ -254,7 +286,6 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
             if (
                 existe_registro
                 or existe_alumno
-                or existe_usuario
                 or existe_instructor
             ):
                 self.add_error(
@@ -285,6 +316,50 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
                 )
 
         return cleaned_data
+
+    def clean_usuario_solicitado(self):
+        username = self.cleaned_data['usuario_solicitado'].strip()
+        if User.objects.filter(username__iexact=username).exists():
+            raise forms.ValidationError('Este nombre de usuario ya está en uso.')
+        registros = RegistroLegalEstudiante.objects.filter(
+            usuario_solicitado__iexact=username,
+        ).exclude(estado=RegistroLegalEstudiante.Estados.RECHAZADO)
+        if self.instance.pk:
+            registros = registros.exclude(pk=self.instance.pk)
+        if registros.exists():
+            raise forms.ValidationError(
+                'Este nombre de usuario ya está reservado por otro registro.'
+            )
+        return username
+
+    def clean_password2(self):
+        password1 = self.cleaned_data.get('password1')
+        password2 = self.cleaned_data.get('password2')
+        if password1 and password2 and password1 != password2:
+            raise forms.ValidationError('Las contraseñas no coinciden.')
+        return password2
+
+    def _post_clean(self):
+        super()._post_clean()
+        password = self.cleaned_data.get('password2')
+        if password:
+            usuario_temporal = User(
+                username=self.cleaned_data.get('usuario_solicitado', '')
+            )
+            try:
+                password_validation.validate_password(password, usuario_temporal)
+            except forms.ValidationError as error:
+                self.add_error('password2', error)
+
+    def save(self, commit=True):
+        registro = super().save(commit=False)
+        password = self.cleaned_data.get('password1')
+        if password:
+            registro.password_hash = make_password(password)
+        if commit:
+            registro.save()
+            self.save_m2m()
+        return registro
 
     def clean_foto(self):
         foto = self.cleaned_data.get('foto')

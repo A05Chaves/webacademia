@@ -1,4 +1,6 @@
 from django.db import models
+from django.db.models import Q
+from django.db.models.functions import Lower
 from django.utils import timezone
 
 
@@ -30,6 +32,8 @@ class RegistroLegalEstudiante(models.Model):
     direccion = models.CharField(max_length=255)
     celular = models.CharField(max_length=30)
     correo = models.EmailField(blank=True, null=True)
+    usuario_solicitado = models.CharField(max_length=150)
+    password_hash = models.CharField(max_length=128, editable=False)
     fecha_ingreso = models.DateField(default=timezone.now)
 
     plan_interes = models.ForeignKey(
@@ -78,6 +82,13 @@ class RegistroLegalEstudiante(models.Model):
         verbose_name = 'Registro legal de estudiante'
         verbose_name_plural = 'Registros legales de estudiantes'
         ordering = ['-creado']
+        constraints = [
+            models.UniqueConstraint(
+                Lower('usuario_solicitado'),
+                condition=~Q(estado='RECHAZADO'),
+                name='registro_username_activo_unico_sin_mayusculas',
+            ),
+        ]
 
     def __str__(self):
         return f"{self.nombres} {self.apellidos} - {self.tipo_estudiante}"

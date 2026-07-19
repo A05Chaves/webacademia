@@ -1,401 +1,87 @@
 {% extends 'gestion/base.html' %}
-
 {% block content %}
+<div class="page-heading">
+  <div class="page-heading-main"><h2 class="page-heading-title"><i class="fa-solid fa-store"></i><span>Dashboard de tienda</span></h2><p class="page-heading-subtitle text-secondary">COP y USD se controlan por separado, sin conversiones.</p></div>
+  <div class="page-heading-actions">
+    <a href="{% url 'tienda:creditos' %}" class="btn btn-outline-info page-heading-action"><i class="fa-solid fa-file-invoice-dollar"></i><span>Créditos</span></a>
+    <a href="{% url 'tienda:consultas' %}" class="btn btn-outline-light page-heading-action"><i class="fa-solid fa-magnifying-glass-chart"></i><span>Consultas</span></a>
+    <a href="{% url 'tienda:configuracion' %}" class="btn btn-outline-warning page-heading-action"><i class="fa-solid fa-gear"></i><span>Configurar</span></a>
+  </div>
+</div>
 
-<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
-    <div>
-        <h2 class="mb-1">
-            <i class="fa-solid fa-store"></i>
-            Dashboard de tienda
-        </h2>
-        <p class="text-secondary mb-0">Finanzas e inventario independientes de la academia.</p>
-    </div>
-    <div class="d-flex gap-2">
-        <a href="{% url 'tienda:configuracion' %}" class="btn btn-outline-warning btn-sm">
-            <i class="fa-solid fa-gear"></i>
-            Configurar tienda
-        </a>
-        <a href="{% url 'gestion:dashboard' %}" class="btn btn-outline-light btn-sm">
-            <i class="fa-solid fa-arrow-left"></i>
-            Dashboard academia
-        </a>
-    </div>
+<form method="get" class="card bg-dark text-light border-secondary mb-4"><div class="card-body row g-3 align-items-end">
+  <div class="col-sm-4"><label class="form-label">Desde</label><input type="date" name="desde" value="{{ desde|date:'Y-m-d' }}" class="form-control"></div>
+  <div class="col-sm-4"><label class="form-label">Hasta</label><input type="date" name="hasta" value="{{ hasta|date:'Y-m-d' }}" class="form-control"></div>
+  <div class="col-sm-4"><button class="btn btn-primary w-100"><i class="fa-solid fa-filter"></i> Aplicar período</button></div>
+</div></form>
+
+<div class="d-flex flex-wrap gap-2 mb-4">
+  <a href="{% url 'tienda:registrar_venta' %}" class="btn btn-success"><i class="fa-solid fa-cart-shopping"></i> Nueva venta</a>
+  <a href="{% url 'tienda:registrar_compra' %}" class="btn btn-warning"><i class="fa-solid fa-boxes-stacked"></i> Registrar compra</a>
+  <a href="{% url 'tienda:registrar_gasto' %}" class="btn btn-danger"><i class="fa-solid fa-arrow-trend-down"></i> Registrar gasto</a>
+  <a href="{% url 'tienda:ajustar_inventario' %}" class="btn btn-info"><i class="fa-solid fa-box-open"></i> Ajustar inventario</a>
+</div>
+
+{% for resumen in resumenes %}
+<section class="mb-4">
+  <h4 class="mb-3"><span class="badge {% if resumen.codigo == 'COP' %}bg-primary{% else %}bg-success{% endif %}">{{ resumen.codigo }}</span> {{ resumen.nombre }}</h4>
+  <div class="row g-3">
+    <div class="col-6 col-lg"><div class="card bg-dark text-light border-secondary h-100"><div class="card-body"><small>Saldo activo</small><h4>{{ resumen.simbolo }} {{ resumen.saldo|floatformat:2 }}</h4></div></div></div>
+    <div class="col-6 col-lg"><div class="card bg-dark text-light border-success h-100"><div class="card-body"><small>Entradas del período</small><h4>{{ resumen.simbolo }} {{ resumen.entradas|floatformat:2 }}</h4></div></div></div>
+    <div class="col-6 col-lg"><div class="card bg-dark text-light border-danger h-100"><div class="card-body"><small>Salidas del período</small><h4>{{ resumen.simbolo }} {{ resumen.salidas|floatformat:2 }}</h4></div></div></div>
+    <div class="col-6 col-lg"><div class="card bg-dark text-light border-info h-100"><div class="card-body"><small>Ventas del período</small><h4>{{ resumen.simbolo }} {{ resumen.ventas|floatformat:2 }}</h4></div></div></div>
+    <div class="col-6 col-lg"><div class="card bg-dark text-light border-warning h-100"><div class="card-body"><small>Cartera pendiente</small><h4>{{ resumen.simbolo }} {{ resumen.cartera|floatformat:2 }}</h4></div></div></div>
+    <div class="col-6 col-lg"><div class="card bg-dark text-light border-light h-100"><div class="card-body"><small>Inventario al costo</small><h4>{{ resumen.simbolo }} {{ resumen.inventario|floatformat:2 }}</h4></div></div></div>
+  </div>
+</section>
+{% endfor %}
+
+<div class="card bg-dark text-light border-secondary mb-4">
+  <div class="table-responsive">
+    <table class="table table-dark align-middle mb-0">
+      <tbody>
+        <tr>
+          <th style="width:18%"><i class="fa-solid fa-boxes-stacked text-warning me-2"></i>Inventario</th>
+          <td>
+            {% if cantidad_productos_bajo_stock %}
+              <strong>{{ cantidad_productos_bajo_stock }} producto{{ cantidad_productos_bajo_stock|pluralize }} con inventario bajo</strong>
+              <div class="small text-secondary mt-1">
+                {% for p in productos_bajo_stock %}{{ p.nombre_variante }}: {{ p.stock }}{% if not forloop.last %} · {% endif %}{% endfor %}
+                {% if cantidad_productos_bajo_stock > 3 %} · y otros{% endif %}
+              </div>
+            {% else %}
+              <span class="text-success"><i class="fa-solid fa-circle-check me-1"></i>Sin alertas de inventario configuradas</span>
+            {% endif %}
+          </td>
+          <td class="text-end"><a href="{% url 'tienda:consultas' %}" class="btn btn-outline-warning btn-sm">Ver inventario</a></td>
+        </tr>
+        <tr>
+          <th><i class="fa-solid fa-receipt text-success me-2"></i>Última venta</th>
+          <td>
+            {% if ultima_venta %}
+              <strong>{{ ultima_venta.numero }}</strong> · {{ ultima_venta.total|floatformat:2 }} {{ ultima_venta.moneda }}
+              <div class="small text-secondary">{{ ultima_venta.fecha|date:'d/m/Y H:i' }} · {{ ultima_venta.cliente.nombres|default:'Consumidor final' }} · {{ ultima_venta.get_estado_display }}</div>
+            {% else %}
+              <span class="text-secondary">Aún no hay ventas registradas.</span>
+            {% endif %}
+          </td>
+          <td class="text-end">{% if ultima_venta %}<a href="{% url 'tienda:detalle_venta' ultima_venta.id %}" class="btn btn-outline-success btn-sm">Ver comprobante</a>{% endif %}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </div>
 
 <div class="row g-4 mb-4">
-    <div class="col-lg-7">
-        <div class="card bg-dark text-light border-secondary h-100">
-            <div class="card-header">
-                <i class="fa-solid fa-chart-line me-1"></i>
-                Ventas vs. egresos — últimos 6 meses
-            </div>
-            <div class="card-body">
-                <div style="height: 300px;">
-                    <canvas id="graficoFlujoTienda"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-lg-5">
-        <div class="card bg-dark text-light border-secondary h-100">
-            <div class="card-header">
-                <i class="fa-solid fa-ranking-star me-1"></i>
-                Productos con mayores ventas
-            </div>
-            <div class="card-body">
-                <div style="height: 300px;">
-                    <canvas id="graficoProductosTienda"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
+  <div class="col-lg-7"><div class="card bg-dark text-light border-secondary h-100"><div class="card-header">Entradas de caja por moneda — últimos 6 meses</div><div class="card-body" style="height:300px"><canvas id="graficoFlujoTienda"></canvas></div></div></div>
+  <div class="col-lg-5"><div class="card bg-dark text-light border-secondary h-100"><div class="card-header">Ventas acumuladas por producto</div><div class="card-body" style="height:300px"><canvas id="graficoProductosTienda"></canvas></div></div></div>
 </div>
 
-<div class="d-flex flex-wrap gap-2 mb-4">
-    <a href="{% url 'tienda:registrar_venta' %}" class="btn btn-success">
-        <i class="fa-solid fa-cart-shopping"></i> Nueva venta
-    </a>
-    <a href="{% url 'tienda:registrar_compra' %}" class="btn btn-warning">
-        <i class="fa-solid fa-boxes-stacked"></i> Registrar compra
-    </a>
-    <a href="{% url 'tienda:registrar_gasto' %}" class="btn btn-danger">
-        <i class="fa-solid fa-arrow-trend-down"></i> Registrar gasto
-    </a>
-    <a href="{% url 'tienda:ajustar_inventario' %}" class="btn btn-info">
-        <i class="fa-solid fa-box-open"></i> Ajustar inventario
-    </a>
-    <a href="{% url 'tienda:crear_producto' %}" class="btn btn-outline-light">
-        <i class="fa-solid fa-plus"></i> Producto
-    </a>
-    <a href="{% url 'tienda:crear_cuenta' %}" class="btn btn-outline-light">
-        <i class="fa-solid fa-plus"></i> Cuenta
-    </a>
-</div>
+{% if creditos %}<div class="card bg-dark text-light border-secondary mb-4"><div class="card-header">Créditos pendientes</div><div class="table-responsive"><table class="table table-dark table-hover mb-0"><thead><tr><th>Venta</th><th>Cliente</th><th>Vence</th><th class="text-end">Saldo</th></tr></thead><tbody>{% for v in creditos %}<tr class="{% if v.esta_vencida %}table-danger{% endif %}"><td><a href="{% url 'tienda:detalle_venta' v.id %}">{{ v.numero }}</a></td><td>{{ v.cliente.nombres }}</td><td>{{ v.fecha_vencimiento|date:'d/m/Y' }}</td><td class="text-end">{{ v.saldo_pendiente|floatformat:2 }} {{ v.moneda }}</td></tr>{% endfor %}</tbody></table></div></div>{% endif %}
 
-{% if not cuentas %}
-    <div class="alert alert-warning">
-        <i class="fa-solid fa-triangle-exclamation me-1"></i>
-        Primero crea una cuenta propia de la tienda para registrar ventas, compras y gastos.
-    </div>
-{% endif %}
-
-<div class="row g-3 mb-4">
-    <div class="col-md-6 col-xl">
-        <div class="card bg-dark text-light border-success h-100">
-            <div class="card-body">
-                <small class="text-secondary">Saldo de la tienda</small>
-                <h3 class="mb-1">${{ saldo_total|floatformat:0 }}</h3>
-                <small>Solo cuentas de tienda</small>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6 col-xl">
-        <div class="card bg-dark text-light border-info h-100">
-            <div class="card-body">
-                <small class="text-secondary">Ventas del mes</small>
-                <h3 class="mb-1">${{ ventas_mes|floatformat:0 }}</h3>
-                <small>Ingresos por productos</small>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6 col-xl">
-        <div class="card bg-dark text-light border-danger h-100">
-            <div class="card-body">
-                <small class="text-secondary">Egresos del mes</small>
-                <h3 class="mb-1">${{ egresos_mes|floatformat:0 }}</h3>
-                <small>Compras y gastos</small>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6 col-xl">
-        <div class="card bg-dark text-light border-warning h-100">
-            <div class="card-body">
-                <small class="text-secondary">Resultado del mes</small>
-                <h3 class="mb-1">${{ utilidad_mes|floatformat:0 }}</h3>
-                <small>Ventas menos egresos</small>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6 col-xl">
-        <div class="card bg-dark text-light border-secondary h-100">
-            <div class="card-body">
-                <small class="text-secondary">Inventario al costo</small>
-                <h3 class="mb-1">${{ valor_inventario|floatformat:0 }}</h3>
-                <small>Valor de existencias activas</small>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6 col-xl">
-        <div class="card bg-dark text-light border-danger h-100">
-            <div class="card-body">
-                <small class="text-secondary">Gastos a la fecha</small>
-                <h3 class="mb-1">${{ egresos_acumulados|floatformat:0 }}</h3>
-                <small>Compras y gastos acumulados</small>
-            </div>
-        </div>
-    </div>
-</div>
-
-{% if productos_bajo_stock %}
-    <div class="alert alert-warning">
-        <strong><i class="fa-solid fa-boxes-stacked me-1"></i> Inventario bajo:</strong>
-        {% for producto in productos_bajo_stock %}
-            {{ producto.nombre }} ({{ producto.stock }}){% if not forloop.last %}, {% endif %}
-        {% endfor %}
-    </div>
-{% endif %}
-
-<div class="card bg-dark text-light border-secondary mb-4">
-    <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="mb-0"><i class="fa-solid fa-shirt"></i> Productos e inventario</h5>
-            <a href="{% url 'tienda:crear_producto' %}" class="btn btn-outline-success btn-sm">
-                <i class="fa-solid fa-plus"></i> Nuevo
-            </a>
-        </div>
-        <div class="table-responsive">
-            <table class="table table-dark table-hover align-middle mb-0">
-                <thead>
-                    <tr>
-                        <th>Producto</th>
-                        <th>Referencia</th>
-                        <th class="text-end">Costo</th>
-                        <th class="text-end">Precio</th>
-                        <th class="text-center">Stock</th>
-                        <th>Estado</th>
-                        <th class="text-end">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for producto in productos %}
-                        <tr class="{% if not producto.activo %}opacity-50{% endif %}">
-                            <td><strong>{{ producto.nombre }}</strong></td>
-                            <td>{{ producto.referencia|default:"—" }}</td>
-                            <td class="text-end">${{ producto.costo_unitario|floatformat:0 }}</td>
-                            <td class="text-end">${{ producto.precio_venta|floatformat:0 }}</td>
-                            <td class="text-center">
-                                <span class="badge {% if producto.bajo_stock %}bg-warning text-dark{% else %}bg-info text-dark{% endif %}">
-                                    {{ producto.stock }}
-                                </span>
-                            </td>
-                            <td>
-                                {% if producto.activo %}
-                                    <span class="badge bg-success">Activo</span>
-                                {% else %}
-                                    <span class="badge bg-secondary">Obsoleto</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-end text-nowrap">
-                                <a href="{% url 'tienda:editar_producto' producto.id %}"
-                                   class="btn btn-outline-info btn-sm" title="Editar">
-                                    <i class="fa-solid fa-pen"></i>
-                                </a>
-                                <form method="post"
-                                      action="{% url 'tienda:cambiar_estado_producto' producto.id %}"
-                                      class="d-inline">
-                                    {% csrf_token %}
-                                    <button type="submit"
-                                            class="btn btn-outline-{% if producto.activo %}warning{% else %}success{% endif %} btn-sm"
-                                            title="{% if producto.activo %}Marcar como obsoleto{% else %}Reactivar{% endif %}">
-                                        <i class="fa-solid {% if producto.activo %}fa-box-archive{% else %}fa-rotate-left{% endif %}"></i>
-                                    </button>
-                                </form>
-                            </td>
-                        </tr>
-                    {% empty %}
-                        <tr>
-                            <td colspan="7" class="text-center text-secondary py-4">
-                                Aún no hay productos registrados.
-                            </td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
-<div class="row g-4">
-    <div class="col-lg-5">
-        <div class="card bg-dark text-light border-secondary h-100">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="mb-0"><i class="fa-solid fa-wallet"></i> Cuentas de tienda</h5>
-                    <a href="{% url 'tienda:crear_cuenta' %}" class="btn btn-outline-success btn-sm">
-                        <i class="fa-solid fa-plus"></i>
-                    </a>
-                </div>
-                <div class="table-responsive">
-                    <table class="table table-dark table-hover align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th>Cuenta</th>
-                                <th class="text-end">Inicial</th>
-                                <th class="text-end">Actual</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for cuenta in cuentas %}
-                                <tr class="{% if not cuenta.activa %}opacity-50{% endif %}">
-                                    <td>
-                                        {{ cuenta.nombre }}<br>
-                                        <small class="text-secondary">{{ cuenta.get_tipo_display }}</small>
-                                    </td>
-                                    <td class="text-end">${{ cuenta.saldo_inicial|floatformat:0 }}</td>
-                                    <td class="text-end">${{ cuenta.saldo_calculado|floatformat:0 }}</td>
-                                    <td class="text-end">
-                                        <a href="{% url 'tienda:editar_cuenta' cuenta.id %}"
-                                           class="btn btn-outline-info btn-sm" title="Editar cuenta">
-                                            <i class="fa-solid fa-pen"></i>
-                                        </a>
-                                    </td>
-                                </tr>
-                            {% empty %}
-                                <tr><td colspan="4" class="text-center text-secondary">Sin cuentas.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-lg-7">
-        <div class="card bg-dark text-light border-secondary h-100">
-            <div class="card-body">
-                <h5 class="mb-3"><i class="fa-solid fa-receipt"></i> Últimos movimientos</h5>
-                <div class="table-responsive">
-                    <table class="table table-dark table-hover align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th>Fecha</th>
-                                <th>Origen</th>
-                                <th>Concepto</th>
-                                <th>Cuenta</th>
-                                <th class="text-end">Valor</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for movimiento in movimientos %}
-                                <tr>
-                                    <td>{{ movimiento.fecha|date:"d/m/Y" }}</td>
-                                    <td>
-                                        <span class="badge {% if movimiento.tipo == 'INGRESO' %}bg-success{% else %}bg-danger{% endif %}">
-                                            {{ movimiento.get_origen_display }}
-                                        </span>
-                                    </td>
-                                    <td>{{ movimiento.concepto }}</td>
-                                    <td>{{ movimiento.cuenta }}</td>
-                                    <td class="text-end">
-                                        {% if movimiento.tipo == 'INGRESO' %}+{% else %}−{% endif %}
-                                        ${{ movimiento.valor|floatformat:0 }}
-                                    </td>
-                                </tr>
-                            {% empty %}
-                                <tr><td colspan="5" class="text-center text-secondary">Sin movimientos.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+<div class="card bg-dark text-light border-secondary"><div class="card-header">Movimientos del período</div><div class="table-responsive"><table class="table table-dark table-hover mb-0"><thead><tr><th>Fecha</th><th>Concepto</th><th>Cuenta</th><th>Moneda</th><th class="text-end">Valor</th></tr></thead><tbody>{% for m in movimientos %}<tr><td>{{ m.fecha|date:'d/m/Y H:i' }}</td><td>{{ m.concepto }}</td><td>{{ m.cuenta.nombre }}</td><td>{{ m.moneda }}</td><td class="text-end {% if m.tipo == 'INGRESO' %}text-success{% else %}text-danger{% endif %}">{% if m.tipo == 'INGRESO' %}+{% else %}−{% endif %} {{ m.valor|floatformat:2 }}</td></tr>{% empty %}<tr><td colspan="5" class="text-center py-4">Sin movimientos.</td></tr>{% endfor %}</tbody></table></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-{{ labels_flujo|json_script:"labels-flujo-tienda" }}
-{{ ventas_flujo|json_script:"ventas-flujo-tienda" }}
-{{ egresos_flujo|json_script:"egresos-flujo-tienda" }}
-{{ labels_productos|json_script:"labels-productos-tienda" }}
-{{ ventas_productos|json_script:"ventas-productos-tienda" }}
-
-<script>
-const formatoMonedaTienda = new Intl.NumberFormat('es-CO', {
-    style: 'currency',
-    currency: 'COP',
-    maximumFractionDigits: 0
-});
-const labelsFlujoTienda = JSON.parse(document.getElementById('labels-flujo-tienda').textContent);
-const ventasFlujoTienda = JSON.parse(document.getElementById('ventas-flujo-tienda').textContent);
-const egresosFlujoTienda = JSON.parse(document.getElementById('egresos-flujo-tienda').textContent);
-const labelsProductosTienda = JSON.parse(document.getElementById('labels-productos-tienda').textContent);
-const ventasProductosTienda = JSON.parse(document.getElementById('ventas-productos-tienda').textContent);
-
-new Chart(document.getElementById('graficoFlujoTienda'), {
-    type: 'line',
-    data: {
-        labels: labelsFlujoTienda,
-        datasets: [
-            {
-                label: 'Ventas',
-                data: ventasFlujoTienda,
-                borderColor: '#198754',
-                backgroundColor: 'rgba(25, 135, 84, 0.16)',
-                fill: true,
-                tension: 0.3
-            },
-            {
-                label: 'Egresos',
-                data: egresosFlujoTienda,
-                borderColor: '#dc3545',
-                backgroundColor: 'rgba(220, 53, 69, 0.12)',
-                fill: true,
-                tension: 0.3
-            }
-        ]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-            y: {
-                beginAtZero: true,
-                ticks: { callback: valor => formatoMonedaTienda.format(valor) }
-            }
-        },
-        plugins: {
-            tooltip: {
-                callbacks: {
-                    label: contexto => `${contexto.dataset.label}: ${formatoMonedaTienda.format(contexto.parsed.y)}`
-                }
-            }
-        }
-    }
-});
-
-new Chart(document.getElementById('graficoProductosTienda'), {
-    type: 'bar',
-    data: {
-        labels: labelsProductosTienda,
-        datasets: [{
-            label: 'Ventas acumuladas',
-            data: ventasProductosTienda,
-            backgroundColor: '#ffc107',
-            borderColor: '#997404',
-            borderWidth: 1
-        }]
-    },
-    options: {
-        indexAxis: 'y',
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-            x: {
-                beginAtZero: true,
-                ticks: { callback: valor => formatoMonedaTienda.format(valor) }
-            }
-        },
-        plugins: {
-            legend: { display: false },
-            tooltip: {
-                callbacks: {
-                    label: contexto => formatoMonedaTienda.format(contexto.parsed.x)
-                }
-            }
-        }
-    }
-});
-</script>
-
+{{ labels_flujo|json_script:'labels-flujo-tienda' }}{{ entradas_cop|json_script:'entradas-cop' }}{{ entradas_usd|json_script:'entradas-usd' }}{{ labels_productos|json_script:'labels-productos' }}{{ ventas_productos|json_script:'ventas-productos' }}
+<script>new Chart(document.getElementById('graficoFlujoTienda'),{type:'line',data:{labels:JSON.parse(document.getElementById('labels-flujo-tienda').textContent),datasets:[{label:'COP',data:JSON.parse(document.getElementById('entradas-cop').textContent),borderColor:'#0d6efd',tension:.3},{label:'USD',data:JSON.parse(document.getElementById('entradas-usd').textContent),borderColor:'#198754',tension:.3}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true}}}});new Chart(document.getElementById('graficoProductosTienda'),{type:'bar',data:{labels:JSON.parse(document.getElementById('labels-productos').textContent),datasets:[{label:'Valor vendido',data:JSON.parse(document.getElementById('ventas-productos').textContent),backgroundColor:'#ffc107'}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true}}}});</script>
 {% endblock %}

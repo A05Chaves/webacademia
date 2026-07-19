@@ -1577,7 +1577,7 @@ def aprobar_registro_legal(request, registro_id):
             registro_id=registro.id
         )
 
-    alumno, password_temporal, error = crear_alumno_desde_registro(
+    alumno, _, error = crear_alumno_desde_registro(
         registro
     )
 
@@ -1596,14 +1596,11 @@ def aprobar_registro_legal(request, registro_id):
     registro.estado = 'APROBADO'
     registro.save()
 
-    enviar_correo_bienvenida_alumno(
-        registro,
-        password_temporal
-    )
+    enviar_correo_bienvenida_alumno(registro)
 
     messages.success(
         request,
-        f'Alumno creado correctamente. Usuario: {registro.documento} | Clave temporal: {password_temporal}'
+        f'Alumno creado correctamente. Usuario: {registro.usuario_solicitado}'
     )
 
     return redirect(
