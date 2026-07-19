@@ -616,6 +616,8 @@
 
     {{ participantes_llave|json_script:"participantesLlaveData" }}
     {{ logos_llave|json_script:"logosLlaveData" }}
+    {{ llave_guardada|json_script:"llaveGuardadaData" }}
+    {% if categoria_llaves %}<form id="bracketCsrfForm" hidden>{% csrf_token %}</form>{% endif %}
 
     <div id="championOverlay" class="champion-overlay" hidden>
         <div class="champion-celebration">
@@ -1022,6 +1024,8 @@
         Object.entries(JSON.parse(document.getElementById('logosLlaveData')?.textContent || '{}'))
             .map(([label, logo]) => [label.toUpperCase(), logo])
     );
+    const serverBracket = JSON.parse(document.getElementById('llaveGuardadaData')?.textContent || 'null');
+    const bracketSaveUrl = {% if categoria_llaves %}'{% url "gestion:guardar_llave_categoria" categoria_llaves.id %}'{% else %}null{% endif %};
     const bracketStorageKey = {% if categoria_llaves %}'luchaBracket-categoria-{{ categoria_llaves.id }}-{{ version_llave }}'{% else %}'luchaBracket'{% endif %};
     const BYE = '__BYE__';
     let activeMatch = null;
@@ -1369,6 +1373,23 @@
 
     function saveBracket() {
         localStorage.setItem(bracketStorageKey, JSON.stringify(bracket));
+        persistBracket(bracket);
+    }
+
+    async function persistBracket(datos) {
+        if (!bracketSaveUrl) return;
+        const csrfToken=document.querySelector('#bracketCsrfForm [name="csrfmiddlewaretoken"]')?.value;
+        try {
+            const response=await fetch(bracketSaveUrl,{
+                method:'POST',
+                headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},
+                body:JSON.stringify({datos})
+            });
+            if(!response.ok) throw new Error('No fue posible publicar la llave.');
+        } catch(error) {
+            console.error(error);
+            alert('La llave quedó guardada en este equipo, pero no pudo publicarse para consulta.');
+        }
     }
 
     function newBracket() {
@@ -1376,6 +1397,7 @@
         document.getElementById('championOverlay').hidden = true;
         bracket = null;
         localStorage.removeItem(bracketStorageKey);
+        persistBracket(null);
         document.getElementById('bracketSetup').hidden = false;
         document.getElementById('bracketTournament').hidden = true;
         document.getElementById('currentFight').hidden = true;
@@ -1413,13 +1435,14 @@
             buildParticipantInputs();
         }
         try {
-            const stored = JSON.parse(localStorage.getItem(bracketStorageKey));
+            const stored = serverBracket || JSON.parse(localStorage.getItem(bracketStorageKey));
             if (stored && Array.isArray(stored.rounds) && Array.isArray(stored.names)) {
                 bracket = stored;
                 bracket.configuredSize = stored.configuredSize || stored.names.length;
                 document.getElementById('bracketSize').value = String(bracket.configuredSize);
                 propagateBracket();
                 renderBracket();
+                if (!serverBracket) saveBracket();
             }
         } catch (error) {
             localStorage.removeItem(bracketStorageKey);

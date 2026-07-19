@@ -1,0 +1,48 @@
+{% extends 'gestion/base.html' %}
+{% block content %}
+<style>
+  .public-bracket-board{align-items:stretch;display:flex;gap:22px;overflow-x:auto;padding:18px 2px 12px}
+  .public-bracket-round{display:flex;flex:1 0 250px;flex-direction:column;gap:14px;justify-content:space-around;min-width:250px}
+  .public-round-title{color:var(--text-secondary);font-size:.82rem;font-weight:800;letter-spacing:.08em;text-align:center;text-transform:uppercase}
+  .public-match{background:var(--bg-main);border:1px solid var(--border-color);border-radius:14px;overflow:hidden}
+  .public-fighter{align-items:center;display:flex;gap:8px;justify-content:space-between;padding:11px 13px;text-transform:uppercase}
+  .public-fighter+.public-fighter{border-top:1px solid var(--border-color)}
+  .public-fighter.winner{background:rgba(25,135,84,.18);color:#75b798;font-weight:800}
+  .public-fighter.pending{color:var(--text-secondary)}
+  .public-category{background:var(--bg-card);border:1px solid var(--border-color);border-radius:18px;margin-bottom:16px;padding:18px}
+</style>
+
+<div class="page-heading">
+  <div class="page-heading-main">
+    <h2 class="page-heading-title"><i class="fa-solid fa-sitemap"></i><span>Llaves: {{ evento.nombre }}</span></h2>
+    <p class="page-heading-subtitle text-secondary">Consulta pública de cruces por categoría · {{ evento.fecha_inicio|date:'d/m/Y H:i' }}</p>
+  </div>
+  <div class="page-heading-actions"><a href="{% url 'gestion:home_publica' %}" class="btn btn-outline-light page-heading-action"><i class="fa-solid fa-arrow-left"></i><span>Volver</span></a></div>
+</div>
+
+<div class="alert alert-info"><i class="fa-solid fa-circle-info me-1"></i> Las llaves son de consulta. La organización puede actualizarlas antes de iniciar la categoría.</div>
+<div id="llavesPublicas"></div>
+{{ llaves|json_script:'llavesPublicasData' }}
+
+<script>
+(() => {
+  const categorias=JSON.parse(document.getElementById('llavesPublicasData').textContent||'[]');
+  const destino=document.getElementById('llavesPublicas');
+  const BYE='__BYE__';
+  function tituloRonda(indice,total){const restantes=total-indice;if(restantes===1)return'Final';if(restantes===2)return'Semifinal';if(restantes===3)return'Cuartos de final';return'Primera ronda'}
+  categorias.forEach(categoria=>{
+    const seccion=document.createElement('section');seccion.className='public-category';
+    const encabezado=document.createElement('div');encabezado.className='d-flex flex-wrap justify-content-between gap-2 align-items-center';
+    const titulo=document.createElement('h3');titulo.className='h5 mb-0';titulo.textContent=categoria.nombre;encabezado.appendChild(titulo);
+    if(categoria.actualizada){const fecha=document.createElement('small');fecha.className='text-secondary';fecha.textContent='Actualizada: '+categoria.actualizada;encabezado.appendChild(fecha)}
+    seccion.appendChild(encabezado);
+    const datos=categoria.datos;
+    if(!datos||!Array.isArray(datos.rounds)||!datos.rounds.length){const aviso=document.createElement('p');aviso.className='text-warning mb-0 mt-3';aviso.textContent='La organización todavía no ha publicado esta llave.';seccion.appendChild(aviso);destino.appendChild(seccion);return}
+    const tablero=document.createElement('div');tablero.className='public-bracket-board';
+    datos.rounds.forEach((ronda,indice)=>{const columna=document.createElement('div');columna.className='public-bracket-round';const nombre=document.createElement('div');nombre.className='public-round-title';nombre.textContent=tituloRonda(indice,datos.rounds.length);columna.appendChild(nombre);ronda.forEach(combate=>{const tarjeta=document.createElement('div');tarjeta.className='public-match';[combate.p1,combate.p2].forEach(participante=>{const fila=document.createElement('div');const visible=participante===BYE?'BYE':(participante||'Por definir');fila.className='public-fighter'+(combate.winner===participante&&participante&&participante!==BYE?' winner':'')+(!participante?' pending':'');const texto=document.createElement('span');texto.textContent=visible;fila.appendChild(texto);if(combate.winner===participante&&participante&&participante!==BYE){const marca=document.createElement('i');marca.className='fa-solid fa-circle-check';fila.appendChild(marca)}tarjeta.appendChild(fila)});columna.appendChild(tarjeta)});tablero.appendChild(columna)});
+    seccion.appendChild(tablero);destino.appendChild(seccion);
+  });
+  if(!categorias.length){destino.innerHTML='<div class="alert alert-warning">Este torneo todavía no tiene categorías publicadas.</div>'}
+})();
+</script>
+{% endblock %}

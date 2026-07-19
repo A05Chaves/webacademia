@@ -1,4 +1,5 @@
 import base64
+import json
 from datetime import timedelta
 from io import BytesIO
 from tempfile import TemporaryDirectory
@@ -19,7 +20,7 @@ from gestion.forms import EventoForm
 
 from .models import (
     AcademiaCompetidora, CategoriaEvento, Evento, InscripcionEvento,
-    MetodoPagoQR, Pago, Promocion,
+    LlaveCategoriaEvento, MetodoPagoQR, Pago, Promocion,
 )
 from .services import marcar_posible_duplicado
 
@@ -500,6 +501,62 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
         response = self.client.get(reverse('gestion:home_publica'))
 
         self.assertContains(response, evento.nombre)
+
+    def test_banner_con_imagen_solo_muestra_acciones_y_habilita_llaves_un_dia_antes(self):
+        evento, _ = self.crear_torneo_gratuito()
+        evento.descripcion = 'Texto que no debe cubrir el afiche del torneo'
+        evento.imagen = imagen_prueba('afiche-acciones.png')
+        evento.publicada_home = True
+        evento.fecha_inicio = timezone.now() + timedelta(days=2)
+        evento.save()
+
+        anticipado = self.client.get(reverse('gestion:home_publica'))
+        self.assertContains(anticipado, 'Registrarme')
+        self.assertNotContains(anticipado, 'Ver llaves')
+        self.assertNotContains(anticipado, evento.descripcion)
+
+        evento.fecha_inicio = timezone.now() + timedelta(hours=12)
+        evento.save(update_fields=['fecha_inicio'])
+        habilitado = self.client.get(reverse('gestion:home_publica'))
+        self.assertContains(habilitado, 'Registrarme')
+        self.assertContains(habilitado, 'Ver llaves')
+
+    def test_llave_guardada_por_admin_se_puede_consultar_publicamente(self):
+        evento, categoria = self.crear_torneo_gratuito()
+        evento.fecha_inicio = timezone.now() + timedelta(hours=12)
+        evento.publicada_home = True
+        evento.save(update_fields=['fecha_inicio', 'publicada_home'])
+        datos = {
+            'names': ['ANA — EQUIPO A', 'LUZ — EQUIPO B'],
+            'configuredSize': 4,
+            'capacity': 4,
+            'rounds': [[{
+                'p1': 'ANA — EQUIPO A',
+                'p2': 'LUZ — EQUIPO B',
+                'winner': None,
+            }]],
+        }
+        self.admin.is_superuser = True
+        self.admin.save(update_fields=['is_superuser'])
+        self.client.force_login(self.admin)
+        guardado = self.client.post(
+            reverse('gestion:guardar_llave_categoria', args=[categoria.id]),
+            data=json.dumps({'datos': datos}),
+            content_type='application/json',
+        )
+        self.assertEqual(guardado.status_code, 200)
+        self.assertTrue(
+            LlaveCategoriaEvento.objects.filter(categoria=categoria).exists()
+        )
+
+        self.client.logout()
+        publica = self.client.get(
+            reverse('gestion:llaves_evento_publicas', args=[evento.id])
+        )
+        self.assertEqual(publica.status_code, 200)
+        self.assertContains(publica, 'ANA')
+        self.assertContains(publica, 'LUZ')
+        self.assertContains(publica, str(categoria.nombre))
 
     def test_fechas_de_inscripcion_son_independientes_del_evento(self):
         inicio_evento = timezone.localtime(timezone.now()) + timedelta(days=10)

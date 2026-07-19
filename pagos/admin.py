@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     AcademiaCompetidora, AplicacionPromocion, CategoriaEvento, Evento,
-    InscripcionEvento, MetodoPagoQR, Pago, Promocion,
+    InscripcionEvento, LlaveCategoriaEvento, MetodoPagoQR, Pago, Promocion,
 )
 
 
@@ -73,6 +73,12 @@ class CategoriaEventoAdmin(admin.ModelAdmin):
 class AcademiaCompetidoraAdmin(admin.ModelAdmin):
     list_display = ('nombre', 'logo', 'activa', 'actualizada')
     search_fields = ('nombre',)
+
+
+@admin.register(LlaveCategoriaEvento)
+class LlaveCategoriaEventoAdmin(admin.ModelAdmin):
+    list_display = ('categoria', 'actualizada', 'actualizada_por')
+    list_filter = ('categoria__evento',)
 
 
 @admin.register(InscripcionEvento)

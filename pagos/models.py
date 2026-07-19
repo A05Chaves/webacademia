@@ -328,6 +328,30 @@ class AcademiaCompetidora(models.Model):
         return self.nombre
 
 
+class LlaveCategoriaEvento(models.Model):
+    categoria = models.OneToOneField(
+        CategoriaEvento,
+        on_delete=models.CASCADE,
+        related_name='llave_publicada',
+    )
+    datos = models.JSONField(default=dict, blank=True)
+    actualizada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='llaves_evento_actualizadas',
+    )
+    actualizada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Llave de categoría'
+        verbose_name_plural = 'Llaves de categorías'
+
+    def __str__(self):
+        return f'Llave - {self.categoria}'
+
+
 class Pago(models.Model):
     class Estados(models.TextChoices):
         PENDIENTE = 'PENDIENTE', 'Pendiente'

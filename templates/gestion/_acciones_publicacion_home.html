@@ -1,0 +1,6 @@
+{% if publicacion.tipo == 'PROMOCION' %}
+<a href="{% url 'gestion:aplicar_promocion' publicacion.objeto.id %}" class="btn btn-warning shadow"><i class="fa-solid fa-tags me-1"></i> Aplicar a la promoción</a>
+{% else %}
+{% if publicacion.objeto.disponible %}<a href="{% url 'gestion:inscribirse_evento' publicacion.objeto.id %}" class="btn btn-info shadow"><i class="fa-solid fa-user-plus me-1"></i> Registrarme</a>{% endif %}
+{% if publicacion.mostrar_llaves %}<a href="{% url 'gestion:llaves_evento_publicas' publicacion.objeto.id %}" class="btn btn-warning shadow"><i class="fa-solid fa-sitemap me-1"></i> Ver llaves</a>{% endif %}
+{% endif %}

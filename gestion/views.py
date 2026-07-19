@@ -34,7 +34,7 @@ from alumnos.models import Alumno
 from planes.models import Plan, Suscripcion
 from pagos.models import (
     AcademiaCompetidora, AplicacionPromocion, CategoriaEvento, Evento,
-    InscripcionEvento, MetodoPagoQR, Pago, Promocion,
+    InscripcionEvento, LlaveCategoriaEvento, MetodoPagoQR, Pago, Promocion,
 )
 from pagos.services import (
     enviar_comprobante_pago, generar_pdf_comprobante_pago,
@@ -240,8 +240,15 @@ def home_publica(request):
     publicaciones_home = sorted(
         ([{'tipo': 'PROMOCION', 'objeto': item, 'orden': item.orden}
           for item in promociones_home]
-         + [{'tipo': 'EVENTO', 'objeto': item, 'orden': item.orden}
-            for item in eventos_home]),
+         + [{
+             'tipo': 'EVENTO',
+             'objeto': item,
+             'orden': item.orden,
+             'mostrar_llaves': (
+                 item.tipo == Evento.Tipos.TORNEO
+                 and ahora >= item.fecha_inicio - timedelta(days=1)
+             ),
+         } for item in eventos_home]),
         key=lambda item: (item['orden'], 0 if item['objeto'].destacada else 1),
     )
 
@@ -2223,6 +2230,108 @@ def mover_inscripcion_categoria(request, inscripcion_id):
     return redirect('gestion:inscripciones_evento', evento_id=inscripcion.evento_id)
 
 
+def llaves_evento_publicas(request, evento_id):
+    evento = get_object_or_404(
+        Evento,
+        id=evento_id,
+        tipo=Evento.Tipos.TORNEO,
+        activo=True,
+        publicada_home=True,
+    )
+    ahora = timezone.now()
+    if ahora < evento.fecha_inicio - timedelta(days=1):
+        messages.info(
+            request,
+            'Las llaves estarán disponibles un día antes de iniciar el torneo.',
+        )
+        return redirect('gestion:home_publica')
+    categorias = evento.categorias.filter(activa=True).select_related(
+        'llave_publicada'
+    )
+    llaves = []
+    for categoria in categorias:
+        try:
+            configuracion = categoria.llave_publicada
+        except LlaveCategoriaEvento.DoesNotExist:
+            configuracion = None
+        llaves.append({
+            'id': categoria.id,
+            'nombre': str(categoria),
+            'datos': configuracion.datos if configuracion else None,
+            'actualizada': (
+                timezone.localtime(configuracion.actualizada).strftime('%d/%m/%Y %H:%M')
+                if configuracion else ''
+            ),
+        })
+    return render(request, 'gestion/llaves_evento_publicas.html', {
+        'evento': evento,
+        'llaves': llaves,
+    })
+
+
+def _datos_llave_validos(datos):
+    if not isinstance(datos, dict):
+        return False
+    nombres = datos.get('names')
+    rondas = datos.get('rounds')
+    if not isinstance(nombres, list) or not isinstance(rondas, list):
+        return False
+    if not 2 <= len(nombres) <= 32 or not 1 <= len(rondas) <= 6:
+        return False
+    if any(not isinstance(nombre, str) or len(nombre) > 180 for nombre in nombres):
+        return False
+    for ronda in rondas:
+        if not isinstance(ronda, list) or len(ronda) > 16:
+            return False
+        for combate in ronda:
+            if not isinstance(combate, dict):
+                return False
+            if any(
+                valor is not None and (
+                    not isinstance(valor, str) or len(valor) > 180
+                )
+                for valor in (
+                    combate.get('p1'), combate.get('p2'), combate.get('winner')
+                )
+            ):
+                return False
+    return True
+
+
+@staff_member_required
+@require_POST
+def guardar_llave_categoria(request, categoria_id):
+    if not request.user.is_superuser:
+        return JsonResponse(
+            {'ok': False, 'error': 'No tienes permiso para publicar llaves.'},
+            status=403,
+        )
+    categoria = get_object_or_404(
+        CategoriaEvento,
+        id=categoria_id,
+        activa=True,
+        evento__tipo=Evento.Tipos.TORNEO,
+    )
+    try:
+        contenido = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'ok': False, 'error': 'Contenido inválido.'}, status=400)
+    datos = contenido.get('datos')
+    if datos is None:
+        LlaveCategoriaEvento.objects.filter(categoria=categoria).delete()
+        return JsonResponse({'ok': True, 'eliminada': True})
+    if not _datos_llave_validos(datos):
+        return JsonResponse({'ok': False, 'error': 'La estructura de la llave no es válida.'}, status=400)
+    llave, _ = LlaveCategoriaEvento.objects.update_or_create(
+        categoria=categoria,
+        defaults={'datos': datos, 'actualizada_por': request.user},
+    )
+    return JsonResponse({
+        'ok': True,
+        'actualizada': timezone.localtime(llave.actualizada).isoformat(),
+    })
+
+
 def aplicar_promocion(request, promocion_id):
     promocion = get_object_or_404(
         Promocion.objects.select_related('plan'), id=promocion_id
@@ -2827,6 +2936,7 @@ def cronometro_lucha(request):
     categorias_torneo = CategoriaEvento.objects.none()
     participantes_llave = []
     logos_llave = {}
+    llave_guardada = None
     version_llave = 'manual'
     if request.user.is_superuser:
         evento_id = request.GET.get('evento')
@@ -2840,6 +2950,9 @@ def cronometro_lucha(request):
         if categoria_id and evento_seleccionado:
             categoria_seleccionada = categorias_torneo.filter(id=categoria_id).first()
         if categoria_seleccionada:
+            llave_guardada = LlaveCategoriaEvento.objects.filter(
+                categoria=categoria_seleccionada
+            ).values_list('datos', flat=True).first()
             participantes = list(
                 categoria_seleccionada.inscripciones.filter(
                     estado=InscripcionEvento.Estados.CONFIRMADA,
@@ -2869,6 +2982,7 @@ def cronometro_lucha(request):
         'categoria_llaves': categoria_seleccionada,
         'participantes_llave': participantes_llave,
         'logos_llave': logos_llave,
+        'llave_guardada': llave_guardada,
         'version_llave': version_llave,
     })
 
