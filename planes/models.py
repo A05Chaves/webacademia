@@ -74,6 +74,7 @@ class Plan(models.Model):
 class Suscripcion(models.Model):
     class Estados(models.TextChoices):
         ACTIVA = 'ACTIVA', 'Activa'
+        PROGRAMADA = 'PROGRAMADA', 'Programada'
         PENDIENTE_PAGO = 'PENDIENTE_PAGO', 'Pendiente de pago'
         VENCIDA = 'VENCIDA', 'Vencida'
         SUSPENDIDA = 'SUSPENDIDA', 'Suspendida'
@@ -98,6 +99,10 @@ class Suscripcion(models.Model):
         default=Estados.PENDIENTE_PAGO
     )
     observaciones = models.TextField(blank=True, null=True)
+    precio_aplicado = models.DecimalField(
+        max_digits=12, decimal_places=2, blank=True, null=True
+    )
+    detalle_beneficio = models.CharField(max_length=240, blank=True)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     actualizado = models.DateTimeField(auto_now=True)
 
@@ -131,7 +136,7 @@ class Suscripcion(models.Model):
         elif self.fecha_inicio <= hoy <= self.fecha_vencimiento:
             self.estado = 'ACTIVA'
         else:
-            self.estado = 'PENDIENTE_PAGO'
+            self.estado = 'PROGRAMADA'
 
         self.save()
 

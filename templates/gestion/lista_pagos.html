@@ -1,58 +1,51 @@
 {% extends 'gestion/base.html' %}
-
 {% block content %}
-
-<div class="d-flex justify-content-between align-items-center mb-3">
-
-    <h2 class="mb-0">
-        Pagos
-    </h2>
-
-    <a href="{% url 'gestion:crear_pago' %}"
-       class="btn btn-outline-light btn-sm">
-
-        <i class="fa-solid fa-plus"></i>
-        Registrar pago
-
-    </a>
-
+<div class="page-heading">
+    <div class="page-heading-main">
+        <h2 class="page-heading-title"><i class="fa-solid fa-receipt"></i><span>Pagos de la academia</span></h2>
+        <p class="page-heading-subtitle text-secondary">Historial completo de mensualidades, promociones y eventos.</p>
+    </div>
+    <div class="page-heading-actions">
+        <a href="{% url 'gestion:crear_pago' %}" class="btn btn-outline-light page-heading-action"><i class="fa-solid fa-plus"></i><span>Registrar pago</span></a>
+    </div>
 </div>
 
-<div class="table-responsive">
+<form method="get" class="card bg-dark text-light border-secondary mb-4">
+    <div class="card-body row g-3 align-items-end">
+        <div class="col-sm-6 col-lg-2"><label class="form-label">Desde</label><input type="date" name="fecha_desde" value="{{ filtros.fecha_desde }}" class="form-control"></div>
+        <div class="col-sm-6 col-lg-2"><label class="form-label">Hasta</label><input type="date" name="fecha_hasta" value="{{ filtros.fecha_hasta }}" class="form-control"></div>
+        <div class="col-lg-3"><label class="form-label">Documento estudiante o acudiente</label><input type="search" name="documento" value="{{ filtros.documento }}" class="form-control" placeholder="Número de documento"></div>
+        <div class="col-sm-6 col-lg-2"><label class="form-label">Estado</label><select name="estado" class="form-select"><option value="">Todos</option>{% for valor, etiqueta in estados_pago %}<option value="{{ valor }}" {% if filtros.estado == valor %}selected{% endif %}>{{ etiqueta }}</option>{% endfor %}</select></div>
+        <div class="col-sm-6 col-lg-2"><label class="form-label">Concepto</label><select name="tipo" class="form-select"><option value="">Todos</option>{% for valor, etiqueta in tipos_pago %}<option value="{{ valor }}" {% if filtros.tipo == valor %}selected{% endif %}>{{ etiqueta }}</option>{% endfor %}</select></div>
+        <div class="col-lg-1 d-grid"><button class="btn btn-primary" title="Aplicar filtros"><i class="fa-solid fa-filter"></i></button></div>
+        <div class="col-md-4"><label class="form-label">Método</label><select name="metodo" class="form-select"><option value="">Todos</option>{% for item in metodos_pago %}<option value="{{ item.id }}" {% if filtros.metodo == item.id|stringformat:'s' %}selected{% endif %}>{{ item }}</option>{% endfor %}</select></div>
+        <div class="col-md-2"><a href="{% url 'gestion:lista_pagos' %}" class="btn btn-outline-secondary w-100">Limpiar</a></div>
+    </div>
+</form>
 
-    <table class="table table-dark table-hover table-dark-custom">
-
-        <tr>
-            <th>ID</th>
-            <th>Alumno</th>
-            <th>Suscripción</th>
-            <th>Método</th>
-            <th>Valor</th>
-            <th>Estado</th>
-            <th>Fecha reporte</th>
-            <th>Acción</th>
-        </tr>
-        {% for pago in pagos %}
-        <tr>
-            <td>{{ pago.id }}</td>
-            <td>{{ pago.alumno }}</td>
-            <td>{{ pago.suscripcion }}</td>
-            <td>{{ pago.metodo_qr }}</td>
-            <td>{{ pago.valor }}</td>
-            <td>{{ pago.estado }}</td>
-            <td>{{ pago.fecha_reporte }}</td>
-            <td>
-                {% if pago.estado == 'PENDIENTE' %}
-                <a href="{% url 'gestion:validar_pago' pago.id %}"
-                class="btn btn-outline-success btn-sm">
-                    <i class="fa-solid fa-check"></i>
-                </a>
-                {% else %}
-                Validado
-                {% endif %}
-            </td>
-        </tr>
-        {% endfor %}
-    </table>
+<div class="row g-3 mb-4">
+    <div class="col-6 col-lg"><div class="card bg-dark text-light border-secondary h-100"><div class="card-body"><small>Registros</small><h4 class="mb-0">{{ resumen.cantidad|default:0 }}</h4></div></div></div>
+    <div class="col-6 col-lg"><div class="card bg-dark text-light border-success h-100"><div class="card-body"><small>Aprobados</small><h4 class="mb-0">$ {{ resumen.aprobados|default:0|floatformat:0 }}</h4></div></div></div>
+    <div class="col-6 col-lg"><div class="card bg-dark text-light border-warning h-100"><div class="card-body"><small>Pendientes</small><h4 class="mb-0">$ {{ resumen.pendientes|default:0|floatformat:0 }}</h4></div></div></div>
+    <div class="col-6 col-lg"><div class="card bg-dark text-light border-danger h-100"><div class="card-body"><small>Rechazados</small><h4 class="mb-0">$ {{ resumen.rechazados|default:0|floatformat:0 }}</h4></div></div></div>
 </div>
+
+<div class="card bg-dark text-light border-secondary">
+<div class="table-responsive"><table class="table table-dark table-hover align-middle mb-0">
+    <thead><tr><th>#</th><th>Fecha</th><th>Estudiante / pagador</th><th>Concepto</th><th>Referencia</th><th class="text-end">Valor</th><th>Estado</th><th class="text-end">Acciones</th></tr></thead>
+    <tbody>{% for pago in pagos %}<tr>
+        <td>{{ pago.id }}{% if pago.posible_duplicado %}<span class="badge bg-warning text-dark d-block mt-1">Posible duplicado</span>{% endif %}</td>
+        <td>{{ pago.fecha_reporte|date:'d/m/Y H:i' }}</td>
+        <td><strong>{{ pago.alumno|default:pago.pagador_nombre }}</strong><br><small class="text-secondary">{{ pago.alumno.documento|default:pago.pagador_documento }}{% if pago.alumno.documento_acudiente %} · Acudiente {{ pago.alumno.documento_acudiente }}{% endif %}</small></td>
+        <td>{{ pago.get_tipo_display }}{% if pago.plan %}<br><small class="text-secondary">{{ pago.plan.nombre }}</small>{% endif %}</td>
+        <td>{{ pago.referencia_pago|default:'—' }}</td>
+        <td class="text-end">$ {{ pago.valor|floatformat:0 }}</td>
+        <td><span class="badge {% if pago.estado == 'APROBADO' %}bg-success{% elif pago.estado == 'RECHAZADO' %}bg-danger{% else %}bg-warning text-dark{% endif %}">{{ pago.get_estado_display }}</span></td>
+        <td><div class="d-flex gap-2 justify-content-end flex-wrap">
+            {% if pago.estado == 'PENDIENTE' %}<a href="{% url 'gestion:validar_pago' pago.id %}" class="btn btn-success btn-sm"><i class="fa-solid fa-clipboard-check"></i> Revisar pago y suscripción</a>{% endif %}
+            {% if pago.suscripcion %}<a href="{% url 'gestion:editar_suscripcion' pago.suscripcion.id %}" class="btn btn-outline-warning btn-sm" title="Ver suscripción"><i class="fa-solid fa-id-card"></i></a>{% endif %}
+            {% if pago.estado == 'APROBADO' and pago.numero_comprobante %}<a href="{% url 'gestion:descargar_comprobante_pago' pago.token_comprobante %}" class="btn btn-primary btn-sm" title="Descargar comprobante"><i class="fa-solid fa-download"></i></a><form method="post" action="{% url 'gestion:reenviar_comprobante_pago' pago.id %}">{% csrf_token %}<button class="btn btn-outline-info btn-sm" title="Reenviar por correo"><i class="fa-solid fa-envelope"></i></button></form>{% endif %}
+        </div></td>
+    </tr>{% empty %}<tr><td colspan="8" class="text-center py-5 text-secondary">No hay pagos para los filtros seleccionados.</td></tr>{% endfor %}</tbody>
+</table></div></div>
 {% endblock %}

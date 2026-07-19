@@ -1,6 +1,14 @@
 from .models import ConfiguracionHome
-from pagos.models import Pago, MetodoPagoQR
+from datetime import timedelta
+
+from django.utils import timezone
+
+from pagos.models import (
+    AcademiaCompetidora, CategoriaEvento, Evento, InscripcionEvento,
+    MetodoPagoQR, Pago, Promocion,
+)
 from django import forms
+from django.db.models import Q
 from django.contrib.auth import get_user_model
 from .models import DiaHorario, HoraHorario
 from alumnos.models import Alumno
@@ -12,7 +20,9 @@ from finanzas.models import MovimientoFinanciero, PagoProgramado, CuentaFinancie
 from usuarios.models import Usuario
 from django.contrib.auth.forms import PasswordChangeForm, UsernameField
 from planes.models import Plan
-from config.file_validation import validate_payment_receipt
+from config.file_validation import (
+    validate_base64_signature, validate_image, validate_payment_receipt,
+)
 Usuario = get_user_model()
 
 
@@ -51,6 +61,8 @@ class AlumnoForm(forms.ModelForm):
             'disciplina',
             'grado',
             'nombre_acudiente',
+            'documento_acudiente',
+            'parentesco_acudiente',
             'telefono_acudiente',
             'estado',
         ]
@@ -64,6 +76,8 @@ class AlumnoForm(forms.ModelForm):
             'disciplina': forms.Select(attrs={'class': 'form-select'}),
             'grado': forms.TextInput(attrs={'class': 'form-control'}),
             'nombre_acudiente': forms.TextInput(attrs={'class': 'form-control'}),
+            'documento_acudiente': forms.TextInput(attrs={'class': 'form-control'}),
+            'parentesco_acudiente': forms.TextInput(attrs={'class': 'form-control'}),
             'telefono_acudiente': forms.TextInput(attrs={'class': 'form-control'}),
             'estado': forms.Select(attrs={'class': 'form-select'}),
         }
@@ -218,12 +232,53 @@ class PagoForm(forms.ModelForm):
 
 
 class ValidarPagoForm(forms.ModelForm):
+    fecha_inicio = forms.DateField(
+        required=False,
+        label='Fecha real de inicio',
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+    )
+    confirmar_duplicado = forms.BooleanField(
+        required=False,
+        label='Confirmo que revisé la coincidencia y el pago es legítimo',
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+    )
+    justificacion_duplicado = forms.CharField(
+        required=False,
+        label='Justificación',
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
+    )
+
     class Meta:
         model = Pago
         fields = [
             'estado',
             'observacion_admin',
         ]
+
+        widgets = {
+            'estado': forms.Select(attrs={'class': 'form-select'}),
+            'observacion_admin': forms.Textarea(attrs={
+                'class': 'form-control', 'rows': 3,
+            }),
+        }
+
+    def __init__(self, *args, **kwargs):
+        self.pago = kwargs.get('instance')
+        super().__init__(*args, **kwargs)
+        if self.pago and self.pago.tipo in (
+            Pago.Tipos.MENSUALIDAD, Pago.Tipos.PROMOCION,
+        ):
+            hoy = timezone.localdate()
+            ultima = Suscripcion.objects.filter(
+                alumno=self.pago.alumno
+            ).order_by('-fecha_vencimiento').first()
+            inicio = (
+                ultima.fecha_vencimiento + timedelta(days=1)
+                if ultima and ultima.fecha_vencimiento >= hoy else hoy
+            )
+            self.fields['fecha_inicio'].initial = inicio
+        else:
+            self.fields['fecha_inicio'].widget = forms.HiddenInput()
 
     def clean_estado(self):
         estado = self.cleaned_data.get('estado')
@@ -234,6 +289,603 @@ class ValidarPagoForm(forms.ModelForm):
             )
 
         return estado
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get('estado') == Pago.Estados.APROBADO:
+            if self.pago.tipo in (Pago.Tipos.MENSUALIDAD, Pago.Tipos.PROMOCION):
+                if not cleaned.get('fecha_inicio'):
+                    cleaned['fecha_inicio'] = self.fields['fecha_inicio'].initial
+            if self.pago.posible_duplicado:
+                if not cleaned.get('confirmar_duplicado'):
+                    self.add_error(
+                        'confirmar_duplicado',
+                        'Debes confirmar que revisaste el posible duplicado.',
+                    )
+                if not cleaned.get('justificacion_duplicado', '').strip():
+                    self.add_error(
+                        'justificacion_duplicado',
+                        'Explica por qué este pago no es un duplicado.',
+                    )
+        return cleaned
+
+    def fecha_vencimiento_calculada(self):
+        inicio = self.cleaned_data['fecha_inicio']
+        dias = (
+            self.pago.promocion.dias_aplicados
+            if self.pago.promocion_id else self.pago.plan.duracion_dias
+        )
+        return inicio + timedelta(days=dias - 1)
+
+
+class PromocionForm(forms.ModelForm):
+    class Meta:
+        model = Promocion
+        fields = [
+            'nombre', 'descripcion', 'plan', 'tipo_beneficio',
+            'valor_beneficio', 'condiciones', 'publico', 'fecha_inicio',
+            'fecha_fin', 'maximo_usos', 'un_uso_por_alumno', 'imagen',
+            'video',
+            'publicada_home', 'destacada', 'orden', 'activa',
+        ]
+        widgets = {
+            'descripcion': forms.Textarea(attrs={'rows': 3}),
+            'condiciones': forms.Textarea(attrs={'rows': 3}),
+            'fecha_inicio': forms.DateInput(attrs={'type': 'date'}),
+            'fecha_fin': forms.DateInput(attrs={'type': 'date'}),
+            'video': forms.ClearableFileInput(attrs={'accept': 'video/mp4,video/webm'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for campo in self.fields.values():
+            if isinstance(campo.widget, forms.CheckboxInput):
+                campo.widget.attrs['class'] = 'form-check-input'
+            else:
+                campo.widget.attrs['class'] = 'form-control'
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get('fecha_inicio') and cleaned.get('fecha_fin'):
+            if cleaned['fecha_fin'] < cleaned['fecha_inicio']:
+                self.add_error('fecha_fin', 'Debe ser posterior a la fecha inicial.')
+        tipo = cleaned.get('tipo_beneficio')
+        valor = cleaned.get('valor_beneficio')
+        if valor is not None and valor < 0:
+            self.add_error('valor_beneficio', 'El beneficio no puede ser negativo.')
+        if tipo == Promocion.TiposBeneficio.PORCENTAJE and valor and valor > 100:
+            self.add_error('valor_beneficio', 'El porcentaje no puede superar 100.')
+        return cleaned
+
+
+class EventoForm(forms.ModelForm):
+    class Meta:
+        model = Evento
+        fields = [
+            'tipo', 'nombre', 'descripcion', 'fecha_inicio', 'fecha_fin',
+            'fecha_inicio_inscripcion', 'fecha_limite_inscripcion',
+            'lugar', 'precio_estudiante',
+            'precio_externo', 'cupo_maximo', 'publico', 'requisitos',
+            'alcance_torneo', 'consentimiento_evento', 'imagen',
+            'video',
+            'reglamento_adultos', 'reglamento_menores',
+            'publicada_home', 'destacada', 'orden', 'activo',
+        ]
+        widgets = {
+            'descripcion': forms.Textarea(attrs={'rows': 3}),
+            'requisitos': forms.Textarea(attrs={'rows': 3}),
+            'consentimiento_evento': forms.Textarea(attrs={'rows': 7}),
+            'reglamento_adultos': forms.Textarea(attrs={'rows': 7}),
+            'reglamento_menores': forms.Textarea(attrs={'rows': 7}),
+            'fecha_inicio': forms.DateTimeInput(
+                format='%Y-%m-%dT%H:%M', attrs={'type': 'datetime-local'}
+            ),
+            'fecha_fin': forms.DateTimeInput(
+                format='%Y-%m-%dT%H:%M', attrs={'type': 'datetime-local'}
+            ),
+            'fecha_inicio_inscripcion': forms.DateTimeInput(
+                format='%Y-%m-%dT%H:%M', attrs={'type': 'datetime-local'}
+            ),
+            'fecha_limite_inscripcion': forms.DateTimeInput(
+                format='%Y-%m-%dT%H:%M', attrs={'type': 'datetime-local'}
+            ),
+            'video': forms.ClearableFileInput(attrs={'accept': 'video/mp4,video/webm'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for nombre in (
+            'fecha_inicio', 'fecha_fin', 'fecha_inicio_inscripcion',
+            'fecha_limite_inscripcion',
+        ):
+            self.fields[nombre].input_formats = ['%Y-%m-%dT%H:%M']
+        for campo in self.fields.values():
+            if isinstance(campo.widget, forms.CheckboxInput):
+                campo.widget.attrs['class'] = 'form-check-input'
+            else:
+                campo.widget.attrs['class'] = 'form-control'
+
+    def clean(self):
+        cleaned = super().clean()
+        inicio = cleaned.get('fecha_inicio')
+        fin = cleaned.get('fecha_fin')
+        inicio_inscripciones = cleaned.get('fecha_inicio_inscripcion')
+        limite = cleaned.get('fecha_limite_inscripcion')
+        if inicio and fin and fin < inicio:
+            self.add_error('fecha_fin', 'La fecha final no puede ser anterior al inicio.')
+        if inicio_inscripciones and limite and limite < inicio_inscripciones:
+            self.add_error(
+                'fecha_limite_inscripcion',
+                'El cierre de inscripciones debe ser posterior a su apertura.',
+            )
+        if (
+            cleaned.get('tipo') == Evento.Tipos.TORNEO
+            and not (cleaned.get('consentimiento_evento') or '').strip()
+        ):
+            self.add_error(
+                'consentimiento_evento',
+                'Debes configurar el consentimiento que firmarán los participantes.',
+            )
+        if cleaned.get('tipo') == Evento.Tipos.TORNEO:
+            publico = cleaned.get('publico')
+            if publico != Evento.Publicos.MENORES and not (
+                cleaned.get('reglamento_adultos') or ''
+            ).strip():
+                self.add_error(
+                    'reglamento_adultos',
+                    'Configura el reglamento para participantes adultos.',
+                )
+            if publico != Evento.Publicos.ADULTOS and not (
+                cleaned.get('reglamento_menores') or ''
+            ).strip():
+                self.add_error(
+                    'reglamento_menores',
+                    'Configura el reglamento para menores y acudientes.',
+                )
+        if (
+            cleaned.get('tipo') == Evento.Tipos.TORNEO
+            and cleaned.get('publicada_home')
+            and (
+                not self.instance.pk
+                or not self.instance.categorias.filter(activa=True).exists()
+            )
+        ):
+            self.add_error(
+                'publicada_home',
+                'Guarda primero el torneo, crea sus categorías y después publícalo.',
+            )
+        return cleaned
+
+
+class CategoriaEventoForm(forms.ModelForm):
+    class Meta:
+        model = CategoriaEvento
+        fields = [
+            'nombre', 'tipo_categoria', 'genero', 'edad_minima', 'edad_maxima',
+            'peso_minimo', 'peso_maximo', 'nivel', 'cupo_maximo',
+            'orden', 'activa',
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for campo in self.fields.values():
+            if isinstance(campo.widget, forms.CheckboxInput):
+                campo.widget.attrs['class'] = 'form-check-input'
+            else:
+                campo.widget.attrs['class'] = 'form-control'
+
+    def clean(self):
+        cleaned = super().clean()
+        for minimo, maximo in (
+            ('edad_minima', 'edad_maxima'), ('peso_minimo', 'peso_maximo')
+        ):
+            if (
+                cleaned.get(minimo) is not None
+                and cleaned.get(maximo) is not None
+                and cleaned[maximo] < cleaned[minimo]
+            ):
+                self.add_error(maximo, 'No puede ser menor que el límite mínimo.')
+        return cleaned
+
+
+class InscripcionEventoForm(forms.ModelForm):
+    academia_registrada = forms.ModelChoiceField(
+        queryset=AcademiaCompetidora.objects.none(),
+        required=False,
+        label='Academia registrada',
+        empty_label='Mi academia no aparece en la lista',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        help_text='Selecciona una academia para reutilizar su nombre y escudo.',
+    )
+    logo_academia = forms.ImageField(
+        required=False,
+        label='Escudo o logo de la academia',
+        widget=forms.ClearableFileInput(attrs={
+            'class': 'form-control', 'accept': '.jpg,.jpeg,.png,.webp',
+        }),
+    )
+    firma_base64 = forms.CharField(
+        required=False,
+        widget=forms.HiddenInput(),
+        validators=[validate_base64_signature],
+    )
+    metodo_qr = forms.ModelChoiceField(
+        queryset=MetodoPagoQR.objects.none(),
+        label='Método de pago',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    referencia_pago = forms.CharField(
+        required=False, widget=forms.TextInput(attrs={'class': 'form-control'})
+    )
+    comprobante = forms.FileField(
+        required=False,
+        widget=forms.ClearableFileInput(attrs={
+            'class': 'form-control', 'accept': '.pdf,.jpg,.jpeg,.png,.webp',
+        }),
+    )
+
+    class Meta:
+        model = InscripcionEvento
+        fields = [
+            'participante_nombre', 'participante_documento', 'fecha_nacimiento',
+            'correo', 'telefono', 'academia_origen', 'foto_participante',
+            'acudiente_nombre', 'acudiente_documento',
+            'acudiente_telefono', 'categoria_evento', 'peso',
+            'acepta_reglamento', 'acepta_consentimiento', 'firma_base64',
+        ]
+        widgets = {
+            'fecha_nacimiento': forms.DateInput(attrs={'type': 'date'}),
+            'acepta_consentimiento': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'acepta_reglamento': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'foto_participante': forms.ClearableFileInput(attrs={
+                'accept': '.jpg,.jpeg,.png,.webp',
+            }),
+        }
+
+    def __init__(self, *args, evento=None, alumno_interno=None, **kwargs):
+        self.evento = evento
+        self.alumno_interno = alumno_interno
+        super().__init__(*args, **kwargs)
+        self.fields['metodo_qr'].queryset = MetodoPagoQR.objects.filter(activo=True)
+        self.fields['academia_registrada'].queryset = (
+            AcademiaCompetidora.objects.filter(
+                activa=True, logo__isnull=False
+            ).exclude(logo='').order_by('nombre')
+        )
+        self.fields['categoria_evento'].queryset = CategoriaEvento.objects.none()
+        if evento and evento.tipo == Evento.Tipos.TORNEO:
+            self.fields['categoria_evento'].queryset = evento.categorias.filter(
+                activa=True
+            )
+            self.fields['categoria_evento'].required = True
+            self.fields['peso'].required = True
+            self.fields['firma_base64'].required = True
+            if evento.alcance_torneo == Evento.AlcancesTorneo.ABIERTO:
+                self.fields['academia_origen'].required = False
+                self.fields['academia_origen'].label = 'Nombre de la nueva academia'
+                self.fields['foto_participante'].required = True
+            else:
+                self.fields.pop('academia_registrada')
+                self.fields.pop('logo_academia')
+                self.fields.pop('academia_origen')
+                self.fields.pop('foto_participante')
+                for nombre in (
+                    'participante_nombre', 'fecha_nacimiento', 'correo', 'telefono',
+                    'acudiente_nombre', 'acudiente_documento', 'acudiente_telefono',
+                ):
+                    self.fields[nombre].required = False
+        else:
+            self.fields.pop('academia_registrada')
+            self.fields.pop('logo_academia')
+            self.fields.pop('categoria_evento')
+            self.fields.pop('academia_origen')
+            self.fields.pop('foto_participante')
+            self.fields.pop('firma_base64')
+        if evento and evento.precio_estudiante == 0 and evento.precio_externo == 0:
+            self.fields.pop('metodo_qr')
+            self.fields.pop('referencia_pago')
+            self.fields.pop('comprobante')
+        elif evento:
+            precio_aplicable = (
+                evento.precio_externo
+                if (
+                    evento.tipo == Evento.Tipos.TORNEO
+                    and evento.alcance_torneo == Evento.AlcancesTorneo.ABIERTO
+                )
+                else evento.precio_estudiante
+            )
+            if precio_aplicable > 0:
+                self.fields['referencia_pago'].required = True
+                self.fields['comprobante'].required = True
+        for campo in self.fields.values():
+            if not isinstance(campo.widget, forms.CheckboxInput):
+                campo.widget.attrs.setdefault('class', 'form-control')
+
+    def clean_comprobante(self):
+        archivo = self.cleaned_data.get('comprobante')
+        precio_aplicable = 0
+        if self.evento:
+            precio_aplicable = (
+                self.evento.precio_externo
+                if (
+                    self.evento.tipo == Evento.Tipos.TORNEO
+                    and self.evento.alcance_torneo == Evento.AlcancesTorneo.ABIERTO
+                )
+                else self.evento.precio_estudiante
+            )
+        if precio_aplicable > 0 and not archivo:
+            raise forms.ValidationError('Adjunta el comprobante de pago.')
+        if archivo:
+            validate_payment_receipt(archivo)
+        return archivo
+
+    def clean_foto_participante(self):
+        foto = self.cleaned_data.get('foto_participante')
+        if foto:
+            validate_image(foto)
+        return foto
+
+    def clean_logo_academia(self):
+        logo = self.cleaned_data.get('logo_academia')
+        if logo:
+            validate_image(logo)
+        return logo
+
+    def clean(self):
+        cleaned = super().clean()
+        if (
+            self.evento
+            and self.evento.tipo == Evento.Tipos.TORNEO
+            and self.evento.alcance_torneo == Evento.AlcancesTorneo.INTERNO
+        ):
+            alumno = self.alumno_interno
+            if not alumno:
+                self.add_error(
+                    'participante_documento',
+                    'No encontramos un estudiante de la academia con este documento.',
+                )
+            else:
+                faltantes = []
+                if not alumno.fecha_nacimiento:
+                    faltantes.append('fecha de nacimiento')
+                if not alumno.user.email:
+                    faltantes.append('correo')
+                if not alumno.user.telefono:
+                    faltantes.append('teléfono')
+                if faltantes:
+                    self.add_error(
+                        'participante_documento',
+                        'La ficha del estudiante debe completar: ' + ', '.join(faltantes) + '.',
+                    )
+                cleaned['participante_nombre'] = str(alumno)
+                cleaned['fecha_nacimiento'] = alumno.fecha_nacimiento
+                cleaned['correo'] = alumno.user.email or ''
+                cleaned['telefono'] = alumno.user.telefono or ''
+                cleaned['acudiente_nombre'] = alumno.nombre_acudiente or ''
+                cleaned['acudiente_documento'] = alumno.documento_acudiente or ''
+                cleaned['acudiente_telefono'] = alumno.telefono_acudiente or ''
+        nacimiento = cleaned.get('fecha_nacimiento')
+        edad = None
+        if nacimiento:
+            hoy = timezone.localdate()
+            edad = hoy.year - nacimiento.year - (
+                (hoy.month, hoy.day) < (nacimiento.month, nacimiento.day)
+            )
+            if self.evento and self.evento.publico == Evento.Publicos.ADULTOS and edad < 18:
+                self.add_error('fecha_nacimiento', 'Este evento es únicamente para adultos.')
+            if self.evento and self.evento.publico == Evento.Publicos.MENORES and edad >= 18:
+                self.add_error('fecha_nacimiento', 'Este evento es únicamente para menores.')
+            if edad < 18:
+                for campo in ('acudiente_nombre', 'acudiente_documento', 'acudiente_telefono'):
+                    if not cleaned.get(campo):
+                        self.add_error(campo, 'Obligatorio para menores de edad.')
+        categoria = cleaned.get('categoria_evento')
+        if (
+            self.evento
+            and self.evento.tipo == Evento.Tipos.TORNEO
+            and self.evento.alcance_torneo == Evento.AlcancesTorneo.ABIERTO
+        ):
+            academia_registrada = cleaned.get('academia_registrada')
+            academia = (cleaned.get('academia_origen') or '').strip()
+            if academia_registrada:
+                academia = academia_registrada.nombre
+                cleaned['academia_origen'] = academia
+            if not academia:
+                self.add_error(
+                    'academia_origen',
+                    'Selecciona una academia o escribe el nombre de una nueva.',
+                )
+            academia_existente = (
+                academia_registrada
+                or AcademiaCompetidora.objects.filter(
+                    nombre__iexact=academia, activa=True
+                ).first()
+            )
+            tiene_logo = bool(
+                academia_existente
+                and academia_existente.logo
+                and academia_existente.logo.name
+            )
+            if academia and not cleaned.get('logo_academia') and not tiene_logo:
+                self.add_error(
+                    'logo_academia',
+                    'Adjunta el logo para registrar esta academia por primera vez.',
+                )
+        peso = cleaned.get('peso')
+        if categoria:
+            if categoria.cupos_disponibles == 0:
+                self.add_error('categoria_evento', 'Esta categoría ya no tiene cupos.')
+            if edad is not None:
+                if categoria.edad_minima is not None and edad < categoria.edad_minima:
+                    self.add_error('categoria_evento', 'No cumples la edad mínima de esta categoría.')
+                if categoria.edad_maxima is not None and edad > categoria.edad_maxima:
+                    self.add_error('categoria_evento', 'Superas la edad máxima de esta categoría.')
+            requiere_peso = (
+                categoria.peso_minimo is not None
+                or categoria.peso_maximo is not None
+            )
+            if requiere_peso and peso is None:
+                self.add_error('peso', 'Indica el peso para validar la categoría.')
+            elif peso is not None:
+                if categoria.peso_minimo is not None and peso < categoria.peso_minimo:
+                    self.add_error('peso', 'El peso es inferior al permitido en esta categoría.')
+                if categoria.peso_maximo is not None and peso > categoria.peso_maximo:
+                    self.add_error('peso', 'El peso supera el permitido en esta categoría.')
+        if not cleaned.get('acepta_consentimiento'):
+            self.add_error('acepta_consentimiento', 'Debes aceptar el consentimiento.')
+        if (
+            self.evento
+            and self.evento.tipo == Evento.Tipos.TORNEO
+            and not cleaned.get('acepta_reglamento')
+        ):
+            self.add_error('acepta_reglamento', 'Debes aceptar el reglamento del torneo.')
+        return cleaned
+
+
+class EditarInscripcionEventoForm(forms.ModelForm):
+    """Edición administrativa sin reemplazar la evidencia legal firmada."""
+
+    logo_academia = forms.ImageField(
+        required=False,
+        label='Nuevo escudo o logo de la academia',
+        widget=forms.ClearableFileInput(attrs={
+            'class': 'form-control', 'accept': '.jpg,.jpeg,.png,.webp',
+        }),
+        help_text='Opcional. Si lo adjuntas, reemplazará el logo actual de la academia.',
+    )
+
+    class Meta:
+        model = InscripcionEvento
+        fields = [
+            'participante_nombre', 'participante_documento', 'fecha_nacimiento',
+            'correo', 'telefono', 'academia_origen', 'foto_participante',
+            'acudiente_nombre', 'acudiente_documento', 'acudiente_telefono',
+            'categoria_evento', 'peso', 'estado',
+        ]
+        widgets = {
+            'fecha_nacimiento': forms.DateInput(attrs={'type': 'date'}),
+            'foto_participante': forms.ClearableFileInput(attrs={
+                'accept': '.jpg,.jpeg,.png,.webp',
+            }),
+        }
+        help_texts = {
+            'categoria_evento': (
+                'Administración puede corregir la categoría aunque el peso o la '
+                'edad queden fuera del rango configurado.'
+            ),
+        }
+
+    def __init__(self, *args, evento=None, **kwargs):
+        self.evento = evento or getattr(kwargs.get('instance'), 'evento', None)
+        super().__init__(*args, **kwargs)
+        for nombre in (
+            'participante_nombre', 'participante_documento', 'fecha_nacimiento',
+            'correo', 'telefono', 'categoria_evento', 'peso', 'estado',
+        ):
+            self.fields[nombre].required = True
+        categorias = CategoriaEvento.objects.none()
+        if self.evento:
+            categorias = self.evento.categorias.filter(
+                Q(activa=True) | Q(pk=self.instance.categoria_evento_id)
+            )
+        self.fields['categoria_evento'].queryset = categorias
+        if (
+            self.evento
+            and self.evento.alcance_torneo == Evento.AlcancesTorneo.ABIERTO
+        ):
+            self.fields['academia_origen'].required = True
+        for campo in self.fields.values():
+            if not isinstance(campo.widget, forms.CheckboxInput):
+                campo.widget.attrs.setdefault(
+                    'class',
+                    'form-select' if isinstance(campo.widget, forms.Select) else 'form-control',
+                )
+
+    def clean_foto_participante(self):
+        foto = self.cleaned_data.get('foto_participante')
+        if foto:
+            validate_image(foto)
+        return foto
+
+    def clean_logo_academia(self):
+        logo = self.cleaned_data.get('logo_academia')
+        if logo:
+            validate_image(logo)
+        return logo
+
+    def clean(self):
+        cleaned = super().clean()
+        nacimiento = cleaned.get('fecha_nacimiento')
+        if nacimiento:
+            hoy = timezone.localdate()
+            edad = hoy.year - nacimiento.year - (
+                (hoy.month, hoy.day) < (nacimiento.month, nacimiento.day)
+            )
+            if edad < 18:
+                for campo in (
+                    'acudiente_nombre', 'acudiente_documento', 'acudiente_telefono'
+                ):
+                    if not cleaned.get(campo):
+                        self.add_error(campo, 'Obligatorio para menores de 18 años.')
+
+        categoria = cleaned.get('categoria_evento')
+        documento = (cleaned.get('participante_documento') or '').strip()
+        if categoria and self.evento and categoria.evento_id != self.evento.id:
+            self.add_error('categoria_evento', 'La categoría no pertenece a este evento.')
+        if categoria and documento and self.evento:
+            otras = InscripcionEvento.objects.filter(
+                evento=self.evento,
+                participante_documento__iexact=documento,
+            ).exclude(pk=self.instance.pk).exclude(
+                estado=InscripcionEvento.Estados.CANCELADA
+            )
+            if otras.filter(categoria_evento=categoria).exists():
+                self.add_error(
+                    'categoria_evento',
+                    'El participante ya tiene una inscripción en esta categoría.',
+                )
+            elif otras.count() >= 2:
+                self.add_error(
+                    'participante_documento',
+                    'El participante ya tiene el máximo de dos inscripciones en el evento.',
+                )
+            elif (
+                categoria.tipo_categoria == CategoriaEvento.TiposCategoria.REGULAR
+                and otras.filter(
+                    categoria_evento__tipo_categoria=(
+                        CategoriaEvento.TiposCategoria.REGULAR
+                    )
+                ).exists()
+            ):
+                self.add_error(
+                    'categoria_evento',
+                    'No puede conservar dos inscripciones en categorías regulares.',
+                )
+        return cleaned
+
+
+class AplicarPromocionForm(forms.Form):
+    username = forms.CharField(widget=forms.TextInput(attrs={'class': 'form-control'}))
+    password = forms.CharField(widget=forms.PasswordInput(attrs={'class': 'form-control'}))
+    metodo_qr = forms.ModelChoiceField(
+        queryset=MetodoPagoQR.objects.none(),
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    referencia_pago = forms.CharField(
+        required=False, widget=forms.TextInput(attrs={'class': 'form-control'})
+    )
+    comprobante = forms.FileField(widget=forms.ClearableFileInput(attrs={
+        'class': 'form-control', 'accept': '.pdf,.jpg,.jpeg,.png,.webp',
+    }))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['metodo_qr'].queryset = MetodoPagoQR.objects.filter(activo=True)
+
+    def clean_comprobante(self):
+        archivo = self.cleaned_data['comprobante']
+        validate_payment_receipt(archivo)
+        return archivo
 
 # FORMULARIO PARA EDICION DE CLASES
 

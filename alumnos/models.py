@@ -33,6 +33,8 @@ class Alumno(models.Model):
     )
     grado = models.CharField(max_length=50, blank=True, null=True)
     nombre_acudiente = models.CharField(max_length=150, blank=True, null=True)
+    documento_acudiente = models.CharField(max_length=30, blank=True, null=True)
+    parentesco_acudiente = models.CharField(max_length=50, blank=True, null=True)
     telefono_acudiente = models.CharField(max_length=20, blank=True, null=True)
     estado = models.CharField(
         max_length=20,
@@ -53,7 +55,13 @@ class Alumno(models.Model):
 
     @property
     def suscripcion_actual(self):
-        return self.suscripciones.order_by('-fecha_vencimiento').first()
+        hoy = timezone.localdate()
+        vigente = self.suscripciones.filter(
+            fecha_inicio__lte=hoy,
+            fecha_vencimiento__gte=hoy,
+            estado='ACTIVA',
+        ).order_by('-fecha_vencimiento').first()
+        return vigente or self.suscripciones.order_by('-fecha_vencimiento').first()
 
     @property
     def fecha_vencimiento_actual(self):
@@ -102,7 +110,10 @@ class Alumno(models.Model):
         if not suscripcion:
             self.estado = self.Estados.PENDIENTE
 
-        elif suscripcion.estado == 'PENDIENTE_PAGO':
+        elif (
+            suscripcion.estado in ('PENDIENTE_PAGO', 'PROGRAMADA')
+            or suscripcion.fecha_inicio > timezone.localdate()
+        ):
             self.estado = self.Estados.PENDIENTE
 
         else:

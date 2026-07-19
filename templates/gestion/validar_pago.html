@@ -1,90 +1,25 @@
 {% extends 'gestion/base.html' %}
-
 {% block content %}
+<div class="page-heading"><div class="page-heading-main"><h2 class="page-heading-title"><i class="fa-solid fa-clipboard-check"></i><span>Revisar pago y suscripción</span></h2><p class="page-heading-subtitle text-secondary">Confirma el pago y define el periodo real en una sola operación.</p></div><div class="page-heading-actions"><a href="{% url 'gestion:lista_pagos' %}" class="btn btn-outline-light page-heading-action"><i class="fa-solid fa-arrow-left"></i><span>Volver</span></a></div></div>
 
-<div class="d-flex justify-content-between align-items-center mb-5 px-2">
-    <h2 class="mb-0">
-        <i class="fa-solid fa-check-circle"></i>
-        Validar pago
-    </h2>
+{% if pago.posible_duplicado %}<div class="alert alert-warning"><h5><i class="fa-solid fa-triangle-exclamation"></i> Posible pago duplicado</h5><p class="mb-1">Coincide con el pago <strong>#{{ pago.duplicado_de_id }}</strong> por archivo, referencia o características cercanas.</p>{% if pago.duplicado_de %}<small>Anterior: {{ pago.duplicado_de.fecha_reporte|date:'d/m/Y H:i' }} · ${{ pago.duplicado_de.valor|floatformat:0 }} · {{ pago.duplicado_de.get_estado_display }}</small>{% endif %}</div>{% endif %}
 
-    <a href="{% url 'gestion:lista_pagos' %}" class="btn btn-outline-light btn-sm">
-        <i class="fa-solid fa-arrow-left"></i>
-        Volver
-    </a>
-</div>
-
-<div class="row">
-
-    <div class="col-md-6 mb-3">
-        <div class="card bg-dark text-light border-secondary">
-            <div class="card-header">
-                Información del pago
-            </div>
-
-            <div class="card-body">
-                <p><strong>Alumno:</strong> {{ pago.alumno }}</p>
-                <p><strong>Valor:</strong> ${{ pago.valor }}</p>
-                <p><strong>Estado actual:</strong> {{ pago.estado }}</p>
-                <p><strong>Método:</strong> {{ pago.metodo_qr }}</p>
-                <p><strong>Referencia:</strong> {{ pago.referencia_pago|default:"Sin referencia" }}</p>
-                <p><strong>Fecha reporte:</strong> {{ pago.fecha_reporte|date:"d/m/Y H:i" }}</p>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-md-6 mb-3">
-        <div class="card bg-dark text-light border-secondary">
-            <div class="card-header">
-                Comprobante
-            </div>
-
-            <div class="card-body text-center">
-                {% if pago.comprobante %}
-                    <a href="{% url 'serve_media' pago.comprobante.name %}" target="_blank"
-                       class="btn btn-outline-info">
-                        <i class="fa-solid fa-file-invoice"></i>
-                        Ver comprobante
-                    </a>
-                {% else %}
-                    <p>No hay comprobante cargado.</p>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-
-</div>
-
-<div class="card bg-dark text-light border-secondary mt-3">
-    <div class="card-header">
-        Decisión administrativa
-    </div>
-
-    <div class="card-body">
-        <form method="post">
-            {% csrf_token %}
-
-            <div class="mb-3">
-                <label class="form-label">Estado</label>
-                {{ form.estado }}
-            </div>
-
-            <div class="mb-3">
-                <label class="form-label">Observación del administrador</label>
-                {{ form.observacion_admin }}
-            </div>
-
-            <button type="submit" class="btn btn-success">
-                <i class="fa-solid fa-check"></i>
-                Guardar validación
-            </button>
-
-            <a href="{% url 'gestion:lista_pagos' %}" class="btn btn-outline-light">
-                <i class="fa-solid fa-xmark"></i>
-                Cancelar
-            </a>
+<div class="row g-4">
+    <div class="col-lg-5"><div class="card bg-dark text-light border-secondary h-100"><div class="card-header">Pago reportado</div><div class="card-body">
+        <dl class="row mb-0"><dt class="col-5">Alumno</dt><dd class="col-7">{{ pago.alumno|default:pago.pagador_nombre }}</dd><dt class="col-5">Documento</dt><dd class="col-7">{{ pago.alumno.documento|default:pago.pagador_documento }}</dd><dt class="col-5">Concepto</dt><dd class="col-7">{{ pago.get_tipo_display }}</dd><dt class="col-5">Plan</dt><dd class="col-7">{{ pago.plan|default:'No aplica' }}</dd>{% if pago.promocion %}<dt class="col-5">Promoción</dt><dd class="col-7">{{ pago.promocion.nombre }}</dd>{% endif %}<dt class="col-5">Valor</dt><dd class="col-7">$ {{ pago.valor|floatformat:0 }}</dd><dt class="col-5">Método</dt><dd class="col-7">{{ pago.metodo_qr }}</dd><dt class="col-5">Referencia</dt><dd class="col-7">{{ pago.referencia_pago|default:'Sin referencia' }}</dd><dt class="col-5">Reportado</dt><dd class="col-7">{{ pago.fecha_reporte|date:'d/m/Y H:i' }}</dd></dl>
+        <a href="{% url 'serve_media' pago.comprobante.name %}" target="_blank" class="btn btn-outline-info w-100 mt-3"><i class="fa-solid fa-file-invoice"></i> Ver comprobante cargado</a>
+    </div></div></div>
+    <div class="col-lg-7"><div class="card bg-dark text-light border-secondary"><div class="card-header">Decisión y cobertura</div><div class="card-body">
+        {% if ultima_suscripcion %}<div class="alert alert-secondary"><strong>Última suscripción:</strong> {{ ultima_suscripcion.plan.nombre }} · {{ ultima_suscripcion.fecha_inicio|date:'d/m/Y' }} a {{ ultima_suscripcion.fecha_vencimiento|date:'d/m/Y' }} · {{ ultima_suscripcion.get_estado_display }}</div>{% endif %}
+        <form method="post" novalidate>{% csrf_token %}
+            {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+            <div class="mb-3"><label class="form-label">Decisión</label>{{ form.estado }}{{ form.estado.errors }}</div>
+            {% if dias_cobertura %}<div class="row g-3 mb-3"><div class="col-md-6"><label class="form-label">Fecha real de inicio</label>{{ form.fecha_inicio }}{{ form.fecha_inicio.errors }}</div><div class="col-md-6"><label class="form-label">Fecha final calculada</label><input id="fechaFinalCalculada" class="form-control" readonly><div class="form-text">{{ dias_cobertura }} días, contando la fecha inicial.</div></div></div>{% else %}{{ form.fecha_inicio }}{% endif %}
+            <div class="mb-3"><label class="form-label">Observación administrativa</label>{{ form.observacion_admin }}{{ form.observacion_admin.errors }}</div>
+            {% if pago.posible_duplicado %}<div class="border border-warning rounded p-3 mb-3"><div class="form-check mb-2">{{ form.confirmar_duplicado }} <label class="form-check-label" for="{{ form.confirmar_duplicado.id_for_label }}">{{ form.confirmar_duplicado.label }}</label>{{ form.confirmar_duplicado.errors }}</div><label class="form-label">Justificación</label>{{ form.justificacion_duplicado }}{{ form.justificacion_duplicado.errors }}</div>{% endif %}
+            <div class="d-flex gap-2 justify-content-end"><a href="{% url 'gestion:lista_pagos' %}" class="btn btn-outline-light">Cancelar</a><button class="btn btn-success"><i class="fa-solid fa-check"></i> Guardar revisión</button></div>
         </form>
-    </div>
+    </div></div></div>
 </div>
-
+{% if dias_cobertura %}<script>const inicio=document.getElementById('id_fecha_inicio');const salida=document.getElementById('fechaFinalCalculada');function calcular(){if(!inicio.value){salida.value='';return;}const partes=inicio.value.split('-').map(Number);const fecha=new Date(Date.UTC(partes[0],partes[1]-1,partes[2]));fecha.setUTCDate(fecha.getUTCDate()+{{ dias_cobertura }}-1);salida.value=fecha.toLocaleDateString('es-CO',{timeZone:'UTC'});}inicio.addEventListener('change',calcular);calcular();</script>{% endif %}
 {% endblock %}

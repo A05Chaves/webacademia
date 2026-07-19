@@ -67,6 +67,17 @@
         flex: 0 0 auto;
     }
 
+    .home-publication-slide {
+        align-items: center;
+        background: radial-gradient(circle at top right, rgba(255,193,7,.2), transparent 45%), #151719;
+        display: flex;
+        min-height: 100%;
+        padding: clamp(28px, 5vw, 72px);
+    }
+    .home-publication-image, .home-publication-video { height: 100%; object-fit: cover; width: 100%; }
+    .home-publication-copy { max-width: 720px; }
+    .home-carousel .carousel-control-prev, .home-carousel .carousel-control-next { width: 7%; }
+
     @media (min-width: 992px) {
         .welcome-media-public {
             --bs-aspect-ratio: 38%;
@@ -90,42 +101,18 @@
 
     <div class="{% if user.is_authenticated %}col-lg-8{% else %}col-12{% endif %}">
 
-        <div class="card bg-dark text-light border-secondary h-100">
-
-            <div class="ratio ratio-16x9 {% if not user.is_authenticated %}welcome-media-public{% endif %}">
-
-                {% if config_home.video_promo_archivo %}
-
-                    <video
-                        class="w-100 h-100"
-                        autoplay
-                        muted
-                        loop
-                        controls
-                        playsinline>
-
-                        <source
-                            src="{{ config_home.video_promo_archivo.url }}"
-                            type="video/mp4">
-
-                        Tu navegador no soporta video HTML5.
-
-                    </video>
-
-                {% else %}
-
-                    <iframe
-                        id="videoFrame"
-                        src="{{ promo_embed }}"
-                        title="Video Academia"
-                        allow="autoplay; encrypted-media"
-                        allowfullscreen>
-                    </iframe>
-
-                {% endif %}
-
+        <div id="homeCarousel" class="carousel slide home-carousel card bg-dark text-light border-secondary h-100" data-bs-interval="9000">
+            <div class="carousel-inner ratio ratio-16x9 {% if not user.is_authenticated %}welcome-media-public{% endif %}">
+                <div class="carousel-item active">
+                    {% if config_home.video_promo_archivo %}<video class="w-100 h-100" autoplay muted loop controls playsinline><source src="{{ config_home.video_promo_archivo.url }}" type="video/mp4">Tu navegador no soporta video HTML5.</video>{% else %}<iframe id="videoFrame" src="{{ promo_embed }}" title="Video Academia" allow="autoplay; encrypted-media" allowfullscreen></iframe>{% endif %}
+                </div>
+                {% for publicacion in publicaciones_home %}
+                <div class="carousel-item">
+                    {% if publicacion.objeto.video %}<video class="home-publication-video" autoplay muted loop playsinline controls preload="metadata"><source src="{{ publicacion.objeto.video.url }}">Tu navegador no soporta este video.</video><div class="carousel-caption text-start bg-dark bg-opacity-75 rounded p-3"><h3>{{ publicacion.objeto.nombre }}</h3><p>{{ publicacion.objeto.descripcion|truncatewords:24 }}</p>{% if publicacion.tipo == 'PROMOCION' %}<a href="{% url 'gestion:aplicar_promocion' publicacion.objeto.id %}" class="btn btn-warning">Aplicar a la promoción</a>{% else %}<a href="{% url 'gestion:inscribirse_evento' publicacion.objeto.id %}" class="btn btn-info">Registrarme</a>{% endif %}</div>{% elif publicacion.objeto.imagen %}<img src="{{ publicacion.objeto.imagen.url }}" class="home-publication-image" alt="{{ publicacion.objeto.nombre }}"><div class="carousel-caption text-start bg-dark bg-opacity-75 rounded p-3"><h3>{{ publicacion.objeto.nombre }}</h3><p>{{ publicacion.objeto.descripcion|truncatewords:24 }}</p>{% if publicacion.tipo == 'PROMOCION' %}<a href="{% url 'gestion:aplicar_promocion' publicacion.objeto.id %}" class="btn btn-warning">Aplicar a la promoción</a>{% else %}<a href="{% url 'gestion:inscribirse_evento' publicacion.objeto.id %}" class="btn btn-info">Registrarme</a>{% endif %}</div>{% else %}<div class="home-publication-slide"><div class="home-publication-copy"><span class="badge {% if publicacion.tipo == 'PROMOCION' %}bg-warning text-dark{% else %}bg-info text-dark{% endif %} mb-3">{% if publicacion.tipo == 'PROMOCION' %}Promoción{% else %}{{ publicacion.objeto.get_tipo_display }}{% endif %}</span><h2>{{ publicacion.objeto.nombre }}</h2><p class="lead">{{ publicacion.objeto.descripcion|truncatewords:30 }}</p>{% if publicacion.tipo == 'PROMOCION' %}<a href="{% url 'gestion:aplicar_promocion' publicacion.objeto.id %}" class="btn btn-warning">Aplicar a la promoción</a>{% else %}<a href="{% url 'gestion:inscribirse_evento' publicacion.objeto.id %}" class="btn btn-info">Registrarme</a>{% endif %}</div></div>{% endif %}
+                </div>
+                {% endfor %}
             </div>
-
+            {% if publicaciones_home %}<button class="carousel-control-prev" type="button" data-bs-target="#homeCarousel" data-bs-slide="prev"><span class="carousel-control-prev-icon"></span><span class="visually-hidden">Anterior</span></button><button class="carousel-control-next" type="button" data-bs-target="#homeCarousel" data-bs-slide="next"><span class="carousel-control-next-icon"></span><span class="visually-hidden">Siguiente</span></button>{% endif %}
         </div>
 
     </div>

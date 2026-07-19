@@ -6,6 +6,7 @@ from registros_legales.services import crear_alumno_desde_registro
 
 from urllib.parse import urlparse, parse_qs
 import calendar
+import hashlib
 from .forms import ConfiguracionHomeForm
 from registros_legales.services import (
     crear_alumno_desde_registro,
@@ -31,13 +32,25 @@ from django.contrib import messages
 
 from alumnos.models import Alumno
 from planes.models import Plan, Suscripcion
-from pagos.models import Pago
-from pagos.models import MetodoPagoQR
+from pagos.models import (
+    AcademiaCompetidora, AplicacionPromocion, CategoriaEvento, Evento,
+    InscripcionEvento, MetodoPagoQR, Pago, Promocion,
+)
+from pagos.services import (
+    enviar_comprobante_pago, generar_pdf_comprobante_pago,
+    marcar_posible_duplicado,
+)
 from datetime import timedelta
 from django.shortcuts import get_object_or_404
 from .forms import ValidarPagoForm
 
 from .forms import (
+    AplicarPromocionForm,
+    CategoriaEventoForm,
+    EditarInscripcionEventoForm,
+    EventoForm,
+    InscripcionEventoForm,
+    PromocionForm,
     UsuarioAlumnoForm,
     UsuarioAlumnoEditForm,
     AlumnoForm,
@@ -61,6 +74,7 @@ from django.db import IntegrityError, models, transaction
 
 from django.contrib.auth import authenticate
 from django.views.decorators.http import require_POST
+from django.templatetags.static import static
 from .models import DiaHorario, HoraHorario, SesionTV, estado_tv_inicial
 from .forms import DiaHorarioForm, HoraHorarioForm
 
@@ -210,6 +224,27 @@ def home_publica(request):
 
     pago_form = PagoAlumnoForm()
 
+    promociones_home = Promocion.objects.filter(
+        publicada_home=True,
+        activa=True,
+        fecha_inicio__lte=hoy,
+        fecha_fin__gte=hoy,
+    ).select_related('plan')
+    eventos_home = Evento.objects.filter(
+        publicada_home=True,
+        activo=True,
+    ).filter(
+        Q(fecha_fin__gte=ahora)
+        | Q(fecha_fin__isnull=True, fecha_inicio__gte=ahora)
+    )
+    publicaciones_home = sorted(
+        ([{'tipo': 'PROMOCION', 'objeto': item, 'orden': item.orden}
+          for item in promociones_home]
+         + [{'tipo': 'EVENTO', 'objeto': item, 'orden': item.orden}
+            for item in eventos_home]),
+        key=lambda item: (item['orden'], 0 if item['objeto'].destacada else 1),
+    )
+
     return render(request, 'gestion/home_publica.html', {
         'asistencias_hoy': asistencias_hoy,
         'promo_embed': promo_embed,
@@ -218,6 +253,7 @@ def home_publica(request):
         'clase_confirmable': clase_confirmable,
         'pago_form': pago_form,
         'config_home': config_home,
+        'publicaciones_home': publicaciones_home,
     })
 
 
@@ -468,11 +504,54 @@ def crear_suscripcion(request):
 def lista_pagos(request):
     pagos = Pago.objects.select_related(
         'alumno__user',
+        'alumno',
         'suscripcion',
+        'plan',
+        'promocion',
         'metodo_qr',
         'validado_por'
     ).all()
-    return render(request, 'gestion/lista_pagos.html', {'pagos': pagos})
+    fecha_desde = request.GET.get('fecha_desde', '').strip()
+    fecha_hasta = request.GET.get('fecha_hasta', '').strip()
+    documento = request.GET.get('documento', '').strip()
+    estado = request.GET.get('estado', '').strip()
+    tipo = request.GET.get('tipo', '').strip()
+    metodo = request.GET.get('metodo', '').strip()
+
+    if fecha_desde:
+        pagos = pagos.filter(fecha_reporte__date__gte=fecha_desde)
+    if fecha_hasta:
+        pagos = pagos.filter(fecha_reporte__date__lte=fecha_hasta)
+    if documento:
+        pagos = pagos.filter(
+            Q(alumno__documento__icontains=documento)
+            | Q(alumno__documento_acudiente__icontains=documento)
+            | Q(pagador_documento__icontains=documento)
+            | Q(inscripcion_evento__participante_documento__icontains=documento)
+            | Q(inscripcion_evento__acudiente_documento__icontains=documento)
+        ).distinct()
+    if estado:
+        pagos = pagos.filter(estado=estado)
+    if tipo:
+        pagos = pagos.filter(tipo=tipo)
+    if metodo:
+        pagos = pagos.filter(metodo_qr_id=metodo)
+
+    resumen = pagos.aggregate(
+        cantidad=Count('id'),
+        total=Sum('valor'),
+        aprobados=Sum('valor', filter=Q(estado=Pago.Estados.APROBADO)),
+        pendientes=Sum('valor', filter=Q(estado=Pago.Estados.PENDIENTE)),
+        rechazados=Sum('valor', filter=Q(estado=Pago.Estados.RECHAZADO)),
+    )
+    return render(request, 'gestion/lista_pagos.html', {
+        'pagos': pagos,
+        'resumen': resumen,
+        'estados_pago': Pago.Estados.choices,
+        'tipos_pago': Pago.Tipos.choices,
+        'metodos_pago': MetodoPagoQR.objects.all(),
+        'filtros': request.GET,
+    })
 
 
 @staff_member_required
@@ -484,6 +563,14 @@ def crear_pago(request):
             pago = form.save(commit=False)
             pago.estado = 'PENDIENTE'
             pago.suscripcion = None
+            pago.tipo = Pago.Tipos.MENSUALIDAD
+            if pago.alumno:
+                pago.pagador_nombre = pago.alumno.nombre_acudiente or str(pago.alumno)
+                pago.pagador_documento = (
+                    pago.alumno.documento_acudiente or pago.alumno.documento
+                )
+                pago.pagador_correo = pago.alumno.user.email
+            marcar_posible_duplicado(pago)
             pago.save()
 
             messages.success(
@@ -504,7 +591,8 @@ def crear_pago(request):
 @transaction.atomic
 def validar_pago(request, pago_id):
     pagos = Pago.objects.select_related(
-        'alumno__user', 'plan', 'metodo_qr__cuenta_financiera'
+        'alumno__user', 'plan', 'promocion',
+        'metodo_qr__cuenta_financiera', 'duplicado_de',
     )
     if request.method == 'POST':
         pagos = pagos.select_for_update()
@@ -522,58 +610,86 @@ def validar_pago(request, pago_id):
             pago = form.save(commit=False)
             pago.validado_por = request.user
             pago.fecha_validacion = timezone.now()
+            pago.justificacion_duplicado = form.cleaned_data.get(
+                'justificacion_duplicado', ''
+            )
 
             if pago.estado == 'APROBADO':
-
                 hoy = timezone.now().date()
-                plan = pago.plan
-
-                if not plan:
-                    messages.error(
-                        request,
-                        'No se puede aprobar el pago porque no tiene un plan asociado.'
+                if pago.tipo in (Pago.Tipos.MENSUALIDAD, Pago.Tipos.PROMOCION):
+                    if not pago.alumno_id or not pago.plan_id:
+                        messages.error(
+                            request,
+                            'El pago necesita estudiante y plan para crear la suscripción.',
+                        )
+                        return redirect('gestion:validar_pago', pago_id=pago.id)
+                    fecha_inicio = form.cleaned_data['fecha_inicio']
+                    fecha_vencimiento = form.fecha_vencimiento_calculada()
+                    estado_suscripcion = (
+                        Suscripcion.Estados.ACTIVA
+                        if fecha_inicio <= hoy <= fecha_vencimiento
+                        else Suscripcion.Estados.PROGRAMADA
                     )
-                    return redirect('gestion:validar_pago', pago_id=pago.id)
+                    if estado_suscripcion == Suscripcion.Estados.ACTIVA:
+                        Suscripcion.objects.filter(
+                            alumno=pago.alumno,
+                            estado=Suscripcion.Estados.ACTIVA,
+                            fecha_vencimiento__gte=fecha_inicio,
+                        ).update(estado=Suscripcion.Estados.FINALIZADA)
+                    beneficio = ''
+                    if pago.promocion_id:
+                        beneficio = (
+                            f'Promoción: {pago.promocion.nombre}. '
+                            f'{pago.promocion.condiciones}'
+                        ).strip()
+                    suscripcion = Suscripcion.objects.create(
+                        alumno=pago.alumno,
+                        plan=pago.plan,
+                        fecha_inicio=fecha_inicio,
+                        fecha_vencimiento=fecha_vencimiento,
+                        estado=estado_suscripcion,
+                        precio_aplicado=pago.valor,
+                        detalle_beneficio=beneficio,
+                    )
+                    pago.suscripcion = suscripcion
+                    pago.concepto_detalle = (
+                        f'{pago.plan.nombre}'
+                        + (f' - {pago.promocion.nombre}' if pago.promocion_id else '')
+                    )
+                    if estado_suscripcion == Suscripcion.Estados.ACTIVA:
+                        pago.alumno.estado = Alumno.Estados.ACTIVO
+                        pago.alumno.save(update_fields=['estado'])
+                    if hasattr(pago, 'aplicacion_promocion'):
+                        pago.aplicacion_promocion.estado = AplicacionPromocion.Estados.APLICADA
+                        pago.aplicacion_promocion.save(update_fields=['estado'])
+                elif pago.tipo == Pago.Tipos.EVENTO:
+                    inscripcion = getattr(pago, 'inscripcion_evento', None)
+                    if not inscripcion:
+                        messages.error(request, 'El pago no tiene una inscripción asociada.')
+                        return redirect('gestion:validar_pago', pago_id=pago.id)
+                    if inscripcion.evento.cupos_disponibles == 0:
+                        messages.error(request, 'El evento ya no tiene cupos disponibles.')
+                        return redirect('gestion:validar_pago', pago_id=pago.id)
+                    inscripcion.estado = InscripcionEvento.Estados.CONFIRMADA
+                    inscripcion.save(update_fields=['estado'])
+                    pago.concepto_detalle = (
+                        f'{inscripcion.evento.get_tipo_display()}: '
+                        f'{inscripcion.evento.nombre}'
+                    )
 
-                ultima_suscripcion = Suscripcion.objects.filter(
-                    alumno=pago.alumno
-                ).order_by('-fecha_vencimiento').first()
-
-                if ultima_suscripcion and ultima_suscripcion.fecha_vencimiento >= hoy:
-                    fecha_inicio = ultima_suscripcion.fecha_vencimiento + \
-                        timedelta(days=1)
-                else:
-                    fecha_inicio = hoy
-
-                fecha_vencimiento = fecha_inicio + timedelta(
-                    days=plan.duracion_dias
-                )
-
-                Suscripcion.objects.filter(
-                    alumno=pago.alumno,
-                    estado='ACTIVA'
-                ).update(
-                    estado='FINALIZADA'
-                )
-
-                suscripcion = Suscripcion.objects.create(
-                    alumno=pago.alumno,
-                    plan=plan,
-                    fecha_inicio=fecha_inicio,
-                    fecha_vencimiento=fecha_vencimiento,
-                    estado='ACTIVA',
-                )
-
-                pago.suscripcion = suscripcion
-                pago.alumno.estado = 'ACTIVO'
-
-                pago.alumno.save()
+                if not pago.numero_comprobante:
+                    pago.numero_comprobante = f'CP-{hoy.year}-{pago.id:06d}'
+                pago.fecha_comprobante = timezone.now()
                 pago.save()
 
                 cuenta = pago.metodo_qr.cuenta_financiera
-
-                categoria_mensualidad = CategoriaFinanciera.objects.filter(
-                    nombre='Mensualidades'
+                categoria_nombre = {
+                    Pago.Tipos.MENSUALIDAD: 'Mensualidades',
+                    Pago.Tipos.PROMOCION: 'Promociones academia',
+                    Pago.Tipos.EVENTO: 'Eventos academia',
+                }.get(pago.tipo, 'Otros ingresos academia')
+                categoria = CategoriaFinanciera.objects.filter(
+                    nombre=categoria_nombre
                 ).first()
 
                 if cuenta:
@@ -582,11 +698,11 @@ def validar_pago(request, pago_id):
                         defaults={
                             'cuenta': cuenta,
                             'tipo': 'INGRESO',
-                            'concepto': f'Pago mensualidad - {pago.alumno}',
+                            'concepto': pago.concepto_detalle or f'Pago #{pago.id}',
                             'valor': pago.valor,
                             'fecha': pago.fecha_validacion,
                             'observaciones': f'Ingreso generado automáticamente desde el pago #{pago.id}.',
-                            'categoria': categoria_mensualidad,
+                            'categoria': categoria,
                         }
                     )
                 else:
@@ -595,58 +711,39 @@ def validar_pago(request, pago_id):
                         'Pago aprobado, pero no se creó movimiento financiero porque el método de pago no tiene cuenta asociada.'
                     )
 
-                correo = pago.alumno.user.email
-
-                if correo:
-                    send_mail(
-                        subject='Pago aprobado',
-                        message=(
-                            f'Hola {pago.alumno},\n\n'
-                            f'Tu pago fue aprobado correctamente.\n\n'
-                            f'Detalles del pago:\n'
-                            f'Plan: {plan.nombre}\n'
-                            f'Valor: ${pago.valor}\n'
-                            f'Método: {pago.metodo_qr}\n'
-                            f'Referencia: {pago.referencia_pago or "Sin referencia"}\n'
-                            f'Fecha de validación: {pago.fecha_validacion.strftime("%d/%m/%Y %H:%M")}\n'
-                            f'Fecha de inicio: {suscripcion.fecha_inicio}\n'
-                            f'Fecha de vencimiento: {suscripcion.fecha_vencimiento}\n\n'
-                            f'Ya puedes confirmar tus clases disponibles.\n\n'
-                            f'Gracias por tu pago.'
-                        ),
-                        from_email=settings.DEFAULT_FROM_EMAIL,
-                        recipient_list=[correo],
-                        fail_silently=False,
-                    )
-
                 messages.success(
                     request,
-                    'Pago aprobado, suscripción creada y alumno activado correctamente.'
+                    'Pago aprobado y comprobante generado correctamente.'
                 )
+                try:
+                    enviar_comprobante_pago(pago)
+                    messages.info(request, 'El comprobante fue enviado por correo.')
+                except ValueError:
+                    messages.info(
+                        request,
+                        'El comprobante está disponible para descarga; no hay correo asociado.',
+                    )
+                except Exception as error:
+                    pago.error_envio_comprobante = str(error)[:500]
+                    pago.save(update_fields=['error_envio_comprobante'])
+                    messages.warning(
+                        request,
+                        'El pago fue aprobado, pero el correo no pudo enviarse. Puedes reenviarlo.',
+                    )
 
             elif pago.estado == 'RECHAZADO':
                 pago.save()
 
-                alumno = pago.alumno
-                correo = alumno.user.email
-
-                if correo:
-                    send_mail(
-                        subject='Pago rechazado',
-                        message=(
-                            f'Hola {alumno},\n\n'
-                            f'Tu pago fue rechazado.\n\n'
-                            f'Motivo: {pago.observacion_admin or "No se especificó motivo."}\n\n'
-                            f'Por favor revisa el comprobante y registra nuevamente el pago.'
-                        ),
-                        from_email=settings.DEFAULT_FROM_EMAIL,
-                        recipient_list=[correo],
-                        fail_silently=False,
-                    )
+                if hasattr(pago, 'aplicacion_promocion'):
+                    pago.aplicacion_promocion.estado = AplicacionPromocion.Estados.RECHAZADA
+                    pago.aplicacion_promocion.save(update_fields=['estado'])
+                if hasattr(pago, 'inscripcion_evento'):
+                    pago.inscripcion_evento.estado = InscripcionEvento.Estados.RECHAZADA
+                    pago.inscripcion_evento.save(update_fields=['estado'])
 
                 messages.warning(
                     request,
-                    'Pago rechazado correctamente. Se notificó al alumno por correo.'
+                    'Pago rechazado correctamente.'
                 )
 
             return redirect('gestion:lista_pagos')
@@ -657,6 +754,15 @@ def validar_pago(request, pago_id):
     return render(request, 'gestion/validar_pago.html', {
         'form': form,
         'pago': pago,
+        'ultima_suscripcion': (
+            Suscripcion.objects.filter(alumno=pago.alumno)
+            .order_by('-fecha_vencimiento').first()
+            if pago.alumno_id else None
+        ),
+        'dias_cobertura': (
+            pago.promocion.dias_aplicados if pago.promocion_id
+            else pago.plan.duracion_dias if pago.plan_id else None
+        ),
     })
 
 
@@ -1237,13 +1343,26 @@ def registrar_pago_alumno(request):
             pago.alumno = alumno
             pago.suscripcion = None
             pago.estado = 'PENDIENTE'
+            pago.tipo = Pago.Tipos.MENSUALIDAD
+            pago.pagador_nombre = alumno.nombre_acudiente or str(alumno)
+            pago.pagador_documento = (
+                alumno.documento_acudiente or alumno.documento
+            )
+            pago.pagador_correo = alumno.user.email
 
+            marcar_posible_duplicado(pago)
             pago.save()
 
-            messages.success(
-                request,
-                'Pago registrado correctamente. Queda pendiente de validación.'
-            )
+            if pago.posible_duplicado:
+                messages.warning(
+                    request,
+                    'Pago recibido y marcado para revisión porque coincide con otro registro.',
+                )
+            else:
+                messages.success(
+                    request,
+                    'Pago registrado correctamente. Queda pendiente de validación.'
+                )
 
             return redirect('gestion:home_publica')
 
@@ -1888,6 +2007,523 @@ def descargar_pdf_registro_legal(request, registro_id):
     return response
 
 
+# PROMOCIONES, EVENTOS Y COMPROBANTES
+
+
+@staff_member_required
+def promociones_eventos(request):
+    return render(request, 'gestion/promociones_eventos.html', {
+        'promociones': Promocion.objects.select_related('plan').all(),
+        'eventos': Evento.objects.prefetch_related('categorias').all(),
+    })
+
+
+@staff_member_required
+def editar_promocion(request, promocion_id=None):
+    promocion = get_object_or_404(Promocion, id=promocion_id) if promocion_id else None
+    form = PromocionForm(request.POST or None, request.FILES or None, instance=promocion)
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        messages.success(request, 'Promoción guardada correctamente.')
+        return redirect('gestion:promociones_eventos')
+    return render(request, 'gestion/publicacion_formulario.html', {
+        'form': form,
+        'titulo': 'Editar promoción' if promocion else 'Nueva promoción',
+        'icono': 'fa-tags',
+    })
+
+
+@staff_member_required
+def editar_evento(request, evento_id=None):
+    evento = get_object_or_404(Evento, id=evento_id) if evento_id else None
+    form = EventoForm(request.POST or None, request.FILES or None, instance=evento)
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        messages.success(request, 'Evento guardado correctamente.')
+        return redirect('gestion:promociones_eventos')
+    return render(request, 'gestion/publicacion_formulario.html', {
+        'form': form,
+        'titulo': 'Editar evento' if evento else 'Nuevo seminario, torneo o evento',
+        'icono': 'fa-calendar-star',
+    })
+
+
+@staff_member_required
+def editar_categoria_evento(request, evento_id, categoria_id=None):
+    evento = get_object_or_404(Evento, id=evento_id)
+    if evento.tipo != Evento.Tipos.TORNEO:
+        messages.error(request, 'Las categorías competitivas solo aplican a torneos.')
+        return redirect('gestion:promociones_eventos')
+    categoria = (
+        get_object_or_404(CategoriaEvento, id=categoria_id, evento=evento)
+        if categoria_id else None
+    )
+    form = CategoriaEventoForm(request.POST or None, instance=categoria)
+    if request.method == 'POST' and form.is_valid():
+        categoria_guardada = form.save(commit=False)
+        categoria_guardada.evento = evento
+        categoria_guardada.save()
+        messages.success(request, 'Categoría del torneo guardada correctamente.')
+        return redirect('gestion:promociones_eventos')
+    return render(request, 'gestion/publicacion_formulario.html', {
+        'form': form,
+        'titulo': (
+            f'Editar categoría · {evento.nombre}'
+            if categoria else f'Nueva categoría · {evento.nombre}'
+        ),
+        'icono': 'fa-layer-group',
+    })
+
+
+@staff_member_required
+def inscripciones_evento(request, evento_id):
+    evento = get_object_or_404(
+        Evento.objects.prefetch_related('categorias'), id=evento_id
+    )
+    inscripciones = evento.inscripciones.select_related(
+        'alumno__user', 'pago', 'categoria_evento', 'academia_equipo'
+    ).all()
+    return render(request, 'gestion/inscripciones_evento.html', {
+        'evento': evento,
+        'inscripciones': inscripciones,
+        'categorias_activas': evento.categorias.filter(activa=True),
+    })
+
+
+@staff_member_required
+@transaction.atomic
+def editar_inscripcion_evento(request, inscripcion_id):
+    inscripcion = get_object_or_404(
+        InscripcionEvento.objects.select_for_update().select_related(
+            'evento', 'categoria_evento', 'academia_equipo'
+        ),
+        id=inscripcion_id,
+        evento__tipo=Evento.Tipos.TORNEO,
+    )
+    form = EditarInscripcionEventoForm(
+        request.POST or None,
+        request.FILES or None,
+        instance=inscripcion,
+        evento=inscripcion.evento,
+    )
+    if request.method == 'POST' and form.is_valid():
+        editada = form.save(commit=False)
+        editada.participante_documento = editada.participante_documento.strip()
+        if inscripcion.evento.alcance_torneo == Evento.AlcancesTorneo.ABIERTO:
+            nombre_academia = editada.academia_origen.strip()
+            academia = AcademiaCompetidora.objects.filter(
+                nombre__iexact=nombre_academia
+            ).first()
+            if not academia:
+                academia = AcademiaCompetidora.objects.create(
+                    nombre=nombre_academia,
+                    logo=form.cleaned_data.get('logo_academia'),
+                )
+            elif form.cleaned_data.get('logo_academia'):
+                academia.logo = form.cleaned_data['logo_academia']
+                academia.save(update_fields=['logo', 'actualizada'])
+            editada.academia_equipo = academia
+        else:
+            academia, _ = AcademiaCompetidora.objects.get_or_create(
+                nombre='Galeras BJJ'
+            )
+            editada.academia_origen = 'Galeras BJJ'
+            editada.academia_equipo = academia
+        editada.categoria = str(editada.categoria_evento)
+        editada.save()
+        messages.success(
+            request,
+            f'Los datos de {editada.participante_nombre} fueron actualizados.',
+        )
+        return redirect(
+            'gestion:inscripciones_evento', evento_id=inscripcion.evento_id
+        )
+    return render(request, 'gestion/editar_inscripcion_evento.html', {
+        'evento': inscripcion.evento,
+        'inscripcion': inscripcion,
+        'form': form,
+    })
+
+
+@staff_member_required
+@require_POST
+@transaction.atomic
+def mover_inscripcion_categoria(request, inscripcion_id):
+    inscripcion = get_object_or_404(
+        InscripcionEvento.objects.select_for_update().select_related(
+            'evento', 'categoria_evento'
+        ),
+        id=inscripcion_id,
+        evento__tipo=Evento.Tipos.TORNEO,
+    )
+    categoria = get_object_or_404(
+        CategoriaEvento,
+        id=request.POST.get('categoria_evento'),
+        evento=inscripcion.evento,
+        activa=True,
+    )
+    observaciones = []
+    nacimiento = inscripcion.fecha_nacimiento
+    hoy = timezone.localdate()
+    edad = hoy.year - nacimiento.year - (
+        (hoy.month, hoy.day) < (nacimiento.month, nacimiento.day)
+    )
+    if categoria.edad_minima is not None and edad < categoria.edad_minima:
+        observaciones.append('no cumple la edad mínima configurada')
+    if categoria.edad_maxima is not None and edad > categoria.edad_maxima:
+        observaciones.append('supera la edad máxima configurada')
+    if inscripcion.peso is None:
+        observaciones.append('no tiene peso registrado')
+    else:
+        if (
+            categoria.peso_minimo is not None
+            and inscripcion.peso < categoria.peso_minimo
+        ):
+            observaciones.append('su peso es inferior al mínimo configurado')
+        if (
+            categoria.peso_maximo is not None
+            and inscripcion.peso > categoria.peso_maximo
+        ):
+            observaciones.append('su peso supera el máximo configurado')
+    if (
+        categoria.id != inscripcion.categoria_evento_id
+        and categoria.cupos_disponibles == 0
+    ):
+        observaciones.append('la categoría supera el cupo configurado')
+    inscripcion_duplicada = InscripcionEvento.objects.filter(
+        evento=inscripcion.evento,
+        participante_documento__iexact=inscripcion.participante_documento,
+        categoria_evento=categoria,
+    ).exclude(pk=inscripcion.pk).exclude(
+        estado=InscripcionEvento.Estados.CANCELADA
+    ).exists()
+    if inscripcion_duplicada:
+        messages.error(
+            request,
+            'No se puede mover porque el participante ya está inscrito en la '
+            'categoría seleccionada.',
+        )
+    elif categoria.id == inscripcion.categoria_evento_id:
+        messages.info(request, 'El participante ya pertenece a esa categoría.')
+    else:
+        inscripcion.categoria_evento = categoria
+        inscripcion.categoria = str(categoria)
+        inscripcion.save(update_fields=['categoria_evento', 'categoria', 'actualizada'])
+        if observaciones:
+            messages.warning(
+                request,
+                f'{inscripcion.participante_nombre} fue movido manualmente a '
+                f'{categoria}. Revisa: ' + '; '.join(observaciones) + '.',
+            )
+        else:
+            messages.success(
+                request,
+                f'{inscripcion.participante_nombre} fue movido a {categoria}.',
+            )
+    return redirect('gestion:inscripciones_evento', evento_id=inscripcion.evento_id)
+
+
+def aplicar_promocion(request, promocion_id):
+    promocion = get_object_or_404(
+        Promocion.objects.select_related('plan'), id=promocion_id
+    )
+    if not promocion.vigente:
+        messages.error(request, 'Esta promoción ya no está disponible.')
+        return redirect('gestion:home_publica')
+    form = AplicarPromocionForm(request.POST or None, request.FILES or None)
+    if request.method == 'POST' and form.is_valid():
+        usuario = authenticate(
+            request,
+            username=form.cleaned_data['username'],
+            password=form.cleaned_data['password'],
+        )
+        if not usuario or not hasattr(usuario, 'perfil_alumno'):
+            form.add_error(None, 'Usuario o contraseña incorrectos.')
+        else:
+            alumno = usuario.perfil_alumno
+            usos = AplicacionPromocion.objects.filter(
+                promocion=promocion,
+            ).exclude(estado=AplicacionPromocion.Estados.RECHAZADA)
+            if promocion.un_uso_por_alumno and usos.filter(alumno=alumno).exists():
+                form.add_error(None, 'Ya utilizaste o solicitaste esta promoción.')
+            elif promocion.maximo_usos and usos.count() >= promocion.maximo_usos:
+                form.add_error(None, 'La promoción alcanzó el máximo de aplicaciones.')
+            elif promocion.publico == Promocion.Publicos.ACTIVOS and alumno.estado != Alumno.Estados.ACTIVO:
+                form.add_error(None, 'Esta promoción es exclusiva para estudiantes activos.')
+            elif promocion.publico == Promocion.Publicos.NUEVOS and alumno.suscripciones.exists():
+                form.add_error(None, 'Esta promoción es exclusiva para estudiantes nuevos.')
+            else:
+                with transaction.atomic():
+                    pago = Pago(
+                        alumno=alumno,
+                        plan=promocion.plan,
+                        promocion=promocion,
+                        tipo=Pago.Tipos.PROMOCION,
+                        metodo_qr=form.cleaned_data['metodo_qr'],
+                        valor=promocion.precio_aplicado,
+                        comprobante=form.cleaned_data['comprobante'],
+                        referencia_pago=form.cleaned_data['referencia_pago'],
+                        pagador_nombre=alumno.nombre_acudiente or str(alumno),
+                        pagador_documento=alumno.documento_acudiente or alumno.documento,
+                        pagador_correo=alumno.user.email,
+                    )
+                    marcar_posible_duplicado(pago)
+                    pago.save()
+                    AplicacionPromocion.objects.create(
+                        promocion=promocion, alumno=alumno, pago=pago
+                    )
+                messages.success(
+                    request,
+                    'Solicitud recibida. El pago quedó pendiente de revisión.',
+                )
+                return redirect('gestion:home_publica')
+    return render(request, 'gestion/aplicar_promocion.html', {
+        'promocion': promocion, 'form': form,
+    })
+
+
+def inscribirse_evento(request, evento_id):
+    evento = get_object_or_404(Evento, id=evento_id, activo=True)
+    if (
+        evento.tipo == Evento.Tipos.TORNEO
+        and (
+            not evento.consentimiento_evento.strip()
+            or (
+                evento.publico != Evento.Publicos.MENORES
+                and not evento.reglamento_adultos.strip()
+            )
+            or (
+                evento.publico != Evento.Publicos.ADULTOS
+                and not evento.reglamento_menores.strip()
+            )
+        )
+    ):
+        messages.error(
+            request,
+            'Este torneo todavía no tiene completos el consentimiento y sus reglamentos.',
+        )
+        return redirect('gestion:home_publica')
+    if not evento.disponible:
+        messages.error(request, 'Las inscripciones para este evento no están disponibles.')
+        return redirect('gestion:home_publica')
+    alumno_interno = None
+    if (
+        evento.tipo == Evento.Tipos.TORNEO
+        and evento.alcance_torneo == Evento.AlcancesTorneo.INTERNO
+        and request.method == 'POST'
+    ):
+        alumno_interno = Alumno.objects.select_related('user').filter(
+            documento__iexact=request.POST.get('participante_documento', '').strip()
+        ).first()
+    form = InscripcionEventoForm(
+        request.POST or None, request.FILES or None,
+        evento=evento, alumno_interno=alumno_interno,
+    )
+    if request.method == 'POST' and form.is_valid():
+        alumno = alumno_interno or Alumno.objects.filter(
+            documento__iexact=form.cleaned_data['participante_documento']
+        ).select_related('user').first()
+        if evento.publico == Evento.Publicos.ESTUDIANTES and not alumno:
+            form.add_error('participante_documento', 'Este evento es exclusivo para estudiantes.')
+        else:
+            inscripciones_previas = InscripcionEvento.objects.filter(
+                evento=evento,
+                participante_documento__iexact=(
+                    form.cleaned_data['participante_documento']
+                ),
+            ).exclude(estado=InscripcionEvento.Estados.CANCELADA)
+            categoria_elegida = form.cleaned_data.get('categoria_evento')
+            error_inscripcion = None
+            if evento.tipo == Evento.Tipos.TORNEO:
+                if inscripciones_previas.filter(
+                    categoria_evento=categoria_elegida
+                ).exists():
+                    error_inscripcion = (
+                        'Este participante ya está inscrito en esta categoría.'
+                    )
+                elif inscripciones_previas.count() >= 2:
+                    error_inscripcion = (
+                        'Cada participante puede inscribirse como máximo en dos categorías.'
+                    )
+                elif (
+                    inscripciones_previas.exists()
+                    and categoria_elegida.tipo_categoria
+                    == CategoriaEvento.TiposCategoria.REGULAR
+                ):
+                    error_inscripcion = (
+                        'La segunda inscripción debe ser en una categoría superior '
+                        'o absoluta.'
+                    )
+            elif inscripciones_previas.exists():
+                error_inscripcion = 'Este participante ya está inscrito en el evento.'
+            if error_inscripcion:
+                form.add_error('categoria_evento', error_inscripcion)
+            else:
+                precio = evento.precio_estudiante if alumno else evento.precio_externo
+                with transaction.atomic():
+                    inscripcion = form.save(commit=False)
+                    inscripcion.evento = evento
+                    inscripcion.alumno = alumno
+                    if evento.tipo == Evento.Tipos.TORNEO:
+                        inscripcion.texto_consentimiento = evento.consentimiento_evento
+                        nacimiento = form.cleaned_data['fecha_nacimiento']
+                        hoy = timezone.localdate()
+                        edad = hoy.year - nacimiento.year - (
+                            (hoy.month, hoy.day) < (nacimiento.month, nacimiento.day)
+                        )
+                        inscripcion.texto_reglamento = (
+                            evento.reglamento_menores
+                            if edad < 18 else evento.reglamento_adultos
+                        )
+                        inscripcion.fecha_firma = timezone.now()
+                        forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR', '')
+                        inscripcion.ip_firma = (
+                            forwarded_for.split(',')[0].strip()
+                            if forwarded_for else request.META.get('REMOTE_ADDR')
+                        )
+                        if evento.alcance_torneo == Evento.AlcancesTorneo.ABIERTO:
+                            academia = AcademiaCompetidora.objects.filter(
+                                nombre__iexact=inscripcion.academia_origen.strip()
+                            ).first()
+                            if not academia:
+                                academia = AcademiaCompetidora.objects.create(
+                                    nombre=inscripcion.academia_origen.strip(),
+                                    logo=form.cleaned_data.get('logo_academia'),
+                                )
+                            elif not academia.logo and form.cleaned_data.get('logo_academia'):
+                                academia.logo = form.cleaned_data['logo_academia']
+                                academia.save(update_fields=['logo', 'actualizada'])
+                            inscripcion.academia_equipo = academia
+                        elif alumno:
+                            academia, _ = AcademiaCompetidora.objects.get_or_create(
+                                nombre='Galeras BJJ'
+                            )
+                            inscripcion.academia_equipo = academia
+                            from registros_legales.models import RegistroLegalEstudiante
+                            registro = RegistroLegalEstudiante.objects.filter(
+                                documento__iexact=alumno.documento,
+                                estado=RegistroLegalEstudiante.Estados.APROBADO,
+                                foto__isnull=False,
+                            ).exclude(foto='').order_by('-actualizado').first()
+                            if registro:
+                                inscripcion.foto_participante.name = registro.foto.name
+                    if inscripcion.categoria_evento_id:
+                        inscripcion.categoria = str(inscripcion.categoria_evento)
+                    if evento.cupos_disponibles == 0:
+                        inscripcion.estado = InscripcionEvento.Estados.LISTA_ESPERA
+                    elif precio == 0:
+                        inscripcion.estado = InscripcionEvento.Estados.CONFIRMADA
+                    pago = None
+                    if precio > 0:
+                        pagador_nombre = (
+                            inscripcion.acudiente_nombre or inscripcion.participante_nombre
+                        )
+                        pagador_documento = (
+                            inscripcion.acudiente_documento
+                            or inscripcion.participante_documento
+                        )
+                        pago = Pago(
+                            alumno=alumno,
+                            tipo=Pago.Tipos.EVENTO,
+                            metodo_qr=form.cleaned_data['metodo_qr'],
+                            valor=precio,
+                            comprobante=form.cleaned_data['comprobante'],
+                            referencia_pago=form.cleaned_data['referencia_pago'],
+                            pagador_nombre=pagador_nombre,
+                            pagador_documento=pagador_documento,
+                            pagador_correo=inscripcion.correo,
+                            concepto_detalle=f'{evento.get_tipo_display()}: {evento.nombre}',
+                        )
+                        marcar_posible_duplicado(pago)
+                        pago.save()
+                    inscripcion.pago = pago
+                    inscripcion.save()
+                messages.success(
+                    request,
+                    'Inscripción recibida.'
+                    + (' El pago quedó pendiente de revisión.' if pago else ' Tu cupo quedó confirmado.'),
+                )
+                return redirect('gestion:home_publica')
+    if request.method == 'POST' and form.errors and 'firma_base64' in form.fields:
+        datos_sin_firma = form.data.copy()
+        datos_sin_firma['firma_base64'] = ''
+        form.data = datos_sin_firma
+    return render(request, 'gestion/inscripcion_evento.html', {
+        'evento': evento, 'form': form,
+    })
+
+
+def datos_estudiante_torneo(request, evento_id):
+    evento = get_object_or_404(
+        Evento,
+        id=evento_id,
+        tipo=Evento.Tipos.TORNEO,
+        alcance_torneo=Evento.AlcancesTorneo.INTERNO,
+        activo=True,
+    )
+    documento = request.GET.get('documento', '').strip()
+    alumno = Alumno.objects.select_related('user').filter(
+        documento__iexact=documento
+    ).first()
+    if not alumno:
+        return JsonResponse(
+            {'encontrado': False, 'mensaje': 'No encontramos este documento.'},
+            status=404,
+        )
+    faltantes = []
+    if not alumno.fecha_nacimiento:
+        faltantes.append('fecha de nacimiento')
+    if not alumno.user.email:
+        faltantes.append('correo')
+    if not alumno.user.telefono:
+        faltantes.append('teléfono')
+    return JsonResponse({
+        'encontrado': True,
+        'nombre': str(alumno),
+        'fecha_nacimiento': (
+            alumno.fecha_nacimiento.isoformat() if alumno.fecha_nacimiento else ''
+        ),
+        'correo': alumno.user.email or '',
+        'telefono': alumno.user.telefono or '',
+        'acudiente_nombre': alumno.nombre_acudiente or '',
+        'ficha_completa': not faltantes,
+        'mensaje': (
+            'Ficha lista para la inscripción.' if not faltantes
+            else 'La administración debe completar: ' + ', '.join(faltantes) + '.'
+        ),
+        'evento': evento.nombre,
+    })
+
+
+def descargar_comprobante_pago(request, token):
+    pago = get_object_or_404(
+        Pago.objects.select_related('alumno__user', 'suscripcion', 'metodo_qr'),
+        token_comprobante=token,
+        estado=Pago.Estados.APROBADO,
+    )
+    respuesta = HttpResponse(
+        generar_pdf_comprobante_pago(pago), content_type='application/pdf'
+    )
+    respuesta['Content-Disposition'] = (
+        f'attachment; filename="comprobante-{pago.numero_comprobante}.pdf"'
+    )
+    return respuesta
+
+
+@staff_member_required
+@require_POST
+def reenviar_comprobante_pago(request, pago_id):
+    pago = get_object_or_404(Pago, id=pago_id, estado=Pago.Estados.APROBADO)
+    try:
+        enviar_comprobante_pago(pago)
+        messages.success(request, 'Comprobante reenviado correctamente.')
+    except Exception as error:
+        pago.error_envio_comprobante = str(error)[:500]
+        pago.save(update_fields=['error_envio_comprobante'])
+        messages.error(request, f'No fue posible enviar el correo: {error}')
+    return redirect('gestion:lista_pagos')
+
+
 # VISTA PARA AGREGAR MUSICA
 
 @staff_member_required
@@ -2182,7 +2818,59 @@ def crear_hora_horario(request):
 
 @login_required
 def cronometro_lucha(request):
-    return render(request, 'gestion/cronometro_lucha.html')
+    torneos = Evento.objects.filter(
+        tipo=Evento.Tipos.TORNEO,
+        activo=True,
+    ).order_by('-fecha_inicio')
+    evento_seleccionado = None
+    categoria_seleccionada = None
+    categorias_torneo = CategoriaEvento.objects.none()
+    participantes_llave = []
+    logos_llave = {}
+    version_llave = 'manual'
+    if request.user.is_superuser:
+        evento_id = request.GET.get('evento')
+        categoria_id = request.GET.get('categoria')
+        if evento_id:
+            evento_seleccionado = torneos.filter(id=evento_id).first()
+        if evento_seleccionado:
+            categorias_torneo = evento_seleccionado.categorias.filter(
+                activa=True
+            )
+        if categoria_id and evento_seleccionado:
+            categoria_seleccionada = categorias_torneo.filter(id=categoria_id).first()
+        if categoria_seleccionada:
+            participantes = list(
+                categoria_seleccionada.inscripciones.filter(
+                    estado=InscripcionEvento.Estados.CONFIRMADA,
+                ).select_related('academia_equipo').order_by('participante_nombre')
+            )
+            participantes_llave = [
+                f'{item.participante_nombre} — {item.academia_origen or "Galeras BJJ"}'
+                for item in participantes
+            ]
+            for item, etiqueta in zip(participantes, participantes_llave):
+                if item.academia_equipo and item.academia_equipo.logo:
+                    logos_llave[etiqueta] = item.academia_equipo.logo.url
+                elif not item.academia_origen:
+                    logos_llave[etiqueta] = static('img/galeras-bjj-logo.png')
+            version_llave = hashlib.sha256(
+                '|'.join(
+                    f'{item.id}:{item.participante_nombre}:'
+                    f'{item.academia_origen or "Galeras BJJ"}:'
+                    f'{logos_llave.get(etiqueta, "")}'
+                    for item, etiqueta in zip(participantes, participantes_llave)
+                ).encode('utf-8')
+            ).hexdigest()[:12]
+    return render(request, 'gestion/cronometro_lucha.html', {
+        'torneos_llaves': torneos,
+        'evento_llaves': evento_seleccionado,
+        'categorias_llaves': categorias_torneo,
+        'categoria_llaves': categoria_seleccionada,
+        'participantes_llave': participantes_llave,
+        'logos_llave': logos_llave,
+        'version_llave': version_llave,
+    })
 
 
 def _clase_tv_payload():

@@ -8,7 +8,10 @@ from pagos.models import Pago
 from registros_legales.models import RegistroLegalEstudiante
 
 
-PUBLIC_PREFIXES = ('qr_pagos/', 'videos_home/')
+PUBLIC_PREFIXES = (
+    'qr_pagos/', 'videos_home/', 'promociones/', 'eventos/', 'academias/logos/',
+)
+PRIVATE_EVENT_PREFIXES = ('eventos/participantes/',)
 
 
 def _safe_media_path(relative_path):
@@ -22,22 +25,26 @@ def _safe_media_path(relative_path):
 def serve_media(request, path):
     normalized = path.replace('\\', '/').lstrip('/')
     file_path = _safe_media_path(normalized)
-    if normalized.startswith(PUBLIC_PREFIXES):
+    if (
+        normalized.startswith(PUBLIC_PREFIXES)
+        and not normalized.startswith(PRIVATE_EVENT_PREFIXES)
+    ):
         return FileResponse(file_path.open('rb'))
     if not request.user.is_authenticated:
         return redirect(f'{settings.LOGIN_URL}?next={request.path}')
 
-    allowed = request.user.is_staff
+    if request.user.is_staff:
+        return FileResponse(file_path.open('rb'))
+
+    allowed = False
     if normalized.startswith('comprobantes_pagos/'):
-        allowed = allowed or Pago.objects.filter(
+        allowed = Pago.objects.filter(
             comprobante=normalized, alumno__user=request.user
         ).exists()
     elif normalized.startswith('registros_estudiantes/fotos/'):
-        allowed = allowed or RegistroLegalEstudiante.objects.filter(
+        allowed = RegistroLegalEstudiante.objects.filter(
             foto=normalized, documento=request.user.username
         ).exists()
-    else:
-        allowed = False
     if not allowed:
         raise Http404
     return FileResponse(file_path.open('rb'))

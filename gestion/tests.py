@@ -58,6 +58,11 @@ class CronometroLlavesPermisosTests(TestCase):
         self.assertContains(response, '12 participantes')
         self.assertContains(response, '16 participantes')
         self.assertContains(response, 'BYE')
+        self.assertContains(response, 'Editar distribución')
+        self.assertContains(response, 'Separar academias')
+        self.assertContains(response, 'function moveParticipant')
+        self.assertContains(response, 'fighter-academy')
+        self.assertContains(response, 'function renderFighterIdentity')
 
 
 class ModoTVTests(TestCase):

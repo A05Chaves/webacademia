@@ -11,11 +11,14 @@ MAX_UPLOAD_SIZE = 5 * 1024 * 1024
 MAX_SIGNATURE_SIZE = 2 * 1024 * 1024
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp'}
 PAYMENT_EXTENSIONS = IMAGE_EXTENSIONS | {'.pdf'}
+VIDEO_EXTENSIONS = {'.mp4', '.webm'}
+MAX_SHORT_VIDEO_SIZE = 25 * 1024 * 1024
 
 
 def _check_size(uploaded_file, maximum=MAX_UPLOAD_SIZE):
     if uploaded_file.size > maximum:
-        raise ValidationError('El archivo no puede superar 5 MB.')
+        limite_mb = maximum // (1024 * 1024)
+        raise ValidationError(f'El archivo no puede superar {limite_mb} MB.')
 
 
 def validate_image(uploaded_file):
@@ -48,6 +51,20 @@ def validate_payment_receipt(uploaded_file):
             raise ValidationError('El archivo no contiene un PDF válido.')
         return
     validate_image(uploaded_file)
+
+
+def validate_short_video(uploaded_file):
+    _check_size(uploaded_file, MAX_SHORT_VIDEO_SIZE)
+    extension = Path(uploaded_file.name).suffix.lower()
+    if extension not in VIDEO_EXTENSIONS:
+        raise ValidationError('El video debe estar en formato MP4 o WEBM.')
+    position = uploaded_file.tell()
+    header = uploaded_file.read(16)
+    uploaded_file.seek(position)
+    is_mp4 = extension == '.mp4' and len(header) >= 12 and header[4:8] == b'ftyp'
+    is_webm = extension == '.webm' and header.startswith(b'\x1aE\xdf\xa3')
+    if not (is_mp4 or is_webm):
+        raise ValidationError('El archivo no contiene un video MP4 o WEBM válido.')
 
 
 def validate_base64_signature(signature):

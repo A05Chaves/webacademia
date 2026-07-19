@@ -34,6 +34,8 @@ def crear_alumno_desde_registro(registro):
         fecha_nacimiento=registro.fecha_nacimiento,
         direccion=registro.direccion,
         nombre_acudiente=registro.nombre_acudiente,
+        documento_acudiente=registro.documento_acudiente,
+        parentesco_acudiente=registro.parentesco_acudiente,
         telefono_acudiente=registro.celular_acudiente,
         estado='PENDIENTE',
     )
