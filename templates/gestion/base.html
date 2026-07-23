@@ -349,7 +349,7 @@
 <nav class="navbar navbar-expand-lg navbar-custom px-3">
     <div class="container-fluid">
 
-        <a class="navbar-brand" href="{% if user.is_authenticated %}{% url 'gestion:horario_clases' %}{% else %}{% url 'gestion:home_publica' %}{% endif %}">
+        <a class="navbar-brand" href="{% if user.is_authenticated %}{% url 'gestion:home_publica' %}{% else %}{% url 'gestion:home_publica' %}{% endif %}">
             <img src="{% static 'img/galeras-bjj-logo.png' %}"
                  class="navbar-brand-logo"
                  alt="Galeras BJJ">
