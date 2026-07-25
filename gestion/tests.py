@@ -417,6 +417,10 @@ class ModoTVTests(TestCase):
         })
         self.assertEqual(combate.status_code, 200)
         self.assertEqual(
+            combate.json()['state']['active_match']['round_name'],
+            'FINAL',
+        )
+        self.assertEqual(
             combate.json()['state']['next_fight']['category_id'],
             otra_categoria.id,
         )

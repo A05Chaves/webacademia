@@ -314,6 +314,7 @@
     .match-timer-btn { width:100%; margin-top:8px; border-radius:9px !important; font-weight:700; }
     .champion-card { text-align:center; border:2px solid #ffc107; border-radius:18px; padding:22px 12px; background:rgba(255,193,7,.12); text-transform:uppercase; }
     .current-fight { font-size:clamp(24px,4vw,50px); font-weight:900; margin-bottom:12px; }
+    .tournament-stage-label { color:#42bdf5; font-size:clamp(18px,2.4vw,34px); font-weight:950; letter-spacing:.16em; text-align:center; }
     .bjj-scoreboard { width:min(1050px,96%); display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:24px; }
     .score-fighter { position:relative; padding:14px; border:2px solid rgba(255,255,255,.35); border-radius:18px; background:rgba(0,0,0,.25); }
     .score-fighter.blue { border-color:#4795ff; }
@@ -479,6 +480,7 @@
 
         <div class="timer-main">
 
+            <div id="tournamentStageLabel" class="tournament-stage-label" hidden></div>
             <div id="currentFight" class="current-fight" hidden></div>
 
             <div id="roundLabel" class="round-label">
@@ -1389,6 +1391,9 @@
         const label = document.getElementById('currentFight');
         label.textContent = `${fighterA}  VS  ${fighterB}`;
         label.hidden = false;
+        const stageLabel = document.getElementById('tournamentStageLabel');
+        stageLabel.textContent = roundName(roundIndex).toUpperCase();
+        stageLabel.hidden = false;
         renderFighterIdentity('scoreNameA', fighterA);
         renderFighterIdentity('scoreNameB', fighterB);
         document.getElementById('bjjScoreboard').hidden = false;
@@ -1447,6 +1452,7 @@
         activeMatch = null;
         document.getElementById('bjjScoreboard').hidden = true;
         document.getElementById('currentFight').hidden = true;
+        document.getElementById('tournamentStageLabel').hidden = true;
         document.getElementById('timerShell').classList.remove('bjj-active');
         if (isFinal) {
             showChampionScreen(winner);
@@ -1495,6 +1501,7 @@
         document.getElementById('bracketSetup').hidden = false;
         document.getElementById('bracketTournament').hidden = true;
         document.getElementById('currentFight').hidden = true;
+        document.getElementById('tournamentStageLabel').hidden = true;
         document.getElementById('bjjScoreboard').hidden = true;
         document.getElementById('timerShell').classList.remove('bjj-active');
         activeMatch = null;

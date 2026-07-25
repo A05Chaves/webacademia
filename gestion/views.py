@@ -3618,8 +3618,18 @@ def accion_tv(request, token):
         estado_nuevo.update(youtube)
         estado_nuevo['red_name'] = p1
         estado_nuevo['blue_name'] = p2
+        rounds_total = len(bracket['rounds'])
+        rounds_remaining = rounds_total - round_index
         estado_nuevo['active_match'] = {
-            'round': round_index, 'match': match_index, 'p1': p1, 'p2': p2
+            'round': round_index,
+            'match': match_index,
+            'p1': p1,
+            'p2': p2,
+            'round_name': {
+                1: 'FINAL',
+                2: 'SEMIFINAL',
+                3: 'CUARTOS DE FINAL',
+            }.get(rounds_remaining, f'RONDA {round_index + 1}'),
         }
         estado = estado_nuevo
     elif accion == 'fight_winner':
