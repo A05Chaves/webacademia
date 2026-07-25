@@ -300,6 +300,51 @@ class ModoTVTests(TestCase):
         response = self.client.post(url, {'action': 'bracket_reset'})
         self.assertIsNone(response.json()['state']['bracket'])
 
+    def test_triangulacion_tv_crea_tres_combates_y_registra_sumision(self):
+        sesion = SesionTV.objects.create(
+            propietario=self.staff,
+            codigo='333333',
+            expira_en=timezone.now() + timedelta(hours=1),
+        )
+        self.client.force_login(self.staff)
+        url = reverse('gestion:accion_tv', args=[sesion.token])
+        response = self.client.post(url, {
+            'action': 'bracket_create',
+            'size': '3',
+            'names': 'ANA\nBEATRIZ\nCARLA',
+        })
+        self.assertEqual(response.status_code, 200)
+        bracket = response.json()['state']['bracket']
+        self.assertEqual(bracket['type'], 'triangulation')
+        self.assertEqual(len(bracket['rounds'][0]), 3)
+        self.assertEqual(
+            [(match['p1'], match['p2']) for match in bracket['rounds'][0]],
+            [('ANA', 'BEATRIZ'), ('BEATRIZ', 'CARLA'), ('CARLA', 'ANA')],
+        )
+
+        response = self.client.post(url, {
+            'action': 'bracket_winner',
+            'round': '0',
+            'match': '0',
+            'winner': 'ANA',
+            'method': 'submission',
+            'winner_points': '2',
+            'loser_points': '0',
+        })
+        self.assertEqual(response.status_code, 200)
+        match = response.json()['state']['bracket']['rounds'][0][0]
+        self.assertEqual(match['winner'], 'ANA')
+        self.assertEqual(match['method'], 'submission')
+        self.assertEqual(match['winner_points'], 2)
+        self.assertIsNone(
+            response.json()['state']['bracket']['rounds'][0][1]['winner']
+        )
+
+        repeated = self.client.post(url, {
+            'action': 'bracket_load', 'round': '0', 'match': '0',
+        })
+        self.assertEqual(repeated.status_code, 409)
+
     def test_superusuario_proyecta_llave_guardada_y_actualiza_resultado(self):
         self.staff.is_superuser = True
         self.staff.save(update_fields=['is_superuser'])

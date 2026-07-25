@@ -3009,7 +3009,8 @@ def _combates_rotados_evento(evento):
                         'categoria': llave.categoria,
                         'ronda': ronda_indice,
                         'combate': combate_indice,
-                        'nombre_ronda': {
+                        'nombre_ronda': 'Triangulación'
+                        if llave.datos.get('type') == 'triangulation' else {
                             1: 'Final', 2: 'Semifinal', 3: 'Cuartos de final'
                         }.get(restantes, f'Ronda {ronda_indice + 1}'),
                         'p1': p1,
@@ -3251,6 +3252,8 @@ def _resolver_bye_tv(match):
 
 
 def _propagar_llave_tv(bracket):
+    if bracket.get('type') == 'triangulation':
+        return
     for match in bracket['rounds'][0]:
         match['winner'] = _resolver_bye_tv(match)
     for round_index in range(1, len(bracket['rounds'])):
@@ -3262,6 +3265,18 @@ def _propagar_llave_tv(bracket):
 
 
 def _crear_llave_tv(names, configured_size):
+    if configured_size == 3:
+        bracket = {
+            'type': 'triangulation',
+            'size': 3,
+            'names': names,
+            'rounds': [[
+                {'p1': names[0], 'p2': names[1], 'winner': None},
+                {'p1': names[1], 'p2': names[2], 'winner': None},
+                {'p1': names[2], 'p2': names[0], 'winner': None},
+            ]],
+        }
+        return bracket
     capacity = 1
     while capacity < configured_size:
         capacity *= 2
@@ -3487,7 +3502,7 @@ def accion_tv(request, token):
             size = int(request.POST.get('size', 4))
         except ValueError:
             size = 4
-        size = size if size in {4, 8, 10, 12, 16} else 4
+        size = size if size in {3, 4, 8, 10, 12, 16} else 4
         names = [
             name.strip().upper()[:60]
             for name in request.POST.get('names', '').splitlines()
@@ -3495,6 +3510,11 @@ def accion_tv(request, token):
         ][:size]
         if len(names) < 2 or len(set(names)) != len(names):
             return JsonResponse({'error': 'Ingresa al menos dos nombres diferentes.'}, status=400)
+        if size == 3 and len(names) != 3:
+            return JsonResponse(
+                {'error': 'La triangulación requiere exactamente tres participantes.'},
+                status=400,
+            )
         estado['bracket'] = _crear_llave_tv(names, size)
         estado['bracket_source_category_id'] = None
         estado['bracket_source_event_id'] = None
@@ -3550,6 +3570,18 @@ def accion_tv(request, token):
         if winner not in {match.get('p1'), match.get('p2')} or winner == '__BYE__':
             return JsonResponse({'error': 'Ganador no válido.'}, status=400)
         match['winner'] = winner
+        if bracket.get('type') == 'triangulation':
+            method = request.POST.get('method', 'points')
+            match['method'] = (
+                'submission' if method == 'submission' else 'points'
+            )
+            try:
+                winner_points = int(request.POST.get('winner_points', 0) or 0)
+                loser_points = int(request.POST.get('loser_points', 0) or 0)
+            except ValueError:
+                winner_points = loser_points = 0
+            match['winner_points'] = max(0, winner_points)
+            match['loser_points'] = max(0, loser_points)
         _propagar_llave_tv(bracket)
         if estado.get('bracket_source_category_id'):
             LlaveCategoriaEvento.objects.filter(
@@ -3625,7 +3657,7 @@ def accion_tv(request, token):
             'match': match_index,
             'p1': p1,
             'p2': p2,
-            'round_name': {
+            'round_name': 'TRIANGULACIÓN' if bracket.get('type') == 'triangulation' else {
                 1: 'FINAL',
                 2: 'SEMIFINAL',
                 3: 'CUARTOS DE FINAL',
@@ -3641,6 +3673,20 @@ def accion_tv(request, token):
         winner = active['p1'] if side == 'red' else active['p2']
         match = bracket['rounds'][active['round']][active['match']]
         match['winner'] = winner
+        if bracket.get('type') == 'triangulation':
+            match['method'] = (
+                'submission'
+                if request.POST.get('method') == 'submission'
+                else 'points'
+            )
+            winner_prefix = 'red' if side == 'red' else 'blue'
+            loser_prefix = 'blue' if side == 'red' else 'red'
+            match['winner_points'] = int(
+                estado.get(f'{winner_prefix}_points', 0)
+            )
+            match['loser_points'] = int(
+                estado.get(f'{loser_prefix}_points', 0)
+            )
         _propagar_llave_tv(bracket)
         if estado.get('bracket_source_category_id'):
             LlaveCategoriaEvento.objects.filter(

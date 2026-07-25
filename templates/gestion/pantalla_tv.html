@@ -63,6 +63,21 @@ function syncYoutube(s){
   if(command.type==='stop')ytPlayer.stopVideo();
 }
 function renderBracket(b){const board=$('bracketBoard');if(!b){board.innerHTML='<h1>CREA UNA LLAVE DESDE EL CELULAR</h1>';return}const labels=['PRIMERA RONDA','CUARTOS','SEMIFINAL','FINAL'];const last=b.rounds[b.rounds.length-1][0];board.innerHTML=b.rounds.map((round,ri)=>`<div class="bracket-round"><div class="round-title">${labels[Math.max(0,labels.length-b.rounds.length+ri)]}</div>${round.map(m=>`<div class="match">${[m.p1,m.p2].map(p=>`<div class="slot ${p==='__BYE__'?'bye':''} ${m.winner===p&&p!=='__BYE__'?'winner':''}">${p==='__BYE__'?'BYE · PASE DIRECTO':(p||'POR DEFINIR')}</div>`).join('')}</div>`).join('')}</div>`).join('')+`<div class="bracket-round champion">🏆<br>${last.winner||'POR DEFINIR'}</div>`}
+function renderTriangulation(b){
+  const table=Object.fromEntries(b.names.map(name=>[name,{name,wins:0,submissions:0,points:0}]));
+  b.rounds[0].forEach(match=>{
+    if(!match.winner)return;
+    table[match.winner].wins++;
+    table[match.winner].submissions+=match.method==='submission'?1:0;
+    table[match.winner].points+=Number(match.winner_points||0);
+    const loser=match.winner===match.p1?match.p2:match.p1;
+    table[loser].points+=Number(match.loser_points||0);
+  });
+  const ranking=Object.values(table).sort((a,b)=>b.wins-a.wins||b.submissions-a.submissions||b.points-a.points);
+  const complete=b.rounds[0].every(match=>match.winner);
+  const unique=complete&&(ranking[0].wins!==ranking[1].wins||ranking[0].submissions!==ranking[1].submissions||ranking[0].points!==ranking[1].points);
+  $('bracketBoard').innerHTML=`<div class="bracket-round"><div class="round-title">TRIANGULACIÓN</div>${b.rounds[0].map(match=>`<div class="match">${[match.p1,match.p2].map(name=>`<div class="slot ${match.winner===name?'winner':''}">${name}</div>`).join('')}<small>${match.winner?(match.method==='submission'?'SUMISIÓN':'PUNTOS'):'PENDIENTE'}</small></div>`).join('')}</div><div class="bracket-round"><div class="round-title">CLASIFICACIÓN</div>${ranking.map((row,index)=>`<div class="match"><b>${index+1}. ${row.name}</b><br>${row.wins} V · ${row.submissions} S · ${row.points} PTS</div>`).join('')}</div><div class="bracket-round champion">🏆<br>${unique?ranking[0].name:(complete?'EMPATE · DECISIÓN MANUAL':'POR DEFINIR')}</div>`;
+}
 function renderFighterName(side,label){
   const element=$(side+'Name');
   const emDash=label.lastIndexOf('—');
@@ -95,7 +110,7 @@ function render(d){
   $('tournamentStage').textContent=s.active_match?.round_name||'';
   $('bigTime').textContent=fmt(s.display_remaining);
   $('bigTime').classList.toggle('ended',s.display_remaining===0);
-  renderBracket(s.bracket);syncYoutube(s);playEvent(s.sound_event);
+  renderBracket(s.bracket);if(s.bracket?.type==='triangulation')renderTriangulation(s.bracket);syncYoutube(s);playEvent(s.sound_event);
 }
 async function sync(){try{const r=await fetch(stateUrl,{cache:'no-store'});if(r.status===410){document.body.innerHTML='<h1 style="padding:10vw">SESIÓN TV VENCIDA</h1>';return}render(await r.json())}catch(e){}}
 sync();setInterval(sync,500);

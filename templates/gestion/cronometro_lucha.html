@@ -612,7 +612,7 @@
             </form>
             <div class="bracket-header">
                 <div><h2 class="mb-1">Llaves de lucha</h2><p class="text-muted mb-0">Crea los cruces y toca al ganador de cada combate.</p></div>
-                <select id="bracketSize" class="form-select" style="width:auto" onchange="buildParticipantInputs()"><option value="4">4 participantes</option><option value="8">8 participantes</option><option value="10">10 participantes</option><option value="12">12 participantes</option><option value="16">16 participantes</option><option value="32">32 participantes</option></select>
+                <select id="bracketSize" class="form-select" style="width:auto" onchange="buildParticipantInputs()"><option value="3">3 participantes · triangulación</option><option value="4">4 participantes</option><option value="8">8 participantes</option><option value="10">10 participantes</option><option value="12">12 participantes</option><option value="16">16 participantes</option><option value="32">32 participantes</option></select>
             </div>
             <div id="bracketSetup">
                 <p class="text-muted mt-3 mb-0">El orden define los cruces iniciales: 1 contra 2, 3 contra 4 y así sucesivamente. Usa las flechas para cambiar participantes. Un campo vacío se mostrará como BYE.</p>
@@ -1220,6 +1220,25 @@
             return;
         }
 
+        if (configuredSize === 3) {
+            if (names.length !== 3) {
+                alert('La triangulación requiere exactamente tres participantes.');
+                return;
+            }
+            bracket = {
+                type: 'triangulation', names, configuredSize: 3, capacity: 3,
+                rounds: [[
+                    {p1: names[0], p2: names[1], winner: null},
+                    {p1: names[1], p2: names[2], winner: null},
+                    {p1: names[2], p2: names[0], winner: null}
+                ]]
+            };
+            document.getElementById('cancelBracketEditBtn').hidden = true;
+            saveBracket();
+            renderBracket();
+            return;
+        }
+
         const rounds = [];
         const bracketCapacity = 2 ** Math.ceil(Math.log2(configuredSize));
         const byeCount = bracketCapacity - names.length;
@@ -1257,6 +1276,7 @@
     }
 
     function propagateBracket() {
+        if (bracket.type === 'triangulation') return;
         bracket.rounds[0].forEach(match => {
             match.winner = resolveAutomaticWinner(match);
         });
@@ -1272,10 +1292,27 @@
         }
     }
 
-    function chooseWinner(roundIndex, matchIndex, fighter) {
+    function chooseWinner(roundIndex, matchIndex, fighter, result = null) {
         const match = bracket.rounds[roundIndex][matchIndex];
         if (match.winner || !fighter || fighter === BYE || (fighter !== match.p1 && fighter !== match.p2)) return;
+        if (bracket.type === 'triangulation' && !result) {
+            const method = prompt('Resultado: escribe S para SUMISIÓN o P para PUNTOS');
+            if (!method) return;
+            const normalized = method.trim().toUpperCase();
+            if (!['S', 'P'].includes(normalized)) {
+                alert('Escribe S para sumisión o P para puntos.');
+                return;
+            }
+            result = {method: normalized === 'S' ? 'submission' : 'points'};
+            if (normalized === 'P') {
+                result.winnerPoints = Math.max(0, Number(prompt('Puntos del ganador', '0')) || 0);
+                result.loserPoints = Math.max(0, Number(prompt('Puntos del oponente', '0')) || 0);
+            }
+        }
         match.winner = fighter;
+        match.method = result?.method || 'points';
+        match.winner_points = Number(result?.winnerPoints || 0);
+        match.loser_points = Number(result?.loserPoints || 0);
         propagateBracket();
 
         saveBracket();
@@ -1283,11 +1320,29 @@
     }
 
     function roundName(index) {
+        if (bracket.type === 'triangulation') return 'Triangulación';
         const remaining = bracket.rounds.length - index;
         if (remaining === 1) return 'Final';
         if (remaining === 2) return 'Semifinal';
         if (remaining === 3) return 'Cuartos de final';
         return 'Primera ronda';
+    }
+
+    function triangulationRanking() {
+        const table = Object.fromEntries(bracket.names.map(name => [name, {
+            name, wins: 0, submissions: 0, points: 0
+        }]));
+        bracket.rounds[0].forEach(match => {
+            if (!match.winner || !table[match.winner]) return;
+            table[match.winner].wins += 1;
+            table[match.winner].submissions += match.method === 'submission' ? 1 : 0;
+            table[match.winner].points += Number(match.winner_points || 0);
+            const loser = match.winner === match.p1 ? match.p2 : match.p1;
+            if (table[loser]) table[loser].points += Number(match.loser_points || 0);
+        });
+        return Object.values(table).sort((a, b) =>
+            b.wins - a.wins || b.submissions - a.submissions || b.points - a.points
+        );
     }
 
     function renderBracket() {
@@ -1337,6 +1392,21 @@
             });
             board.appendChild(column);
         });
+
+        if (bracket.type === 'triangulation') {
+            const ranking = triangulationRanking();
+            const complete = bracket.rounds[0].every(match => match.winner);
+            const uniqueLeader = complete && (
+                ranking[0].wins !== ranking[1].wins
+                || ranking[0].submissions !== ranking[1].submissions
+                || ranking[0].points !== ranking[1].points
+            );
+            const standings = document.createElement('section');
+            standings.className = 'bracket-round';
+            standings.innerHTML = `<div class="round-title">Clasificación</div>${ranking.map((item, index) => `<div class="match-card"><strong>${index + 1}. ${item.name}</strong><br><small>${item.wins} victoria(s) · ${item.submissions} sumisión(es) · ${item.points} puntos</small></div>`).join('')}<div class="champion-card"><i class="fa-solid fa-trophy fa-2x text-warning mb-2"></i><h3>${uniqueLeader ? ranking[0].name : (complete ? 'EMPATE · DECISIÓN MANUAL' : 'POR DEFINIR')}</h3></div>`;
+            board.appendChild(standings);
+            return;
+        }
 
         const finalMatch = bracket.rounds[bracket.rounds.length - 1][0];
         const championColumn = document.createElement('section');
@@ -1448,13 +1518,24 @@
         running = false;
         paused = false;
         finished = false;
-        chooseWinner(activeMatch.roundIndex, activeMatch.matchIndex, winner);
+        let result = null;
+        if (bracket.type === 'triangulation') {
+            const submission = confirm('¿La victoria fue por SUMISIÓN?\nAceptar = Sumisión · Cancelar = Puntos');
+            result = {
+                method: submission ? 'submission' : 'points',
+                winnerPoints: score[side].points,
+                loserPoints: score[side === 'a' ? 'b' : 'a'].points
+            };
+        }
+        chooseWinner(activeMatch.roundIndex, activeMatch.matchIndex, winner, result);
         activeMatch = null;
         document.getElementById('bjjScoreboard').hidden = true;
         document.getElementById('currentFight').hidden = true;
         document.getElementById('tournamentStageLabel').hidden = true;
         document.getElementById('timerShell').classList.remove('bjj-active');
-        if (isFinal) {
+        if (bracket.type === 'triangulation') {
+            showTool('bracket');
+        } else if (isFinal) {
             showChampionScreen(winner);
         } else {
             showTool('bracket');
