@@ -11,7 +11,9 @@ from datetime import date, datetime, time, timedelta
 
 from alumnos.models import Alumno
 from finanzas.models import CuentaFinanciera, MovimientoFinanciero
-from pagos.models import MetodoPagoQR, Pago
+from pagos.models import (
+    CategoriaEvento, Evento, LlaveCategoriaEvento, MetodoPagoQR, Pago,
+)
 from planes.models import Plan, Suscripcion
 from clases.models import ClaseProgramada, AsistenciaClase
 from instructores.models import Instructor
@@ -61,8 +63,13 @@ class CronometroLlavesPermisosTests(TestCase):
         self.assertContains(response, 'Editar distribución')
         self.assertContains(response, 'Separar academias')
         self.assertContains(response, 'function moveParticipant')
+        self.assertContains(response, 'function moveParticipantTo')
+        self.assertContains(response, 'participant-drag')
+        self.assertContains(response, 'Arrastra para cambiar la posición')
         self.assertContains(response, 'fighter-academy')
         self.assertContains(response, 'function renderFighterIdentity')
+        self.assertContains(response, 'phaseEndsAt = Date.now()')
+        self.assertContains(response, 'countdown = !activeMatch')
 
 
 class ModoTVTests(TestCase):
@@ -83,6 +90,21 @@ class ModoTVTests(TestCase):
         self.assertEqual(len(sesion.codigo), 6)
         self.assertGreater(sesion.expira_en, timezone.now() + timedelta(days=3000))
         self.assertContains(response, sesion.codigo)
+
+    def test_pantalla_tv_ajusta_nombres_largos_del_marcador(self):
+        sesion = SesionTV.objects.create(
+            propietario=self.staff,
+            codigo='555555',
+            expira_en=timezone.now() + timedelta(hours=1),
+        )
+        response = self.client.get(
+            reverse('gestion:pantalla_tv', args=[sesion.token])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'font-size:clamp(22px,3.3vw,52px)')
+        self.assertContains(response, 'overflow-wrap:anywhere')
+        self.assertContains(response, 'function renderFighterName')
+        self.assertContains(response, "teamElement.className='fighter-team'")
 
     def test_codigo_tv_se_invalida_al_cerrar_sesion(self):
         sesion = SesionTV.objects.create(
@@ -277,6 +299,156 @@ class ModoTVTests(TestCase):
 
         response = self.client.post(url, {'action': 'bracket_reset'})
         self.assertIsNone(response.json()['state']['bracket'])
+
+    def test_superusuario_proyecta_llave_guardada_y_actualiza_resultado(self):
+        self.staff.is_superuser = True
+        self.staff.save(update_fields=['is_superuser'])
+        evento = Evento.objects.create(
+            tipo=Evento.Tipos.TORNEO,
+            nombre='Torneo TV',
+            descripcion='Torneo para proyectar',
+            fecha_inicio=timezone.now() + timedelta(days=1),
+            lugar='Galeras BJJ',
+            precio_estudiante=0,
+            precio_externo=0,
+        )
+        categoria = CategoriaEvento.objects.create(
+            evento=evento, nombre='Adultos livianos'
+        )
+        llave = LlaveCategoriaEvento.objects.create(
+            categoria=categoria,
+            actualizada_por=self.staff,
+            datos={
+                'names': ['ANA', 'BEATRIZ'],
+                'configuredSize': 2,
+                'capacity': 2,
+                'rounds': [[{
+                    'p1': 'ANA', 'p2': 'BEATRIZ', 'winner': None,
+                }]],
+            },
+        )
+        otra_categoria = CategoriaEvento.objects.create(
+            evento=evento, nombre='Adultos pesados'
+        )
+        LlaveCategoriaEvento.objects.create(
+            categoria=otra_categoria,
+            actualizada_por=self.staff,
+            datos={
+                'names': ['CARLOS', 'DANIEL'],
+                'configuredSize': 2,
+                'capacity': 2,
+                'rounds': [[{
+                    'p1': 'CARLOS', 'p2': 'DANIEL', 'winner': None,
+                }]],
+            },
+        )
+        evento_vencido = Evento.objects.create(
+            tipo=Evento.Tipos.TORNEO,
+            nombre='Torneo vencido oculto',
+            descripcion='Solo debe quedar en el historial',
+            fecha_inicio=timezone.now() - timedelta(days=3),
+            fecha_fin=timezone.now() - timedelta(days=2),
+            lugar='Galeras BJJ',
+            precio_estudiante=0,
+            precio_externo=0,
+        )
+        categoria_vencida = CategoriaEvento.objects.create(
+            evento=evento_vencido, nombre='Categoría histórica'
+        )
+        LlaveCategoriaEvento.objects.create(
+            categoria=categoria_vencida,
+            actualizada_por=self.staff,
+            datos={
+                'names': ['HISTÓRICO A', 'HISTÓRICO B'],
+                'rounds': [[{
+                    'p1': 'HISTÓRICO A', 'p2': 'HISTÓRICO B', 'winner': None,
+                }]],
+            },
+        )
+        sesion = SesionTV.objects.create(
+            propietario=self.staff,
+            codigo='444444',
+            expira_en=timezone.now() + timedelta(hours=1),
+        )
+        self.client.force_login(self.staff)
+
+        control = self.client.get(reverse('gestion:control_tv'))
+        self.assertContains(control, 'Proyectar llave guardada del torneo')
+        self.assertContains(control, 'Cargar siguiente pelea')
+        self.assertContains(control, 'function loadNextTournamentFight')
+        self.assertContains(control, 'function previewSavedBracket')
+        self.assertContains(control, 'FINALIZADA')
+        self.assertContains(control, 'id="savedBracketEvent"')
+        self.assertContains(control, 'Categoría / llave')
+        self.assertContains(control, 'Torneo TV')
+        self.assertNotContains(control, 'Torneo vencido oculto')
+        cronometro = self.client.get(reverse('gestion:cronometro_lucha'))
+        self.assertContains(cronometro, 'Torneo TV')
+        self.assertNotContains(cronometro, 'Torneo vencido oculto')
+        url = reverse('gestion:accion_tv', args=[sesion.token])
+        vista_previa = self.client.post(url, {
+            'action': 'bracket_import',
+            'category': categoria.id,
+            'preview': '1',
+        })
+        self.assertEqual(vista_previa.status_code, 200)
+        self.assertNotEqual(vista_previa.json()['state']['mode'], 'bracket')
+        self.assertEqual(
+            vista_previa.json()['state']['bracket_source_category_id'],
+            categoria.id,
+        )
+
+        importada = self.client.post(url, {
+            'action': 'bracket_import', 'category': categoria.id,
+        })
+        self.assertEqual(importada.status_code, 200)
+        state = importada.json()['state']
+        self.assertEqual(state['mode'], 'bracket')
+        self.assertEqual(state['bracket_source_category_id'], categoria.id)
+        self.assertEqual(state['bracket']['rounds'][0][0]['p1'], 'ANA')
+
+        vencida = self.client.post(url, {
+            'action': 'bracket_import', 'category': categoria_vencida.id,
+        })
+        self.assertEqual(vencida.status_code, 404)
+
+        combate = self.client.post(url, {
+            'action': 'bracket_load', 'round': '0', 'match': '0',
+        })
+        self.assertEqual(combate.status_code, 200)
+        self.assertEqual(
+            combate.json()['state']['next_fight']['category_id'],
+            otra_categoria.id,
+        )
+        self.assertEqual(combate.json()['state']['next_fight']['p1'], 'CARLOS')
+
+        inicio = self.client.post(url, {'action': 'start'})
+        self.assertEqual(inicio.status_code, 200)
+        self.assertTrue(inicio.json()['state']['running'])
+        self.assertFalse(inicio.json()['state']['preparing'])
+        self.assertEqual(inicio.json()['state']['sound_event']['type'], 'bell')
+
+        ganador = self.client.post(url, {
+            'action': 'bracket_winner',
+            'round': '0',
+            'match': '0',
+            'winner': 'ANA',
+        })
+        self.assertEqual(ganador.status_code, 200)
+        llave.refresh_from_db()
+        self.assertEqual(llave.datos['rounds'][0][0]['winner'], 'ANA')
+
+        recarga_finalizada = self.client.post(url, {
+            'action': 'bracket_load', 'round': '0', 'match': '0',
+        })
+        self.assertEqual(recarga_finalizada.status_code, 409)
+        cambio_finalizada = self.client.post(url, {
+            'action': 'bracket_winner',
+            'round': '0',
+            'match': '0',
+            'winner': 'BEATRIZ',
+        })
+        self.assertEqual(cambio_finalizada.status_code, 409)
 
 
 class CambioNombreUsuarioTests(TestCase):

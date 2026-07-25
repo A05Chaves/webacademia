@@ -47,6 +47,8 @@ urlpatterns = [
          views.editar_categoria_evento, name='crear_categoria_evento'),
     path('eventos/<int:evento_id>/categorias/<int:categoria_id>/editar/',
          views.editar_categoria_evento, name='editar_categoria_evento'),
+    path('eventos/<int:evento_id>/categorias/<int:categoria_id>/eliminar/',
+         views.eliminar_categoria_evento, name='eliminar_categoria_evento'),
     path('eventos/<int:evento_id>/inscripcion/', views.inscribirse_evento,
          name='inscribirse_evento'),
     path('eventos/<int:evento_id>/datos-estudiante/',

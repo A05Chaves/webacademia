@@ -67,6 +67,10 @@
         opacity: .85;
     }
 
+    .next-fight-notice { flex:1; min-width:0; padding:5px 7px 5px 12px; border:1px solid rgba(255,193,7,.65); border-radius:10px; background:rgba(255,193,7,.12); color:#fff; font-size:clamp(12px,1.4vw,18px); line-height:1.15; display:flex; align-items:center; justify-content:center; gap:9px; }
+    .next-fight-notice span { min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .next-fight-notice strong { color:#ffc107; letter-spacing:.08em; }
+
     .fullscreen-btn {
         border: 1px solid rgba(255, 255, 255, .35);
         background: rgba(255, 255, 255, .08);
@@ -290,9 +294,13 @@
     .bracket-header, .bracket-actions { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
     .participant-grid { display:grid; grid-template-columns:repeat(2,minmax(220px,1fr)); gap:12px; margin:22px 0; }
     .participant-input { border:1px solid var(--border-color); border-radius:12px; padding:12px 14px; background:var(--bg-main); color:var(--text-main); text-transform:uppercase; }
-    .participant-editor { align-items:center; display:grid; gap:6px; grid-template-columns:32px minmax(0,1fr) 36px 36px; }
+    .participant-editor { align-items:center; display:grid; gap:6px; grid-template-columns:30px 32px minmax(0,1fr) 36px 36px; border:1px solid transparent; border-radius:10px; padding:3px; transition:border-color .15s,background .15s; }
     .participant-editor .participant-input { min-width:0; width:100%; }
     .participant-position { color:var(--text-secondary); font-weight:700; text-align:center; }
+    .participant-drag { display:grid; place-items:center; min-height:36px; color:var(--text-secondary); cursor:grab; touch-action:none; user-select:none; }
+    .participant-drag:active { cursor:grabbing; }
+    .participant-editor.dragging { opacity:.45; }
+    .participant-editor.drag-over { border-color:#0dcaf0; background:rgba(13,202,240,.12); }
     .bracket-board { display:flex; gap:28px; overflow-x:auto; padding:22px 4px 12px; align-items:stretch; }
     .bracket-round { min-width:260px; flex:1; display:flex; flex-direction:column; justify-content:space-around; gap:18px; }
     .round-title { text-align:center; font-size:14px; font-weight:900; text-transform:uppercase; color:var(--text-muted); }
@@ -458,6 +466,8 @@
                 Fight Timer
             </div>
 
+            {% if siguiente_combate %}<div id="nextFightNotice" class="next-fight-notice"><span><strong>SIGUIENTE:</strong> {{ siguiente_combate.categoria.nombre }} · {{ siguiente_combate.p1 }} vs {{ siguiente_combate.p2 }}</span><a class="btn btn-warning btn-sm text-nowrap" href="{% url 'gestion:cronometro_lucha' %}?evento={{ evento_llaves.id }}&categoria={{ siguiente_combate.categoria.id }}&ronda={{ siguiente_combate.ronda }}&combate={{ siguiente_combate.combate }}"><i class="fa-solid fa-forward-step"></i> Cargar siguiente</a></div>{% endif %}
+
             <button type="button"
                     class="fullscreen-btn"
                     onclick="toggleFullscreen()">
@@ -595,6 +605,7 @@
                         <div class="col-lg-2 d-grid"><button class="btn btn-warning" type="submit" {% if not evento_llaves %}disabled{% endif %}><i class="fa-solid fa-download"></i> Cargar</button></div>
                     </div>
                     {% if categoria_llaves %}<p class="mb-0 mt-3"><strong>{{ categoria_llaves }}</strong>: {{ participantes_llave|length }} participante{{ participantes_llave|length|pluralize }} confirmado{{ participantes_llave|length|pluralize }}. La llave se guarda de forma independiente para esta categoría.</p>{% endif %}
+                    {% if evento_llaves %}<div class="mt-3"><div class="d-flex justify-content-between align-items-center gap-2"><strong>Orden rotativo de combates</strong><span class="badge bg-info text-dark">{{ combates_disponibles|length }} listos</span></div><div class="d-flex flex-wrap gap-2 mt-2">{% for combate in combates_disponibles %}<a class="btn btn-outline-info btn-sm text-start" href="{% url 'gestion:cronometro_lucha' %}?evento={{ evento_llaves.id }}&categoria={{ combate.categoria.id }}&ronda={{ combate.ronda }}&combate={{ combate.combate }}"><strong>#{{ forloop.counter }} · {{ combate.categoria.nombre }}</strong> · {{ combate.nombre_ronda }}<br><small>{{ combate.p1 }} vs {{ combate.p2 }}</small></a>{% empty %}<span class="text-muted">No hay combates listos. Crea las llaves o registra los ganadores pendientes.</span>{% endfor %}</div></div>{% endif %}
                 </div>
             </form>
             <div class="bracket-header">
@@ -607,7 +618,7 @@
                 <div class="d-flex flex-wrap gap-2"><button class="btn btn-outline-warning" type="button" onclick="separateAcademies()"><i class="fa-solid fa-people-arrows"></i> Separar academias</button><button class="btn btn-outline-info" type="button" onclick="shuffleParticipants()"><i class="fa-solid fa-shuffle"></i> Mezclar orden</button><button class="btn btn-primary" type="button" onclick="createBracket()"><i class="fa-solid fa-sitemap"></i> Crear llaves</button><button id="cancelBracketEditBtn" class="btn btn-outline-light" type="button" onclick="cancelBracketEdit()" hidden>Cancelar edición</button></div>
             </div>
             <div id="bracketTournament" hidden>
-                <div class="bracket-actions"><p class="mb-0 text-muted">Selecciona un luchador para marcarlo como ganador.</p><div class="d-flex gap-2"><button class="btn btn-outline-warning btn-sm" type="button" onclick="editBracketParticipants()"><i class="fa-solid fa-pen"></i> Editar distribución</button><button class="btn btn-outline-danger btn-sm" type="button" onclick="newBracket()">Nueva llave</button></div></div>
+                <div class="bracket-actions"><p class="mb-0 text-muted">Selecciona un luchador para marcarlo como ganador.</p><div class="d-flex gap-2">{% if evento_llaves %}<a class="btn btn-outline-info btn-sm" href="{% url 'gestion:cronometro_lucha' %}?evento={{ evento_llaves.id }}"><i class="fa-solid fa-list-ol"></i> Orden del torneo</a>{% endif %}<button class="btn btn-outline-warning btn-sm" type="button" onclick="editBracketParticipants()"><i class="fa-solid fa-pen"></i> Editar distribución</button><button class="btn btn-outline-danger btn-sm" type="button" onclick="newBracket()">Nueva llave</button></div></div>
                 <div id="bracketBoard" class="bracket-board"></div>
             </div>
         </div>
@@ -617,6 +628,7 @@
     {{ participantes_llave|json_script:"participantesLlaveData" }}
     {{ logos_llave|json_script:"logosLlaveData" }}
     {{ llave_guardada|json_script:"llaveGuardadaData" }}
+    {{ combate_solicitado|json_script:"combateSolicitadoData" }}
     {% if categoria_llaves %}<form id="bracketCsrfForm" hidden>{% csrf_token %}</form>{% endif %}
 
     <div id="championOverlay" class="champion-overlay" hidden>
@@ -653,6 +665,7 @@
     let countdown = false;
     let countdownRemaining = 5;
     let interval = null;
+    let phaseEndsAt = null;
     let warningDone = false;
 
     let currentTotal = duration;
@@ -831,10 +844,12 @@
 
     function startInterval() {
         clearInterval(interval);
+        const phaseSeconds = countdown ? countdownRemaining : remaining;
+        phaseEndsAt = Date.now() + Math.max(0, phaseSeconds) * 1000;
 
-        interval = setInterval(function() {
+        function tick() {
             if (countdown) {
-                countdownRemaining--;
+                countdownRemaining = Math.max(0, Math.ceil((phaseEndsAt - Date.now()) / 1000));
 
                 if (countdownRemaining <= 0) {
                     countdown = false;
@@ -842,6 +857,7 @@
                     remaining = duration;
                     currentTotal = duration;
                     warningDone = false;
+                    phaseEndsAt = Date.now() + duration * 1000;
                     campana();
                 }
 
@@ -849,9 +865,10 @@
                 return;
             }
 
-            remaining--;
+            const previousRemaining = remaining;
+            remaining = Math.max(0, Math.ceil((phaseEndsAt - Date.now()) / 1000));
 
-            if (!resting && remaining === 10 && !warningDone) {
+            if (!resting && remaining <= 10 && previousRemaining > 10 && !warningDone) {
                 warningDone = true;
                 palmasTresVeces();
             }
@@ -875,6 +892,7 @@
                     remaining = rest;
                     currentTotal = rest;
                     warningDone = false;
+                    phaseEndsAt = Date.now() + rest * 1000;
                 } else {
                     resting = false;
                     currentRound++;
@@ -888,12 +906,16 @@
 
                     remaining = duration;
                     currentTotal = duration;
+                    phaseEndsAt = Date.now() + duration * 1000;
                     campana();
                 }
             }
 
             updateDisplay();
-        }, 1000);
+        }
+
+        tick();
+        interval = setInterval(tick, 200);
     }
 
     function toggleTimer() {
@@ -920,12 +942,17 @@
         }
 
         running = true;
-        countdown = true;
+        countdown = !activeMatch;
         countdownRemaining = 5;
         resting = false;
         currentRound = currentRound || 1;
-        currentTotal = 5;
+        currentTotal = activeMatch ? duration : 5;
         warningDone = false;
+
+        if (activeMatch) {
+            remaining = duration;
+            campana();
+        }
 
         document.getElementById('startBtn').innerHTML = '<i class="fa-solid fa-pause"></i> Pause';
 
@@ -1025,10 +1052,13 @@
             .map(([label, logo]) => [label.toUpperCase(), logo])
     );
     const serverBracket = JSON.parse(document.getElementById('llaveGuardadaData')?.textContent || 'null');
+    const requestedFight = JSON.parse(document.getElementById('combateSolicitadoData')?.textContent || 'null');
     const bracketSaveUrl = {% if categoria_llaves %}'{% url "gestion:guardar_llave_categoria" categoria_llaves.id %}'{% else %}null{% endif %};
     const bracketStorageKey = {% if categoria_llaves %}'luchaBracket-categoria-{{ categoria_llaves.id }}-{{ version_llave }}'{% else %}'luchaBracket'{% endif %};
     const BYE = '__BYE__';
     let activeMatch = null;
+    let requestedFightLoaded = false;
+    let draggedParticipantIndex = null;
     let score = {
         a: {points: 0, advantages: 0, penalties: 0},
         b: {points: 0, advantages: 0, penalties: 0}
@@ -1054,6 +1084,36 @@
         for (let index = 0; index < size; index++) {
             const editor = document.createElement('div');
             editor.className = 'participant-editor';
+            const dragHandle = document.createElement('span');
+            dragHandle.className = 'participant-drag';
+            dragHandle.draggable = true;
+            dragHandle.title = 'Arrastra para cambiar la posición';
+            dragHandle.setAttribute('aria-label', 'Arrastrar participante');
+            dragHandle.innerHTML = '<i class="fa-solid fa-grip-vertical"></i>';
+            dragHandle.ondragstart = event => {
+                draggedParticipantIndex = index;
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData('text/plain', String(index));
+                editor.classList.add('dragging');
+            };
+            dragHandle.ondragend = () => {
+                draggedParticipantIndex = null;
+                document.querySelectorAll('.participant-editor').forEach(item => {
+                    item.classList.remove('dragging', 'drag-over');
+                });
+            };
+            editor.ondragover = event => {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'move';
+                if (draggedParticipantIndex !== index) editor.classList.add('drag-over');
+            };
+            editor.ondragleave = () => editor.classList.remove('drag-over');
+            editor.ondrop = event => {
+                event.preventDefault();
+                editor.classList.remove('drag-over');
+                const source = draggedParticipantIndex ?? Number(event.dataTransfer.getData('text/plain'));
+                moveParticipantTo(source, index);
+            };
             const position = document.createElement('span');
             position.className = 'participant-position';
             position.textContent = index + 1;
@@ -1079,7 +1139,7 @@
             down.innerHTML = '<i class="fa-solid fa-arrow-down"></i>';
             down.disabled = index === size - 1;
             down.onclick = () => moveParticipant(index, 1);
-            editor.append(position, input, up, down);
+            editor.append(dragHandle, position, input, up, down);
             container.appendChild(editor);
         }
     }
@@ -1094,6 +1154,21 @@
         if (!inputs[index] || !inputs[target]) return;
         [inputs[index].value, inputs[target].value] = [inputs[target].value, inputs[index].value];
         inputs[target].focus();
+    }
+
+    function moveParticipantTo(source, target) {
+        const inputs = participantInputs();
+        if (
+            !Number.isInteger(source) || !Number.isInteger(target)
+            || source < 0 || target < 0 || source >= inputs.length
+            || target >= inputs.length || source === target
+        ) return;
+        const values = inputs.map(input => input.value);
+        const [moved] = values.splice(source, 1);
+        values.splice(target, 0, moved);
+        buildParticipantInputs(values);
+        participantInputs()[target]?.focus();
+        draggedParticipantIndex = null;
     }
 
     function shuffleParticipants() {
@@ -1197,7 +1272,7 @@
 
     function chooseWinner(roundIndex, matchIndex, fighter) {
         const match = bracket.rounds[roundIndex][matchIndex];
-        if (!fighter || fighter === BYE || (fighter !== match.p1 && fighter !== match.p2)) return;
+        if (match.winner || !fighter || fighter === BYE || (fighter !== match.p1 && fighter !== match.p2)) return;
         match.winner = fighter;
         propagateBracket();
 
@@ -1235,20 +1310,26 @@
                     button.type = 'button';
                     const isBye = fighter === BYE;
                     button.className = `fighter-row${match.winner === fighter && fighter ? ' winner' : ''}${isBye ? ' bye' : ''}`;
-                    button.disabled = !fighter || isBye;
+                    button.disabled = !fighter || isBye || Boolean(match.winner);
                     button.textContent = isBye ? 'BYE' : (fighter || 'Por definir');
                     if (match.winner === fighter && fighter && !isBye) button.innerHTML += ' <i class="fa-solid fa-check"></i>';
                     button.onclick = () => chooseWinner(roundIndex, matchIndex, fighter);
                     card.appendChild(button);
                 });
 
-                if (match.p1 && match.p2 && match.p1 !== BYE && match.p2 !== BYE) {
+                if (!match.winner && match.p1 && match.p2 && match.p1 !== BYE && match.p2 !== BYE) {
                     const timerButton = document.createElement('button');
                     timerButton.type = 'button';
                     timerButton.className = 'btn btn-outline-primary btn-sm match-timer-btn';
                     timerButton.innerHTML = '<i class="fa-solid fa-stopwatch"></i> Llevar al cronómetro';
                     timerButton.onclick = () => loadFight(match.p1, match.p2, roundIndex, matchIndex);
                     card.appendChild(timerButton);
+                }
+                if (match.winner) {
+                    const closedBadge = document.createElement('div');
+                    closedBadge.className = 'badge bg-success mt-2';
+                    closedBadge.textContent = 'FINALIZADA';
+                    card.appendChild(closedBadge);
                 }
                 column.appendChild(card);
             });
@@ -1315,6 +1396,19 @@
         updateScoreboard();
         showTool('timer');
         window.scrollTo({top: 0, behavior: 'smooth'});
+    }
+
+    function loadRequestedFight() {
+        if (!requestedFight || requestedFightLoaded || !bracket) return;
+        const roundIndex = Number(requestedFight.ronda);
+        const matchIndex = Number(requestedFight.combate);
+        const match = bracket.rounds?.[roundIndex]?.[matchIndex];
+        if (
+            !match || match.winner || !match.p1 || !match.p2
+            || [match.p1, match.p2].includes(BYE)
+        ) return;
+        requestedFightLoaded = true;
+        loadFight(match.p1, match.p2, roundIndex, matchIndex);
     }
 
     function addPoints(side, amount) {
@@ -1442,6 +1536,7 @@
                 document.getElementById('bracketSize').value = String(bracket.configuredSize);
                 propagateBracket();
                 renderBracket();
+                loadRequestedFight();
                 if (!serverBracket) saveBracket();
             }
         } catch (error) {

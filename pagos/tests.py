@@ -16,7 +16,7 @@ from PIL import Image, ImageDraw
 from alumnos.models import Alumno
 from finanzas.models import CuentaFinanciera
 from planes.models import Plan, Suscripcion
-from gestion.forms import EventoForm
+from gestion.forms import CategoriaEventoForm, EventoForm
 
 from .models import (
     AcademiaCompetidora, CategoriaEvento, Evento, InscripcionEvento,
@@ -170,6 +170,58 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
             nivel='Principiante',
         )
         return evento, categoria
+
+    def test_formulario_categoria_aclara_el_orden_de_aparicion(self):
+        form = CategoriaEventoForm()
+        self.assertEqual(form.fields['orden'].label, 'Orden de aparición')
+        self.assertIn(
+            'No lanza combates automáticamente',
+            form.fields['orden'].help_text,
+        )
+
+    def test_panel_eventos_oculta_vencidos_y_permite_buscar_historial(self):
+        vigente, _ = self.crear_torneo_gratuito()
+        vencido = Evento.objects.create(
+            tipo=Evento.Tipos.TORNEO,
+            nombre='Torneo histórico Pasto',
+            descripcion='Evento finalizado',
+            fecha_inicio=timezone.now() - timedelta(days=5),
+            fecha_fin=timezone.now() - timedelta(days=4),
+            lugar='Pasto',
+            precio_estudiante=0,
+            precio_externo=0,
+        )
+        categoria = CategoriaEvento.objects.create(
+            evento=vencido, nombre='Adultos cinturón azul'
+        )
+        InscripcionEvento.objects.create(
+            evento=vencido,
+            categoria_evento=categoria,
+            participante_nombre='Atleta Histórico',
+            participante_documento='REC-2026-01',
+            fecha_nacimiento=timezone.localdate().replace(year=1992),
+            correo='record@example.com',
+            telefono='3000000000',
+            estado=InscripcionEvento.Estados.CONFIRMADA,
+        )
+        self.client.force_login(self.admin)
+        url = reverse('gestion:promociones_eventos')
+
+        actuales = self.client.get(url)
+        self.assertContains(actuales, vigente.nombre)
+        self.assertNotContains(actuales, vencido.nombre)
+        self.assertContains(actuales, 'Eventos vigentes')
+
+        historial = self.client.get(url, {
+            'estado': 'historicos', 'q': 'REC-2026-01'
+        })
+        self.assertContains(historial, vencido.nombre)
+        self.assertContains(historial, 'Historial de eventos')
+        self.assertContains(
+            historial,
+            reverse('gestion:inscripciones_evento', args=[vencido.id]),
+        )
+        self.assertNotContains(historial, vigente.nombre)
 
     def test_evento_gratuito_oculta_campos_de_pago(self):
         evento, categoria = self.crear_torneo_gratuito()
@@ -349,6 +401,85 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
         self.assertNotContains(response, 'Pendiente No Cargar')
         self.assertNotContains(response, 'Otra Categoria')
         self.assertContains(response, f'luchaBracket-categoria-{categoria.id}')
+
+    def test_orden_del_torneo_reune_combates_de_varias_llaves(self):
+        evento, categoria = self.crear_torneo_gratuito()
+        otra = CategoriaEvento.objects.create(
+            evento=evento, nombre='Adulto pesado', edad_minima=18, orden=20,
+        )
+        for indice, categoria_llave in enumerate((categoria, otra), start=1):
+            LlaveCategoriaEvento.objects.create(
+                categoria=categoria_llave,
+                datos={
+                    'names': [f'ROJO {indice}', f'AZUL {indice}'],
+                    'configuredSize': 2,
+                    'capacity': 2,
+                    'rounds': [[{
+                        'p1': f'ROJO {indice}',
+                        'p2': f'AZUL {indice}',
+                        'winner': None,
+                    }]],
+                },
+                actualizada_por=self.admin,
+            )
+        self.admin.is_superuser = True
+        self.admin.save(update_fields=['is_superuser'])
+        self.client.force_login(self.admin)
+
+        response = self.client.get(
+            reverse('gestion:cronometro_lucha'), {'evento': evento.id}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context['combates_disponibles']), 2)
+        self.assertContains(response, 'Orden rotativo de combates')
+        self.assertContains(response, 'ROJO 1 vs AZUL 1')
+        self.assertContains(response, 'ROJO 2 vs AZUL 2')
+
+        directo = self.client.get(reverse('gestion:cronometro_lucha'), {
+            'evento': evento.id,
+            'categoria': categoria.id,
+            'ronda': 0,
+            'combate': 0,
+        })
+        self.assertEqual(
+            directo.context['combate_solicitado'], {'ronda': 0, 'combate': 0}
+        )
+        self.assertEqual(
+            directo.context['siguiente_combate']['categoria'].id, otra.id
+        )
+        self.assertContains(directo, 'SIGUIENTE:')
+        self.assertContains(directo, 'Cargar siguiente')
+        self.assertContains(directo, 'ROJO 2 vs AZUL 2')
+        self.assertContains(directo, 'function loadRequestedFight')
+
+    def test_categoria_sin_inscripciones_se_puede_eliminar(self):
+        evento, categoria = self.crear_torneo_gratuito()
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse(
+            'gestion:eliminar_categoria_evento', args=[evento.id, categoria.id]
+        ))
+        self.assertRedirects(response, reverse('gestion:promociones_eventos'))
+        self.assertFalse(CategoriaEvento.objects.filter(id=categoria.id).exists())
+
+    def test_categoria_con_inscripciones_no_se_elimina(self):
+        evento, categoria = self.crear_torneo_gratuito()
+        InscripcionEvento.objects.create(
+            evento=evento,
+            categoria_evento=categoria,
+            participante_nombre='Competidor protegido',
+            participante_documento='CAT-PROTEGIDA',
+            fecha_nacimiento=timezone.localdate().replace(year=1990),
+            correo='protegido@example.com',
+            telefono='3000000000',
+        )
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse(
+            'gestion:eliminar_categoria_evento', args=[evento.id, categoria.id]
+        ))
+        self.assertRedirects(response, reverse(
+            'gestion:editar_categoria_evento', args=[evento.id, categoria.id]
+        ))
+        self.assertTrue(CategoriaEvento.objects.filter(id=categoria.id).exists())
 
     def test_torneo_interno_recupera_datos_solo_con_documento(self):
         evento = Evento.objects.create(

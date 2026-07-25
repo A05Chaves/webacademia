@@ -2019,9 +2019,29 @@ def descargar_pdf_registro_legal(request, registro_id):
 
 @staff_member_required
 def promociones_eventos(request):
+    estado_eventos = request.GET.get('estado', 'vigentes')
+    if estado_eventos not in {'vigentes', 'historicos', 'todos'}:
+        estado_eventos = 'vigentes'
+    busqueda_eventos = request.GET.get('q', '').strip()[:100]
+    eventos = Evento.objects.all()
+    if estado_eventos == 'vigentes':
+        eventos = eventos.filter(activo=True).filter(_evento_operativo_q())
+    elif estado_eventos == 'historicos':
+        eventos = eventos.exclude(_evento_operativo_q())
+    if busqueda_eventos:
+        eventos = eventos.filter(
+            Q(nombre__icontains=busqueda_eventos)
+            | Q(lugar__icontains=busqueda_eventos)
+            | Q(categorias__nombre__icontains=busqueda_eventos)
+            | Q(inscripciones__participante_nombre__icontains=busqueda_eventos)
+            | Q(inscripciones__participante_documento__icontains=busqueda_eventos)
+        ).distinct()
+    eventos = eventos.prefetch_related('categorias').order_by('-fecha_inicio')
     return render(request, 'gestion/promociones_eventos.html', {
         'promociones': Promocion.objects.select_related('plan').all(),
-        'eventos': Evento.objects.prefetch_related('categorias').all(),
+        'eventos': eventos,
+        'estado_eventos': estado_eventos,
+        'busqueda_eventos': busqueda_eventos,
     })
 
 
@@ -2079,7 +2099,38 @@ def editar_categoria_evento(request, evento_id, categoria_id=None):
             if categoria else f'Nueva categoría · {evento.nombre}'
         ),
         'icono': 'fa-layer-group',
+        'delete_url': (
+            reverse('gestion:eliminar_categoria_evento', args=[evento.id, categoria.id])
+            if categoria else None
+        ),
+        'delete_label': 'Eliminar categoría',
     })
+
+
+@staff_member_required
+@require_POST
+@transaction.atomic
+def eliminar_categoria_evento(request, evento_id, categoria_id):
+    categoria = get_object_or_404(
+        CategoriaEvento.objects.select_for_update(),
+        id=categoria_id,
+        evento_id=evento_id,
+    )
+    if categoria.inscripciones.exists():
+        messages.error(
+            request,
+            'No se puede eliminar esta categoría porque tiene inscripciones. '
+            'Primero mueve o cancela esas inscripciones; también puedes marcarla inactiva.',
+        )
+        return redirect(
+            'gestion:editar_categoria_evento',
+            evento_id=evento_id,
+            categoria_id=categoria_id,
+        )
+    nombre = categoria.nombre
+    categoria.delete()
+    messages.success(request, f'La categoría {nombre} fue eliminada.')
+    return redirect('gestion:promociones_eventos')
 
 
 @staff_member_required
@@ -2925,18 +2976,71 @@ def crear_hora_horario(request):
 
 # VISTA DE CRONOMETRO
 
+
+def _evento_operativo_q():
+    """Eventos aún vigentes; si no tienen fin, permanecen durante su día."""
+    ahora = timezone.now()
+    return (
+        Q(fecha_fin__gte=ahora)
+        | Q(fecha_fin__isnull=True, fecha_inicio__date__gte=timezone.localdate())
+    )
+
+
+def _combates_rotados_evento(evento):
+    """Devuelve peleas listas alternando una por categoría."""
+    peleas = []
+    llaves = LlaveCategoriaEvento.objects.filter(
+        categoria__evento=evento,
+        categoria__activa=True,
+    ).select_related('categoria').order_by(
+        'categoria__orden', 'categoria__nombre'
+    )
+    for llave in llaves:
+        rondas = llave.datos.get('rounds', [])
+        for ronda_indice, ronda in enumerate(rondas):
+            for combate_indice, combate in enumerate(ronda):
+                p1, p2 = combate.get('p1'), combate.get('p2')
+                if (
+                    p1 and p2 and '__BYE__' not in {p1, p2}
+                    and not combate.get('winner')
+                ):
+                    restantes = len(rondas) - ronda_indice
+                    peleas.append({
+                        'categoria': llave.categoria,
+                        'ronda': ronda_indice,
+                        'combate': combate_indice,
+                        'nombre_ronda': {
+                            1: 'Final', 2: 'Semifinal', 3: 'Cuartos de final'
+                        }.get(restantes, f'Ronda {ronda_indice + 1}'),
+                        'p1': p1,
+                        'p2': p2,
+                    })
+    grupos = {}
+    for pelea in peleas:
+        grupos.setdefault(pelea['categoria'].id, []).append(pelea)
+    rotadas = []
+    while any(grupos.values()):
+        for peleas_categoria in grupos.values():
+            if peleas_categoria:
+                rotadas.append(peleas_categoria.pop(0))
+    return rotadas
+
+
 @login_required
 def cronometro_lucha(request):
     torneos = Evento.objects.filter(
         tipo=Evento.Tipos.TORNEO,
         activo=True,
-    ).order_by('-fecha_inicio')
+    ).filter(_evento_operativo_q()).order_by('fecha_inicio')
     evento_seleccionado = None
     categoria_seleccionada = None
     categorias_torneo = CategoriaEvento.objects.none()
     participantes_llave = []
     logos_llave = {}
     llave_guardada = None
+    combates_disponibles = []
+    combate_solicitado = None
+    siguiente_combate = None
     version_llave = 'manual'
     if request.user.is_superuser:
         evento_id = request.GET.get('evento')
@@ -2947,6 +3051,7 @@ def cronometro_lucha(request):
             categorias_torneo = evento_seleccionado.categorias.filter(
                 activa=True
             )
+            combates_disponibles = _combates_rotados_evento(evento_seleccionado)
         if categoria_id and evento_seleccionado:
             categoria_seleccionada = categorias_torneo.filter(id=categoria_id).first()
         if categoria_seleccionada:
@@ -2975,6 +3080,22 @@ def cronometro_lucha(request):
                     for item, etiqueta in zip(participantes, participantes_llave)
                 ).encode('utf-8')
             ).hexdigest()[:12]
+            try:
+                ronda = int(request.GET.get('ronda', ''))
+                combate = int(request.GET.get('combate', ''))
+                combate_solicitado = {'ronda': ronda, 'combate': combate}
+            except (TypeError, ValueError):
+                combate_solicitado = None
+            if combate_solicitado:
+                for indice, pelea in enumerate(combates_disponibles):
+                    if (
+                        pelea['categoria'].id == categoria_seleccionada.id
+                        and pelea['ronda'] == combate_solicitado['ronda']
+                        and pelea['combate'] == combate_solicitado['combate']
+                    ):
+                        if indice + 1 < len(combates_disponibles):
+                            siguiente_combate = combates_disponibles[indice + 1]
+                        break
     return render(request, 'gestion/cronometro_lucha.html', {
         'torneos_llaves': torneos,
         'evento_llaves': evento_seleccionado,
@@ -2983,6 +3104,9 @@ def cronometro_lucha(request):
         'participantes_llave': participantes_llave,
         'logos_llave': logos_llave,
         'llave_guardada': llave_guardada,
+        'combates_disponibles': combates_disponibles,
+        'combate_solicitado': combate_solicitado,
+        'siguiente_combate': siguiente_combate,
         'version_llave': version_llave,
     })
 
@@ -3185,8 +3309,37 @@ def control_tv(request):
             # conserva por compatibilidad con sesiones y migraciones anteriores.
             expira_en=timezone.now() + timedelta(days=3650),
         )
+    llaves_torneo_tv = []
+    llaves_torneo_tv_data = []
+    if request.user.is_superuser:
+        llaves_torneo_tv = LlaveCategoriaEvento.objects.filter(
+            categoria__activa=True,
+            categoria__evento__activo=True,
+            categoria__evento__tipo=Evento.Tipos.TORNEO,
+        ).filter(
+            Q(categoria__evento__fecha_fin__gte=timezone.now())
+            | Q(
+                categoria__evento__fecha_fin__isnull=True,
+                categoria__evento__fecha_inicio__date__gte=timezone.localdate(),
+            )
+        ).select_related('categoria__evento').order_by(
+            'categoria__evento__fecha_inicio',
+            'categoria__orden',
+            'categoria__nombre',
+        )
+        llaves_torneo_tv_data = [{
+            'event_id': llave.categoria.evento_id,
+            'event_name': llave.categoria.evento.nombre,
+            'event_date': timezone.localtime(
+                llave.categoria.evento.fecha_inicio
+            ).strftime('%d/%m/%Y'),
+            'category_id': llave.categoria_id,
+            'category_name': str(llave.categoria),
+        } for llave in llaves_torneo_tv]
     return render(request, 'gestion/control_tv.html', {
         'sesion_tv': sesion,
+        'llaves_torneo_tv': llaves_torneo_tv,
+        'llaves_torneo_tv_data': llaves_torneo_tv_data,
         'tv_url': request.build_absolute_uri(
             reverse('gestion:pantalla_tv', kwargs={'token': sesion.token})
         ),
@@ -3244,12 +3397,22 @@ def accion_tv(request, token):
     elif accion == 'start' and estado['remaining'] > 0 and not estado['running']:
         inicio_nuevo = estado['remaining'] == estado['duration']
         if inicio_nuevo:
-            estado['preparing'] = True
-            estado['preparation_started_at'] = timezone.now().isoformat()
-            estado['running'] = False
-            estado['started_at'] = None
             estado['warning_done'] = False
-            estado['sound_event'] = None
+            if estado.get('active_match'):
+                ahora = timezone.now()
+                estado['preparing'] = False
+                estado['preparation_started_at'] = None
+                estado['running'] = True
+                estado['started_at'] = ahora.isoformat()
+                estado['sound_event'] = {
+                    'type': 'bell', 'id': ahora.isoformat()
+                }
+            else:
+                estado['preparing'] = True
+                estado['preparation_started_at'] = timezone.now().isoformat()
+                estado['running'] = False
+                estado['started_at'] = None
+                estado['sound_event'] = None
         else:
             estado['preparing'] = False
             estado['preparation_started_at'] = None
@@ -3263,6 +3426,9 @@ def accion_tv(request, token):
     elif accion == 'reset':
         mode = estado.get('mode', 'timer')
         bracket = estado.get('bracket')
+        bracket_source_category_id = estado.get('bracket_source_category_id')
+        bracket_source_event_id = estado.get('bracket_source_event_id')
+        next_fight = estado.get('next_fight')
         duration = estado.get('duration', 300)
         youtube = {
             key: value for key, value in estado.items()
@@ -3271,6 +3437,9 @@ def accion_tv(request, token):
         estado = estado_tv_inicial()
         estado['mode'] = mode
         estado['bracket'] = bracket
+        estado['bracket_source_category_id'] = bracket_source_category_id
+        estado['bracket_source_event_id'] = bracket_source_event_id
+        estado['next_fight'] = next_fight
         estado['duration'] = duration
         estado['remaining'] = duration
         estado.update(youtube)
@@ -3327,7 +3496,44 @@ def accion_tv(request, token):
         if len(names) < 2 or len(set(names)) != len(names):
             return JsonResponse({'error': 'Ingresa al menos dos nombres diferentes.'}, status=400)
         estado['bracket'] = _crear_llave_tv(names, size)
+        estado['bracket_source_category_id'] = None
+        estado['bracket_source_event_id'] = None
+        estado['next_fight'] = None
         estado['mode'] = 'bracket'
+    elif accion == 'bracket_import':
+        if not request.user.is_superuser:
+            return JsonResponse(
+                {'error': 'Solo un superusuario puede cargar llaves del torneo.'},
+                status=403,
+            )
+        llaves_operativas = LlaveCategoriaEvento.objects.select_related(
+            'categoria__evento'
+        ).filter(
+            Q(categoria__evento__fecha_fin__gte=timezone.now())
+            | Q(
+                categoria__evento__fecha_fin__isnull=True,
+                categoria__evento__fecha_inicio__date__gte=timezone.localdate(),
+            )
+        )
+        llave = get_object_or_404(
+            llaves_operativas,
+            categoria_id=request.POST.get('category'),
+            categoria__activa=True,
+            categoria__evento__activo=True,
+            categoria__evento__tipo=Evento.Tipos.TORNEO,
+        )
+        if not _datos_llave_validos(llave.datos):
+            return JsonResponse(
+                {'error': 'La llave guardada no tiene una estructura válida.'},
+                status=400,
+            )
+        estado['bracket'] = json.loads(json.dumps(llave.datos))
+        estado['bracket_source_category_id'] = llave.categoria_id
+        estado['bracket_source_event_id'] = llave.categoria.evento_id
+        estado['next_fight'] = None
+        estado['active_match'] = None
+        if request.POST.get('preview') != '1':
+            estado['mode'] = 'bracket'
     elif accion == 'bracket_winner':
         bracket = estado.get('bracket')
         try:
@@ -3337,10 +3543,22 @@ def accion_tv(request, token):
             match = bracket['rounds'][round_index][match_index]
         except (TypeError, ValueError, IndexError, KeyError):
             return JsonResponse({'error': 'Combate no válido.'}, status=400)
+        if match.get('winner'):
+            return JsonResponse(
+                {'error': 'Este combate ya finalizó y está cerrado.'}, status=409
+            )
         if winner not in {match.get('p1'), match.get('p2')} or winner == '__BYE__':
             return JsonResponse({'error': 'Ganador no válido.'}, status=400)
         match['winner'] = winner
         _propagar_llave_tv(bracket)
+        if estado.get('bracket_source_category_id'):
+            LlaveCategoriaEvento.objects.filter(
+                categoria_id=estado['bracket_source_category_id']
+            ).update(
+                datos=bracket,
+                actualizada_por=request.user,
+                actualizada=timezone.now(),
+            )
     elif accion == 'bracket_load':
         bracket = estado.get('bracket')
         try:
@@ -3350,9 +3568,39 @@ def accion_tv(request, token):
             p1, p2 = match.get('p1'), match.get('p2')
         except (TypeError, ValueError, IndexError, KeyError):
             return JsonResponse({'error': 'Combate no válido.'}, status=400)
+        if match.get('winner'):
+            return JsonResponse(
+                {'error': 'Este combate ya finalizó y no puede cargarse nuevamente.'},
+                status=409,
+            )
         if not p1 or not p2 or '__BYE__' in {p1, p2}:
             return JsonResponse({'error': 'Este combate aún no está listo.'}, status=400)
         duration = estado.get('duration', 300)
+        next_fight = None
+        source_event_id = estado.get('bracket_source_event_id')
+        source_category_id = estado.get('bracket_source_category_id')
+        if source_event_id and source_category_id:
+            evento_fuente = Evento.objects.filter(id=source_event_id).first()
+            if evento_fuente:
+                orden = _combates_rotados_evento(evento_fuente)
+                for indice, pelea in enumerate(orden):
+                    if (
+                        pelea['categoria'].id == source_category_id
+                        and pelea['ronda'] == round_index
+                        and pelea['combate'] == match_index
+                        and indice + 1 < len(orden)
+                    ):
+                        proxima = orden[indice + 1]
+                        next_fight = {
+                            'category_id': proxima['categoria'].id,
+                            'category': proxima['categoria'].nombre,
+                            'round': proxima['ronda'],
+                            'match': proxima['combate'],
+                            'round_name': proxima['nombre_ronda'],
+                            'p1': proxima['p1'],
+                            'p2': proxima['p2'],
+                        }
+                        break
         youtube = {
             key: value for key, value in estado.items()
             if key.startswith('youtube_')
@@ -3360,6 +3608,11 @@ def accion_tv(request, token):
         estado_nuevo = estado_tv_inicial()
         estado_nuevo['mode'] = 'timer'
         estado_nuevo['bracket'] = bracket
+        estado_nuevo['bracket_source_category_id'] = estado.get(
+            'bracket_source_category_id'
+        )
+        estado_nuevo['bracket_source_event_id'] = source_event_id
+        estado_nuevo['next_fight'] = next_fight
         estado_nuevo['duration'] = duration
         estado_nuevo['remaining'] = duration
         estado_nuevo.update(youtube)
@@ -3379,12 +3632,23 @@ def accion_tv(request, token):
         match = bracket['rounds'][active['round']][active['match']]
         match['winner'] = winner
         _propagar_llave_tv(bracket)
+        if estado.get('bracket_source_category_id'):
+            LlaveCategoriaEvento.objects.filter(
+                categoria_id=estado['bracket_source_category_id']
+            ).update(
+                datos=bracket,
+                actualizada_por=request.user,
+                actualizada=timezone.now(),
+            )
         estado['active_match'] = None
         estado['running'] = False
         estado['started_at'] = None
         estado['mode'] = 'bracket'
     elif accion == 'bracket_reset':
         estado['bracket'] = None
+        estado['bracket_source_category_id'] = None
+        estado['bracket_source_event_id'] = None
+        estado['next_fight'] = None
         estado['active_match'] = None
         estado['mode'] = 'bracket'
 

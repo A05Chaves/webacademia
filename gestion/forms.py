@@ -468,6 +468,11 @@ class CategoriaEventoForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['orden'].label = 'Orden de aparición'
+        self.fields['orden'].help_text = (
+            'Define en qué posición se muestra esta categoría en los listados '
+            'y en el orden del torneo. No lanza combates automáticamente.'
+        )
         for campo in self.fields.values():
             if isinstance(campo.widget, forms.CheckboxInput):
                 campo.widget.attrs['class'] = 'form-check-input'
