@@ -997,6 +997,7 @@ class GastoForm(forms.ModelForm):
         fields = [
             'cuenta',
             'categoria',
+            'evento',
             'concepto',
             'valor',
             'fecha',
@@ -1012,6 +1013,7 @@ class GastoForm(forms.ModelForm):
                 'step': '0.01',
             }),
             'categoria': forms.Select(attrs={'class': 'form-select'}),
+            'evento': forms.Select(attrs={'class': 'form-select'}),
             'fecha': forms.DateTimeInput(attrs={
                 'type': 'datetime-local',
                 'class': 'form-control'
@@ -1036,6 +1038,11 @@ class GastoForm(forms.ModelForm):
                 CategoriaFinanciera.Tipos.AMBOS,
             ],
         )
+        self.fields['evento'].queryset = Evento.objects.order_by(
+            '-fecha_inicio', 'nombre'
+        )
+        self.fields['evento'].required = False
+        self.fields['evento'].empty_label = 'Gasto general (sin evento)'
 
     def clean_valor(self):
         valor = self.cleaned_data['valor']

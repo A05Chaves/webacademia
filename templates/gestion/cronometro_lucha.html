@@ -620,7 +620,7 @@
                 <div class="d-flex flex-wrap gap-2"><button class="btn btn-outline-warning" type="button" onclick="separateAcademies()"><i class="fa-solid fa-people-arrows"></i> Separar academias</button><button class="btn btn-outline-info" type="button" onclick="shuffleParticipants()"><i class="fa-solid fa-shuffle"></i> Mezclar orden</button><button class="btn btn-primary" type="button" onclick="createBracket()"><i class="fa-solid fa-sitemap"></i> Crear llaves</button><button id="cancelBracketEditBtn" class="btn btn-outline-light" type="button" onclick="cancelBracketEdit()" hidden>Cancelar edición</button></div>
             </div>
             <div id="bracketTournament" hidden>
-                <div class="bracket-actions"><p class="mb-0 text-muted">Selecciona un luchador para marcarlo como ganador.</p><div class="d-flex gap-2">{% if evento_llaves %}<a class="btn btn-outline-info btn-sm" href="{% url 'gestion:cronometro_lucha' %}?evento={{ evento_llaves.id }}"><i class="fa-solid fa-list-ol"></i> Orden del torneo</a>{% endif %}<button class="btn btn-outline-warning btn-sm" type="button" onclick="editBracketParticipants()"><i class="fa-solid fa-pen"></i> Editar distribución</button><button class="btn btn-outline-danger btn-sm" type="button" onclick="newBracket()">Nueva llave</button></div></div>
+                <div class="bracket-actions"><p class="mb-0 text-muted">Selecciona un luchador para marcarlo como ganador.</p><div class="d-flex gap-2">{% if evento_llaves %}<a class="btn btn-outline-info btn-sm" href="{% url 'gestion:cronometro_lucha' %}?evento={{ evento_llaves.id }}"><i class="fa-solid fa-list-ol"></i> Orden del torneo</a>{% endif %}<button class="btn btn-warning btn-sm" type="button" onclick="editBracketParticipants()"><i class="fa-solid fa-pen"></i> Editar participantes y distribución</button><button class="btn btn-outline-danger btn-sm" type="button" onclick="newBracket()">Nueva llave</button></div></div>
                 <div id="bracketBoard" class="bracket-board"></div>
             </div>
         </div>
@@ -1267,6 +1267,23 @@
         renderBracket();
     }
 
+    function undoMatchResult(roundIndex, matchIndex) {
+        const match = bracket.rounds[roundIndex][matchIndex];
+        if (!match?.winner) return;
+        const warning = bracket.type === 'triangulation'
+            ? 'Se reabrirá únicamente este combate.'
+            : 'También se borrarán los resultados posteriores que dependan de este ganador.';
+        if (!confirm(`¿Deshacer el resultado de ${match.p1} vs ${match.p2}?\n${warning}`)) return;
+        match.winner = null;
+        delete match.method;
+        delete match.winner_points;
+        delete match.loser_points;
+        propagateBracket();
+        document.getElementById('championOverlay').hidden = true;
+        saveBracket();
+        renderBracket();
+    }
+
     function resolveAutomaticWinner(match) {
         if (!match.p1 || !match.p2) return null;
         if (match.p1 === BYE && match.p2 === BYE) return BYE;
@@ -1387,6 +1404,12 @@
                     closedBadge.className = 'badge bg-success mt-2';
                     closedBadge.textContent = 'FINALIZADA';
                     card.appendChild(closedBadge);
+                    const undoButton = document.createElement('button');
+                    undoButton.type = 'button';
+                    undoButton.className = 'btn btn-outline-warning btn-sm w-100 mt-2';
+                    undoButton.innerHTML = '<i class="fa-solid fa-rotate-left"></i> Deshacer resultado';
+                    undoButton.onclick = () => undoMatchResult(roundIndex, matchIndex);
+                    card.appendChild(undoButton);
                 }
                 column.appendChild(card);
             });
@@ -1609,7 +1632,7 @@
     function restoreBracket() {
         if (!canManageBrackets) return;
         if (importedParticipants.length) {
-            const supportedSizes = [4, 8, 10, 12, 16, 32];
+            const supportedSizes = [3, 4, 8, 10, 12, 16, 32];
             const selectedSize = supportedSizes.find(size => size >= importedParticipants.length) || 32;
             document.getElementById('bracketSize').value = String(selectedSize);
             buildParticipantInputs(importedParticipants.slice(0, 32));

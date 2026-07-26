@@ -336,6 +336,31 @@ def dashboard(request):
 
     utilidad_mes = ingresos_mes - gastos_mes
 
+    eventos_financieros = list(
+        Evento.objects.filter(
+            movimientos_financieros__isnull=False
+        ).annotate(
+            ingresos_evento=Sum(
+                'movimientos_financieros__valor',
+                filter=Q(
+                    movimientos_financieros__tipo=MovimientoFinanciero.Tipos.INGRESO
+                ),
+            ),
+            gastos_evento=Sum(
+                'movimientos_financieros__valor',
+                filter=Q(
+                    movimientos_financieros__tipo=MovimientoFinanciero.Tipos.EGRESO
+                ),
+            ),
+        ).distinct().order_by('-fecha_inicio')[:12]
+    )
+    for evento in eventos_financieros:
+        evento.ingresos_evento = evento.ingresos_evento or 0
+        evento.gastos_evento = evento.gastos_evento or 0
+        evento.resultado_evento = (
+            evento.ingresos_evento - evento.gastos_evento
+        )
+
     nombres_meses = (
         'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
         'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic',
@@ -405,6 +430,7 @@ def dashboard(request):
         'ingresos_mes': ingresos_mes,
         'gastos_mes': gastos_mes,
         'utilidad_mes': utilidad_mes,
+        'eventos_financieros': eventos_financieros,
         'saldo_total': saldo_total,
         'cuentas_financieras': cuentas_financieras,
         'pagos_programados_pendientes': pagos_programados_pendientes,
@@ -681,7 +707,12 @@ def validar_pago(request, pago_id):
                     inscripcion.save(update_fields=['estado'])
                     pago.concepto_detalle = (
                         f'{inscripcion.evento.get_tipo_display()}: '
-                        f'{inscripcion.evento.nombre}'
+                        f'{inscripcion.evento.nombre} · '
+                        f'{inscripcion.participante_nombre}'
+                        + (
+                            f' · {inscripcion.categoria_evento}'
+                            if inscripcion.categoria_evento_id else ''
+                        )
                     )
 
                 if not pago.numero_comprobante:
@@ -700,6 +731,10 @@ def validar_pago(request, pago_id):
                 ).first()
 
                 if cuenta:
+                    evento_movimiento = (
+                        inscripcion.evento
+                        if pago.tipo == Pago.Tipos.EVENTO else None
+                    )
                     MovimientoFinanciero.objects.get_or_create(
                         pago=pago,
                         defaults={
@@ -710,6 +745,7 @@ def validar_pago(request, pago_id):
                             'fecha': pago.fecha_validacion,
                             'observaciones': f'Ingreso generado automáticamente desde el pago #{pago.id}.',
                             'categoria': categoria,
+                            'evento': evento_movimiento,
                         }
                     )
                 else:
@@ -722,21 +758,30 @@ def validar_pago(request, pago_id):
                     request,
                     'Pago aprobado y comprobante generado correctamente.'
                 )
-                try:
-                    enviar_comprobante_pago(pago)
-                    messages.info(request, 'El comprobante fue enviado por correo.')
-                except ValueError:
-                    messages.info(
-                        request,
-                        'El comprobante está disponible para descarga; no hay correo asociado.',
-                    )
-                except Exception as error:
-                    pago.error_envio_comprobante = str(error)[:500]
-                    pago.save(update_fields=['error_envio_comprobante'])
-                    messages.warning(
-                        request,
-                        'El pago fue aprobado, pero el correo no pudo enviarse. Puedes reenviarlo.',
-                    )
+                def enviar_despues_de_confirmar():
+                    pago_confirmado = Pago.objects.select_related(
+                        'alumno__user', 'suscripcion', 'metodo_qr'
+                    ).get(pk=pago.pk)
+                    try:
+                        enviar_comprobante_pago(pago_confirmado)
+                        messages.info(
+                            request, 'El comprobante fue enviado por correo.'
+                        )
+                    except ValueError:
+                        messages.info(
+                            request,
+                            'El comprobante está disponible para descarga; no hay correo asociado.',
+                        )
+                    except Exception as error:
+                        Pago.objects.filter(pk=pago.pk).update(
+                            error_envio_comprobante=str(error)[:500]
+                        )
+                        messages.warning(
+                            request,
+                            'El pago fue aprobado, pero el correo no pudo enviarse. Puedes reenviarlo.',
+                        )
+
+                transaction.on_commit(enviar_despues_de_confirmar)
 
             elif pago.estado == 'RECHAZADO':
                 pago.save()
@@ -1515,7 +1560,7 @@ def detalle_financiero(request):
     movimientos = MovimientoFinanciero.objects.filter(
         fecha__month=mes,
         fecha__year=anio
-    ).select_related('cuenta', 'pago')
+    ).select_related('cuenta', 'pago', 'evento')
 
     if tipo in ['INGRESO', 'EGRESO']:
         movimientos = movimientos.filter(tipo=tipo)
@@ -3498,6 +3543,12 @@ def accion_tv(request, token):
         delta = 1 if request.POST.get('delta') == '1' else -1
         estado[accion] = max(0, int(estado.get(accion, 0)) + delta)
     elif accion == 'bracket_create':
+        source_category_id = estado.get('bracket_source_category_id')
+        source_event_id = estado.get('bracket_source_event_id')
+        preserve_source = (
+            request.POST.get('preserve_source') == '1'
+            and source_category_id
+        )
         try:
             size = int(request.POST.get('size', 4))
         except ValueError:
@@ -3516,8 +3567,20 @@ def accion_tv(request, token):
                 status=400,
             )
         estado['bracket'] = _crear_llave_tv(names, size)
-        estado['bracket_source_category_id'] = None
-        estado['bracket_source_event_id'] = None
+        estado['bracket_source_category_id'] = (
+            source_category_id if preserve_source else None
+        )
+        estado['bracket_source_event_id'] = (
+            source_event_id if preserve_source else None
+        )
+        if preserve_source:
+            LlaveCategoriaEvento.objects.filter(
+                categoria_id=source_category_id
+            ).update(
+                datos=estado['bracket'],
+                actualizada_por=request.user,
+                actualizada=timezone.now(),
+            )
         estado['next_fight'] = None
         estado['mode'] = 'bracket'
     elif accion == 'bracket_import':
@@ -3583,6 +3646,35 @@ def accion_tv(request, token):
             match['winner_points'] = max(0, winner_points)
             match['loser_points'] = max(0, loser_points)
         _propagar_llave_tv(bracket)
+        if estado.get('bracket_source_category_id'):
+            LlaveCategoriaEvento.objects.filter(
+                categoria_id=estado['bracket_source_category_id']
+            ).update(
+                datos=bracket,
+                actualizada_por=request.user,
+                actualizada=timezone.now(),
+            )
+    elif accion == 'bracket_undo':
+        bracket = estado.get('bracket')
+        try:
+            round_index = int(request.POST.get('round'))
+            match_index = int(request.POST.get('match'))
+            match = bracket['rounds'][round_index][match_index]
+        except (TypeError, ValueError, IndexError, KeyError):
+            return JsonResponse({'error': 'Combate no válido.'}, status=400)
+        if not match.get('winner'):
+            return JsonResponse(
+                {'error': 'Este combate todavía no tiene un resultado.'},
+                status=409,
+            )
+        match['winner'] = None
+        match.pop('method', None)
+        match.pop('winner_points', None)
+        match.pop('loser_points', None)
+        _propagar_llave_tv(bracket)
+        estado['active_match'] = None
+        estado['running'] = False
+        estado['started_at'] = None
         if estado.get('bracket_source_category_id'):
             LlaveCategoriaEvento.objects.filter(
                 categoria_id=estado['bracket_source_category_id']

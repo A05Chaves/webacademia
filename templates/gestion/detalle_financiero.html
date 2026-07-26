@@ -155,6 +155,7 @@
                         <th>Tipo</th>
                         <th>Cuenta</th>
                         <th>Concepto</th>
+                        <th>Evento</th>
                         <th>Valor</th>
                         <th>Origen</th>
                     </tr>
@@ -177,6 +178,7 @@
 
                         <td>{{ movimiento.cuenta }}</td>
                         <td>{{ movimiento.concepto }}</td>
+                        <td>{% if movimiento.evento %}<strong>{{ movimiento.evento.nombre }}</strong><br><small>{{ movimiento.evento.get_tipo_display }}</small>{% else %}—{% endif %}</td>
                         <td>${{ movimiento.valor|floatformat:0 }}</td>
 
                         <td>
@@ -189,7 +191,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="text-center">
+                        <td colspan="7" class="text-center">
                             No hay movimientos para este filtro.
                         </td>
                     </tr>

@@ -11,9 +11,9 @@ class CuentaFinancieraAdmin(admin.ModelAdmin):
 
 @admin.register(MovimientoFinanciero)
 class MovimientoFinancieroAdmin(admin.ModelAdmin):
-    list_display = ('id', 'cuenta', 'tipo', 'concepto',
+    list_display = ('id', 'cuenta', 'tipo', 'evento', 'concepto',
                     'valor', 'fecha', 'pago')
-    list_filter = ('tipo', 'cuenta', 'fecha')
+    list_filter = ('tipo', 'cuenta', 'evento', 'fecha')
     search_fields = ('concepto', 'observaciones')
 
 

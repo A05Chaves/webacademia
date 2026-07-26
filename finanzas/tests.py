@@ -6,6 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from gestion.forms import GastoForm, PagoProgramadoForm, TransferenciaForm
+from pagos.models import Evento
 
 from .models import CategoriaFinanciera, CuentaFinanciera, MovimientoFinanciero, PagoProgramado
 
@@ -109,6 +110,42 @@ class VistasContablesTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['mes'], timezone.localdate().month)
         self.assertEqual(response.context['anio'], timezone.localdate().year)
+
+    def test_dashboard_discrimina_ingresos_y_gastos_por_evento(self):
+        evento = Evento.objects.create(
+            tipo=Evento.Tipos.TORNEO,
+            nombre='Open Galeras 2026',
+            descripcion='Torneo de prueba contable',
+            fecha_inicio=timezone.now(),
+            lugar='Dojo principal',
+            precio_estudiante=80000,
+            precio_externo=100000,
+        )
+        MovimientoFinanciero.objects.create(
+            cuenta=self.cuenta,
+            tipo=MovimientoFinanciero.Tipos.INGRESO,
+            evento=evento,
+            concepto='Inscripción Open Galeras 2026',
+            valor=300000,
+        )
+        MovimientoFinanciero.objects.create(
+            cuenta=self.cuenta,
+            tipo=MovimientoFinanciero.Tipos.EGRESO,
+            evento=evento,
+            concepto='Medallas Open Galeras 2026',
+            valor=90000,
+        )
+
+        response = self.client.get(reverse('gestion:dashboard'))
+
+        self.assertEqual(response.status_code, 200)
+        resumen = response.context['eventos_financieros'][0]
+        self.assertEqual(resumen.nombre, 'Open Galeras 2026')
+        self.assertEqual(resumen.ingresos_evento, 300000)
+        self.assertEqual(resumen.gastos_evento, 90000)
+        self.assertEqual(resumen.resultado_evento, 210000)
+        self.assertContains(response, 'Resultado financiero por evento')
+        self.assertContains(response, 'Open Galeras 2026')
 
     def test_pago_cancelado_no_genera_movimiento(self):
         pago = PagoProgramado.objects.create(

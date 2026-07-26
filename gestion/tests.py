@@ -60,7 +60,7 @@ class CronometroLlavesPermisosTests(TestCase):
         self.assertContains(response, '12 participantes')
         self.assertContains(response, '16 participantes')
         self.assertContains(response, 'BYE')
-        self.assertContains(response, 'Editar distribución')
+        self.assertContains(response, 'Editar participantes y distribución')
         self.assertContains(response, 'Separar academias')
         self.assertContains(response, 'function moveParticipant')
         self.assertContains(response, 'function moveParticipantTo')
@@ -297,6 +297,14 @@ class ModoTVTests(TestCase):
         self.assertEqual(state['mode'], 'bracket')
         self.assertEqual(state['bracket']['rounds'][1][0]['winner'], 'ANA')
 
+        response = self.client.post(url, {
+            'action': 'bracket_undo', 'round': '0', 'match': '1',
+        })
+        self.assertEqual(response.status_code, 200)
+        final_reopened = response.json()['state']['bracket']['rounds'][1][0]
+        self.assertIsNone(final_reopened['p2'])
+        self.assertIsNone(final_reopened['winner'])
+
         response = self.client.post(url, {'action': 'bracket_reset'})
         self.assertIsNone(response.json()['state']['bracket'])
 
@@ -344,6 +352,18 @@ class ModoTVTests(TestCase):
             'action': 'bracket_load', 'round': '0', 'match': '0',
         })
         self.assertEqual(repeated.status_code, 409)
+
+        undone = self.client.post(url, {
+            'action': 'bracket_undo', 'round': '0', 'match': '0',
+        })
+        self.assertEqual(undone.status_code, 200)
+        reopened = undone.json()['state']['bracket']['rounds'][0][0]
+        self.assertIsNone(reopened['winner'])
+        self.assertNotIn('method', reopened)
+        self.assertEqual(
+            undone.json()['state']['bracket']['rounds'][0][1]['p1'],
+            'BEATRIZ',
+        )
 
     def test_superusuario_proyecta_llave_guardada_y_actualiza_resultado(self):
         self.staff.is_superuser = True
@@ -423,6 +443,9 @@ class ModoTVTests(TestCase):
         self.assertContains(control, 'function loadNextTournamentFight')
         self.assertContains(control, 'function previewSavedBracket')
         self.assertContains(control, 'FINALIZADA')
+        self.assertContains(control, 'id="bracketParticipantEditor"')
+        self.assertContains(control, 'function saveBracketEdit')
+        self.assertContains(control, 'Editar participantes de la llave cargada')
         self.assertContains(control, 'id="savedBracketEvent"')
         self.assertContains(control, 'Categoría / llave')
         self.assertContains(control, 'Torneo TV')
@@ -498,6 +521,33 @@ class ModoTVTests(TestCase):
             'winner': 'BEATRIZ',
         })
         self.assertEqual(cambio_finalizada.status_code, 409)
+
+        deshecho = self.client.post(url, {
+            'action': 'bracket_undo', 'round': '0', 'match': '0',
+        })
+        self.assertEqual(deshecho.status_code, 200)
+        llave.refresh_from_db()
+        self.assertIsNone(llave.datos['rounds'][0][0]['winner'])
+
+        editada = self.client.post(url, {
+            'action': 'bracket_create',
+            'size': '4',
+            'names': 'ANA\nBEATRIZ CORREGIDA\nDANIEL\nELENA',
+            'preserve_source': '1',
+        })
+        self.assertEqual(editada.status_code, 200)
+        self.assertEqual(
+            editada.json()['state']['bracket_source_category_id'],
+            categoria.id,
+        )
+        llave.refresh_from_db()
+        self.assertIn('BEATRIZ CORREGIDA', llave.datos['names'])
+        self.assertTrue(all(
+            not match.get('winner')
+            for round_matches in llave.datos['rounds']
+            for match in round_matches
+            if '__BYE__' not in {match.get('p1'), match.get('p2')}
+        ))
 
 
 class CambioNombreUsuarioTests(TestCase):

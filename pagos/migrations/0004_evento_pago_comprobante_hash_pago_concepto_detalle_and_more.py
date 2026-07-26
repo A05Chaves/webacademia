@@ -32,6 +32,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('alumnos', '0004_alumno_documento_acudiente_and_more'),
+        ('finanzas', '0002_categoriafinanciera_movimientofinanciero_categoria'),
         ('pagos', '0003_pago_plan_alter_pago_suscripcion'),
         ('planes', '0009_suscripcion_detalle_beneficio_and_more'),
     ]

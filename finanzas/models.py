@@ -85,6 +85,14 @@ class MovimientoFinanciero(models.Model):
         blank=True,
         related_name='movimiento_financiero'
     )
+    evento = models.ForeignKey(
+        'pagos.Evento',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='movimientos_financieros',
+        help_text='Evento específico que originó este ingreso o gasto.',
+    )
     observaciones = models.TextField(blank=True, null=True)
 
     class Meta:
