@@ -80,6 +80,11 @@ urlpatterns = [
 
     path('horario/', views.horario_clases, name='horario_clases'),
     path('mi-asistencia/', views.mi_asistencia, name='mi_asistencia'),
+    path(
+        'alumnos/<int:alumno_id>/asistencia/',
+        views.mi_asistencia,
+        name='asistencia_alumno',
+    ),
     path('horario/<int:clase_id>/confirmar/',
          views.confirmar_asistencia, name='confirmar_asistencia'),
     path('horario/crear/', views.crear_clase, name='crear_clase'),

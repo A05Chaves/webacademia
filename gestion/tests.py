@@ -866,6 +866,102 @@ class ValidadoresArchivosTests(TestCase):
             validate_base64_signature(firma)
 
 
+class ListaSuscripcionesTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.admin = User.objects.create_user(
+            username='admin_suscripciones',
+            password='clave',
+            is_staff=True,
+        )
+        usuario_activo = User.objects.create_user(
+            username='laura.activa',
+            first_name='Laura',
+            last_name='Activa',
+            password='clave',
+        )
+        usuario_vencido = User.objects.create_user(
+            username='carlos.vencido',
+            first_name='Carlos',
+            last_name='Vencido',
+            password='clave',
+        )
+        self.alumno_activo = Alumno.objects.create(
+            user=usuario_activo, documento='ACT-100'
+        )
+        self.alumno_vencido = Alumno.objects.create(
+            user=usuario_vencido, documento='VEN-200'
+        )
+        self.plan = Plan.objects.create(
+            nombre='Plan mensual',
+            precio=100000,
+            duracion_dias=30,
+        )
+        hoy = timezone.localdate()
+        Suscripcion.objects.create(
+            alumno=self.alumno_activo,
+            plan=self.plan,
+            fecha_inicio=hoy - timedelta(days=5),
+            fecha_vencimiento=hoy + timedelta(days=24),
+            estado=Suscripcion.Estados.ACTIVA,
+        )
+        Suscripcion.objects.create(
+            alumno=self.alumno_vencido,
+            plan=self.plan,
+            fecha_inicio=hoy - timedelta(days=60),
+            fecha_vencimiento=hoy - timedelta(days=31),
+            estado=Suscripcion.Estados.VENCIDA,
+        )
+        cuenta = CuentaFinanciera.objects.create(
+            nombre='Cuenta suscripciones',
+            tipo=CuentaFinanciera.Tipos.BANCO,
+        )
+        metodo = MetodoPagoQR.objects.create(
+            nombre='QR suscripciones',
+            titular='Academia',
+            imagen_qr=SimpleUploadedFile('qr-sus.png', b'qr'),
+            cuenta_financiera=cuenta,
+        )
+        for referencia in ('M-1', 'M-2'):
+            Pago.objects.create(
+                alumno=self.alumno_activo,
+                plan=self.plan,
+                metodo_qr=metodo,
+                tipo=Pago.Tipos.MENSUALIDAD,
+                estado=Pago.Estados.APROBADO,
+                valor=100000,
+                referencia_pago=referencia,
+                comprobante=SimpleUploadedFile(
+                    f'{referencia}.pdf', b'%PDF-1.4'
+                ),
+            )
+        self.client.force_login(self.admin)
+
+    def test_por_defecto_solo_muestra_suscripciones_activas(self):
+        response = self.client.get(reverse('gestion:lista_suscripciones'))
+
+        self.assertContains(response, 'Laura Activa')
+        self.assertNotContains(response, 'Carlos Vencido')
+        self.assertEqual(
+            response.context['suscripciones'][0].mensualidades_pagadas, 2
+        )
+
+    def test_filtro_vencidas_y_busqueda_por_documento(self):
+        vencidas = self.client.get(
+            reverse('gestion:lista_suscripciones'),
+            {'estado': 'vencidas'},
+        )
+        self.assertContains(vencidas, 'Carlos Vencido')
+        self.assertNotContains(vencidas, 'Laura Activa')
+
+        busqueda = self.client.get(
+            reverse('gestion:lista_suscripciones'),
+            {'q': 'VEN-200'},
+        )
+        self.assertContains(busqueda, 'Carlos Vencido')
+        self.assertEqual(busqueda.context['estado_filtro'], 'todas')
+
+
 class CalendarioAsistenciaTests(TestCase):
     def setUp(self):
         User = get_user_model()
@@ -896,6 +992,45 @@ class CalendarioAsistenciaTests(TestCase):
         response = self.client.get(reverse('gestion:mi_asistencia'))
         self.assertEqual(response.status_code, 302)
         self.assertIn(settings.LOGIN_URL, response.url)
+
+    def test_administrador_puede_ver_calendario_del_estudiante(self):
+        administrador = get_user_model().objects.create_user(
+            username='admin_calendario',
+            password='clave-admin',
+            is_staff=True,
+        )
+        AsistenciaClase.objects.create(
+            alumno=self.alumno,
+            clase=self.clase,
+            fecha_clase=date(2026, 7, 8),
+            estado=AsistenciaClase.Estados.CONFIRMADA,
+        )
+        self.client.force_login(administrador)
+
+        response = self.client.get(
+            reverse('gestion:asistencia_alumno', args=[self.alumno.id]),
+            {'mes': 7, 'anio': 2026},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context['vista_administrativa'])
+        self.assertContains(response, f'Asistencia de {self.alumno}')
+        self.assertContains(response, 'Clase técnica')
+
+    def test_estudiante_no_puede_ver_calendario_de_otro(self):
+        otro_usuario = get_user_model().objects.create_user(
+            username='otro_calendario', password='clave'
+        )
+        otro = Alumno.objects.create(
+            user=otro_usuario, documento='CAL-OTRO'
+        )
+        self.client.force_login(self.usuario)
+
+        response = self.client.get(
+            reverse('gestion:asistencia_alumno', args=[otro.id])
+        )
+
+        self.assertEqual(response.status_code, 403)
 
     def test_confirmacion_home_funciona_con_plan_legacy_sin_flags(self):
         hoy = date(2026, 7, 15)

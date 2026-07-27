@@ -1,6 +1,6 @@
 {% extends 'gestion/base.html' %}
 
-{% block title %}Mi asistencia{% endblock %}
+{% block title %}{% if vista_administrativa %}Asistencia de estudiante{% else %}Mi asistencia{% endif %}{% endblock %}
 
 {% block content %}
 <style>
@@ -41,8 +41,8 @@
 
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
     <div>
-        <h1 class="h2 mb-1">Mi asistencia</h1>
-        <p class="text-secondary mb-0">Consulta tus clases confirmadas mes a mes.</p>
+        <h1 class="h2 mb-1">{% if vista_administrativa %}Asistencia de {{ alumno }}{% else %}Mi asistencia{% endif %}</h1>
+        <p class="text-secondary mb-0">{% if vista_administrativa %}Cédula {{ alumno.documento }} · Calendario de clases confirmadas.{% else %}Consulta tus clases confirmadas mes a mes.{% endif %}</p>
     </div>
     <div class="d-flex gap-2">
         <a class="btn btn-outline-primary" href="?mes={{ anterior.month }}&anio={{ anterior.year }}" aria-label="Mes anterior">←</a>
@@ -50,6 +50,10 @@
         <a class="btn btn-outline-primary" href="?mes={{ siguiente.month }}&anio={{ siguiente.year }}" aria-label="Mes siguiente">→</a>
     </div>
 </div>
+
+{% if vista_administrativa %}
+<div class="mb-3"><a class="btn btn-outline-light btn-sm" href="{% url 'gestion:lista_suscripciones' %}?q={{ alumno.documento }}&estado=todas"><i class="fa-solid fa-arrow-left"></i> Volver al historial del estudiante</a></div>
+{% endif %}
 
 <div class="row g-3 mb-4">
     <div class="col-sm-6"><div class="card h-100"><div class="card-body"><div class="text-secondary">Días asistidos</div><div class="display-6 fw-bold text-success">{{ dias_asistidos }}</div></div></div></div>

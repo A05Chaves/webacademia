@@ -1,55 +1,75 @@
 {% extends 'gestion/base.html' %}
 
 {% block content %}
+<div class="page-heading">
+    <div class="page-heading-main">
+        <h2 class="page-heading-title"><i class="fa-solid fa-id-card"></i><span>Suscripciones</span></h2>
+        <p class="page-heading-subtitle text-secondary">La vista inicial muestra únicamente las mensualidades activas.</p>
+    </div>
+    <div class="page-heading-actions">
+        <a href="{% url 'gestion:crear_suscripcion' %}" class="btn btn-outline-light page-heading-action">
+            <i class="fa-solid fa-plus"></i><span>Nueva suscripción</span>
+        </a>
+    </div>
+</div>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-
-    <h2 class="mb-0">
-        Suscripciones
-    </h2>
-
-    <a href="{% url 'gestion:crear_suscripcion' %}"
-       class="btn btn-outline-light btn-sm">
-
-        <i class="fa-solid fa-plus"></i>
-        Nueva suscripción
-
-    </a>
-
+<div class="card bg-dark text-light border-secondary mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-lg-7">
+                <label for="qSuscripcion" class="form-label">Buscar estudiante</label>
+                <input id="qSuscripcion" name="q" value="{{ busqueda }}" class="form-control" placeholder="Nombre, apellido, usuario o cédula">
+            </div>
+            <div class="col-lg-3">
+                <label for="estadoSuscripcion" class="form-label">Estado</label>
+                <select id="estadoSuscripcion" name="estado" class="form-select">
+                    <option value="activas" {% if estado_filtro == 'activas' %}selected{% endif %}>Activas</option>
+                    <option value="vencidas" {% if estado_filtro == 'vencidas' %}selected{% endif %}>Vencidas / finalizadas</option>
+                    <option value="programadas" {% if estado_filtro == 'programadas' %}selected{% endif %}>Programadas</option>
+                    <option value="todas" {% if estado_filtro == 'todas' %}selected{% endif %}>Historial completo</option>
+                </select>
+            </div>
+            <div class="col-lg-2 d-grid">
+                <button class="btn btn-primary" type="submit"><i class="fa-solid fa-search"></i> Buscar</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <div class="table-responsive">
-
-    <table class="table table-dark table-hover table-dark-custom">
-
-        <tr>
-            <th>ID</th>
-            <th>Alumno</th>
-            <th>Plan</th>
-            <th>Inicio</th>
-            <th>Vencimiento</th>
-            <th>Estado</th>
-            <th>Acciones</th>
-        </tr>
-        {% for suscripcion in suscripciones %}
-        <tr>
-            <td>{{ suscripcion.id }}</td>
-            <td>{{ suscripcion.alumno }}</td>
-            <td>{{ suscripcion.plan.nombre }}</td>
-            <td>{{ suscripcion.fecha_inicio }}</td>
-            <td>{{ suscripcion.fecha_vencimiento }}</td>
-            <td>{{ suscripcion.estado }}</td>
-            <td>
-                <a href="{% url 'gestion:editar_suscripcion' suscripcion.id %}" class="btn btn-outline-warning btn-sm">
-                    <i class="fa-solid fa-pen"></i> Editar
-                </a>
-                |
-                <a href="{% url 'gestion:eliminar_suscripcion' suscripcion.id %}" class="btn btn-outline-danger btn-sm">
-                    <i class="fa-solid fa-trash"></i> Eliminar
-                </a>
-            </td>
-        </tr>
-        {% endfor %}
+    <table class="table table-dark table-hover table-dark-custom align-middle">
+        <thead>
+            <tr>
+                <th>Estudiante</th>
+                <th>Cédula</th>
+                <th>Plan</th>
+                <th>Vigencia</th>
+                <th>Estado</th>
+                <th class="text-center">Mensualidades pagadas</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for suscripcion in suscripciones %}
+            <tr>
+                <td><strong>{{ suscripcion.alumno }}</strong></td>
+                <td>{{ suscripcion.alumno.documento }}</td>
+                <td>{{ suscripcion.plan.nombre }}</td>
+                <td>{{ suscripcion.fecha_inicio|date:"d/m/Y" }}<br><small class="text-secondary">hasta {{ suscripcion.fecha_vencimiento|date:"d/m/Y" }}</small></td>
+                <td><span class="badge {% if suscripcion.estado == 'ACTIVA' %}bg-success{% elif suscripcion.estado == 'PROGRAMADA' %}bg-info text-dark{% else %}bg-secondary{% endif %}">{{ suscripcion.get_estado_display }}</span></td>
+                <td class="text-center"><span class="badge bg-primary fs-6">{{ suscripcion.mensualidades_pagadas }}</span></td>
+                <td>
+                    <div class="d-flex flex-wrap gap-1">
+                        <a href="{% url 'gestion:asistencia_alumno' suscripcion.alumno.id %}" class="btn btn-outline-success btn-sm" title="Ver calendario de asistencias"><i class="fa-solid fa-calendar-check"></i> Asistencia</a>
+                        <a href="{% url 'gestion:editar_suscripcion' suscripcion.id %}" class="btn btn-outline-warning btn-sm" title="Editar suscripción"><i class="fa-solid fa-pen"></i></a>
+                        <a href="{% url 'gestion:eliminar_suscripcion' suscripcion.id %}" class="btn btn-outline-danger btn-sm" title="Eliminar suscripción"><i class="fa-solid fa-trash"></i></a>
+                    </div>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="7" class="text-center py-4">No se encontraron suscripciones con estos filtros.</td></tr>
+            {% endfor %}
+        </tbody>
     </table>
 </div>
 {% endblock %}

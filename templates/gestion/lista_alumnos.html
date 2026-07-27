@@ -69,6 +69,11 @@
 
             </td>
             <td>
+                <a href="{% url 'gestion:asistencia_alumno' alumno.id %}"
+                    class="btn btn-outline-success btn-sm">
+                    <i class="fa-solid fa-calendar-check"></i> Asistencia
+                </a>
+                |
                 <a href="{% url 'gestion:editar_alumno' alumno.id %}"
                     class="btn btn-outline-warning btn-sm">
                     <i class="fa-solid fa-pen"></i> Editar

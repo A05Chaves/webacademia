@@ -514,9 +514,57 @@ def crear_plan(request):
 
 @staff_member_required
 def lista_suscripciones(request):
+    busqueda = request.GET.get('q', '').strip()
+    estado_solicitado = request.GET.get('estado')
+    estado = estado_solicitado or ('todas' if busqueda else 'activas')
+
     suscripciones = Suscripcion.objects.select_related(
-        'alumno__user', 'plan').all()
-    return render(request, 'gestion/lista_suscripciones.html', {'suscripciones': suscripciones})
+        'alumno__user', 'plan'
+    ).annotate(
+        mensualidades_pagadas=Count(
+            'alumno__pagos',
+            filter=Q(
+                alumno__pagos__estado=Pago.Estados.APROBADO,
+                alumno__pagos__tipo__in=[
+                    Pago.Tipos.MENSUALIDAD,
+                    Pago.Tipos.PROMOCION,
+                ],
+            ),
+            distinct=True,
+        )
+    )
+
+    if estado == 'activas':
+        suscripciones = suscripciones.filter(
+            estado=Suscripcion.Estados.ACTIVA
+        )
+    elif estado == 'vencidas':
+        suscripciones = suscripciones.filter(
+            estado__in=[
+                Suscripcion.Estados.VENCIDA,
+                Suscripcion.Estados.FINALIZADA,
+            ]
+        )
+    elif estado == 'programadas':
+        suscripciones = suscripciones.filter(
+            estado=Suscripcion.Estados.PROGRAMADA
+        )
+    else:
+        estado = 'todas'
+
+    if busqueda:
+        suscripciones = suscripciones.filter(
+            Q(alumno__documento__icontains=busqueda)
+            | Q(alumno__user__first_name__icontains=busqueda)
+            | Q(alumno__user__last_name__icontains=busqueda)
+            | Q(alumno__user__username__icontains=busqueda)
+        )
+
+    return render(request, 'gestion/lista_suscripciones.html', {
+        'suscripciones': suscripciones,
+        'busqueda': busqueda,
+        'estado_filtro': estado,
+    })
 
 
 @staff_member_required
@@ -960,8 +1008,17 @@ def eliminar_suscripcion(request, suscripcion_id):
 # VISTA PARA ASISTENCIA A CLASE
 
 @login_required
-def mi_asistencia(request):
-    alumno = get_object_or_404(Alumno, user=request.user)
+def mi_asistencia(request, alumno_id=None):
+    if alumno_id is not None:
+        if not request.user.is_staff:
+            return HttpResponse(status=403)
+        alumno = get_object_or_404(
+            Alumno.objects.select_related('user'), id=alumno_id
+        )
+        vista_administrativa = True
+    else:
+        alumno = get_object_or_404(Alumno, user=request.user)
+        vista_administrativa = False
     hoy = timezone.localdate()
 
     try:
@@ -1041,6 +1098,7 @@ def mi_asistencia(request):
         'siguiente': siguiente,
         'total_asistencias': asistencias.count(),
         'dias_asistidos': len(asistencias_por_dia),
+        'vista_administrativa': vista_administrativa,
     })
 
 
