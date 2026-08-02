@@ -9,6 +9,7 @@ from .models import (
     ClienteTienda,
     CuentaTienda,
     CuotaVentaTienda,
+    Monedas,
     ProductoTienda,
     SubcategoriaProducto,
     VentaTienda,
@@ -215,6 +216,125 @@ class VentaTiendaForm(OperacionProductoForm):
             cleaned['numero_cuotas'] = 1
         if cuenta and producto and cuenta.moneda != producto.moneda:
             self.add_error('cuenta', f'Seleccione una cuenta en {producto.moneda}.')
+        return cleaned
+
+
+class CarteraInicialTiendaForm(forms.Form):
+    cliente = forms.ModelChoiceField(
+        queryset=ClienteTienda.objects.none(),
+        required=False,
+        label='Comprador registrado',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        help_text='Seleccione el deudor si ya existe en la tienda.',
+    )
+    registrar_comprador = forms.BooleanField(
+        required=False,
+        label='El comprador todavía no está registrado',
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+    )
+    comprador_nombres = forms.CharField(
+        required=False, max_length=150, label='Nombre completo',
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+    )
+    comprador_tipo_documento = forms.ChoiceField(
+        required=False, label='Tipo de documento',
+        choices=ClienteTienda.TiposDocumento.choices,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    comprador_numero_documento = forms.CharField(
+        required=False, max_length=30, label='Número de documento',
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+    )
+    comprador_whatsapp = forms.CharField(
+        required=False, max_length=20, label='WhatsApp',
+        widget=forms.TextInput(attrs={
+            'class': 'form-control', 'placeholder': 'Ej. 573001234567',
+        }),
+    )
+    comprador_correo = forms.EmailField(
+        required=False, label='Correo electrónico',
+        widget=forms.EmailInput(attrs={'class': 'form-control'}),
+    )
+    comprador_direccion = forms.CharField(
+        required=False, max_length=200, label='Dirección',
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+    )
+    moneda = forms.ChoiceField(
+        choices=Monedas.choices,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    saldo_inicial = forms.DecimalField(
+        label='Saldo pendiente a incorporar',
+        min_value=Decimal('0.01'), max_digits=14, decimal_places=2,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control', 'min': '0.01', 'step': '0.01',
+        }),
+        help_text='Ingrese únicamente lo que aún debe el comprador, no el valor original si ya hizo pagos.',
+    )
+    fecha_origen = forms.DateField(
+        label='Fecha de la deuda original', initial=timezone.localdate,
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+    )
+    fecha_vencimiento = forms.DateField(
+        label='Vencimiento de la primera cuota', initial=timezone.localdate,
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+        help_text='Puede ser una fecha pasada si la deuda ya está vencida.',
+    )
+    numero_cuotas = forms.IntegerField(
+        label='Número de cuotas pendientes', min_value=1, max_value=60, initial=1,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control', 'min': 1, 'max': 60,
+        }),
+    )
+    referencia_externa = forms.CharField(
+        required=False, max_length=80,
+        label='Factura o referencia anterior',
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+    )
+    observaciones = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+        help_text='Puede anotar el origen de la deuda o acuerdos previos con el comprador.',
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['cliente'].queryset = ClienteTienda.objects.filter(activo=True)
+
+    def clean_fecha_origen(self):
+        fecha = self.cleaned_data['fecha_origen']
+        if fecha > timezone.localdate():
+            raise forms.ValidationError('La fecha de la deuda no puede ser futura.')
+        return fecha
+
+    def clean(self):
+        cleaned = super().clean()
+        cliente = cleaned.get('cliente')
+        registrar = cleaned.get('registrar_comprador')
+        if cliente and registrar:
+            self.add_error(
+                'registrar_comprador',
+                'Use el comprador seleccionado o registre uno nuevo, pero no ambos.',
+            )
+        elif not cliente and not registrar:
+            self.add_error(
+                'cliente', 'Seleccione el comprador o registre uno nuevo aquí mismo.'
+            )
+        if registrar:
+            for campo in (
+                'comprador_nombres', 'comprador_tipo_documento',
+                'comprador_numero_documento',
+            ):
+                if not cleaned.get(campo):
+                    self.add_error(campo, 'Este dato es obligatorio para registrar al comprador.')
+            documento = cleaned.get('comprador_numero_documento')
+            if documento and ClienteTienda.objects.filter(
+                numero_documento=documento
+            ).exists():
+                self.add_error(
+                    'comprador_numero_documento',
+                    'Este documento ya existe. Seleccione el comprador registrado.',
+                )
         return cleaned
 
 

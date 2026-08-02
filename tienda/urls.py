@@ -31,6 +31,11 @@ urlpatterns = [
     path('ventas/<int:venta_id>/abono/', views.registrar_abono, name='registrar_abono'),
     path('ventas/<int:venta_id>/paz-y-salvo/', views.paz_y_salvo, name='paz_y_salvo'),
     path('creditos/', views.creditos, name='creditos'),
+    path(
+        'creditos/cartera-inicial/nueva/',
+        views.registrar_cartera_inicial,
+        name='registrar_cartera_inicial',
+    ),
     path('compras/nueva/', views.registrar_compra, name='registrar_compra'),
     path('gastos/nuevo/', views.registrar_gasto, name='registrar_gasto'),
     path('inventario/ajustar/', views.ajustar_inventario, name='ajustar_inventario'),

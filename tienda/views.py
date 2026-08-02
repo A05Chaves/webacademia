@@ -1,5 +1,5 @@
 import calendar
-from datetime import date
+from datetime import date, datetime, time
 from decimal import Decimal
 from io import BytesIO
 from urllib.parse import quote
@@ -18,6 +18,7 @@ from django.views.decorators.http import require_POST
 from .forms import (
     AbonoVentaForm,
     AjusteInventarioForm,
+    CarteraInicialTiendaForm,
     CategoriaProductoForm,
     ClienteTiendaForm,
     CompraTiendaForm,
@@ -108,7 +109,9 @@ def _resumen_moneda(moneda, desde, hasta):
         total=Sum('valor')
     )['total'] or Decimal('0')
     ventas = VentaTienda.objects.filter(
-        moneda=moneda, fecha__date__range=(desde, hasta)
+        moneda=moneda,
+        tipo_registro=VentaTienda.TiposRegistro.VENTA,
+        fecha__date__range=(desde, hasta),
     ).exclude(estado=VentaTienda.Estados.ANULADA).aggregate(total=Sum('total'))['total'] or Decimal('0')
     ventas_anteriores = movimientos.filter(
         origen=MovimientoTienda.Origenes.VENTA, venta__isnull=True
@@ -144,7 +147,9 @@ def panel(request):
     ).select_related('categoria', 'subcategoria')
     cantidad_productos_bajo_stock = productos_bajo_stock_qs.count()
     productos_bajo_stock = productos_bajo_stock_qs.order_by('stock', 'nombre')[:3]
-    ultima_venta = VentaTienda.objects.exclude(
+    ultima_venta = VentaTienda.objects.filter(
+        tipo_registro=VentaTienda.TiposRegistro.VENTA,
+    ).exclude(
         estado=VentaTienda.Estados.ANULADA
     ).select_related('cliente').prefetch_related('detalles').first()
     movimientos = MovimientoTienda.objects.filter(
@@ -480,6 +485,61 @@ def creditos(request):
     elif estado == 'pagadas':
         ventas = ventas.filter(estado=VentaTienda.Estados.PAGADA)
     return render(request, 'tienda/creditos.html', {'ventas': ventas, 'estado_filtro': estado})
+
+
+@staff_member_required
+def registrar_cartera_inicial(request):
+    form = CarteraInicialTiendaForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        with transaction.atomic():
+            cliente_cartera = form.cleaned_data.get('cliente')
+            if form.cleaned_data.get('registrar_comprador'):
+                cliente_cartera = ClienteTienda.objects.create(
+                    nombres=form.cleaned_data['comprador_nombres'],
+                    tipo_documento=form.cleaned_data['comprador_tipo_documento'],
+                    numero_documento=form.cleaned_data['comprador_numero_documento'],
+                    telefono_whatsapp=form.cleaned_data.get('comprador_whatsapp', ''),
+                    correo=form.cleaned_data.get('comprador_correo', ''),
+                    direccion=form.cleaned_data.get('comprador_direccion', ''),
+                )
+            saldo = form.cleaned_data['saldo_inicial']
+            fecha_origen = timezone.make_aware(
+                datetime.combine(form.cleaned_data['fecha_origen'], time.min),
+                timezone.get_current_timezone(),
+            )
+            venta = VentaTienda.objects.create(
+                cliente=cliente_cartera,
+                tipo_registro=VentaTienda.TiposRegistro.CARTERA_INICIAL,
+                referencia_externa=form.cleaned_data.get('referencia_externa', ''),
+                modalidad=VentaTienda.Modalidades.CREDITO,
+                estado=VentaTienda.Estados.PENDIENTE,
+                moneda=form.cleaned_data['moneda'],
+                subtotal=saldo,
+                descuento=0,
+                total=saldo,
+                saldo_pendiente=saldo,
+                fecha=fecha_origen,
+                fecha_vencimiento=form.cleaned_data['fecha_vencimiento'],
+                numero_cuotas=form.cleaned_data['numero_cuotas'],
+                observaciones=form.cleaned_data.get('observaciones', ''),
+                registrado_por=request.user,
+            )
+            _crear_cuotas(venta)
+        messages.success(
+            request,
+            f'Cartera anterior {venta.numero} incorporada por '
+            f'{saldo:,.2f} {venta.moneda}. No se registró como una venta nueva ni como ingreso de caja.',
+        )
+        return redirect('tienda:detalle_venta', venta_id=venta.id)
+    return _render_formulario(
+        request,
+        form,
+        'Ingresar cartera anterior',
+        'fa-file-circle-plus',
+        'Guardar cartera inicial',
+        'btn-warning',
+        volver_url='tienda:creditos',
+    )
 
 
 @staff_member_required

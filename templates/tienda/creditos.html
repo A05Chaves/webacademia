@@ -1,5 +1,97 @@
-{% extends 'gestion/base.html' %}{% block content %}
-<div class="page-heading"><div class="page-heading-main"><h2 class="page-heading-title"><i class="fa-solid fa-file-invoice-dollar"></i><span>Cartera de la tienda</span></h2><p class="page-heading-subtitle text-secondary">Ventas a crédito, abonos y vencimientos.</p></div><div class="page-heading-actions"><a href="{% url 'tienda:panel' %}" class="btn btn-outline-light page-heading-action"><i class="fa-solid fa-arrow-left"></i><span>Volver</span></a></div></div>
-<div class="btn-group mb-3"><a href="?estado=pendientes" class="btn btn-outline-warning">Pendientes</a><a href="?estado=pagadas" class="btn btn-outline-success">Pagadas</a><a href="?estado=todas" class="btn btn-outline-light">Todas</a></div>
-<div class="card bg-dark text-light border-secondary"><div class="table-responsive"><table class="table table-dark table-hover mb-0"><thead><tr><th>Venta</th><th>Fecha</th><th>Comprador</th><th>Próximo vencimiento</th><th>Cuotas pagadas</th><th>Estado</th><th class="text-end">Total</th><th class="text-end">Saldo</th><th></th></tr></thead><tbody>{% for v in ventas %}<tr class="{% if v.esta_vencida %}table-danger{% endif %}"><td>{{ v.numero }}</td><td>{{ v.fecha|date:'d/m/Y' }}</td><td>{{ v.cliente.nombres }}<br><small>{{ v.cliente.telefono_whatsapp }}</small></td><td>{{ v.proximo_vencimiento|date:'d/m/Y'|default:'—' }}</td><td><strong>{{ v.progreso_cuotas }}</strong></td><td>{{ v.get_estado_display }}</td><td class="text-end">{{ v.total|floatformat:2 }} {{ v.moneda }}</td><td class="text-end">{{ v.saldo_pendiente|floatformat:2 }} {{ v.moneda }}</td><td><a href="{% url 'tienda:detalle_venta' v.id %}" class="btn btn-outline-info btn-sm">Ver</a></td></tr>{% empty %}<tr><td colspan="9" class="text-center py-4">No hay ventas en este filtro.</td></tr>{% endfor %}</tbody></table></div></div>
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+<div class="page-heading">
+    <div class="page-heading-main">
+        <h2 class="page-heading-title">
+            <i class="fa-solid fa-file-invoice-dollar"></i>
+            <span>Cartera de la tienda</span>
+        </h2>
+        <p class="page-heading-subtitle text-secondary">
+            Ventas a crédito, deudas anteriores, abonos y vencimientos.
+        </p>
+    </div>
+    <div class="page-heading-actions">
+        <a href="{% url 'tienda:registrar_cartera_inicial' %}"
+           class="btn btn-warning page-heading-action">
+            <i class="fa-solid fa-file-circle-plus"></i>
+            <span>Ingresar cartera anterior</span>
+        </a>
+        <a href="{% url 'tienda:panel' %}"
+           class="btn btn-outline-light page-heading-action">
+            <i class="fa-solid fa-arrow-left"></i>
+            <span>Volver</span>
+        </a>
+    </div>
+</div>
+
+<div class="alert alert-info">
+    <i class="fa-solid fa-circle-info me-1"></i>
+    La cartera anterior aumenta las cuentas por cobrar, pero no se registra como una venta
+    nueva ni como dinero recibido. Los ingresos se generan únicamente cuando registre abonos.
+</div>
+
+<div class="btn-group mb-3">
+    <a href="?estado=pendientes" class="btn btn-outline-warning">Pendientes</a>
+    <a href="?estado=pagadas" class="btn btn-outline-success">Pagadas</a>
+    <a href="?estado=todas" class="btn btn-outline-light">Todas</a>
+</div>
+
+<div class="card bg-dark text-light border-secondary">
+    <div class="table-responsive">
+        <table class="table table-dark table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Registro</th>
+                    <th>Origen</th>
+                    <th>Fecha</th>
+                    <th>Comprador</th>
+                    <th>Próximo vencimiento</th>
+                    <th>Cuotas pagadas</th>
+                    <th>Estado</th>
+                    <th class="text-end">Total</th>
+                    <th class="text-end">Saldo</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for v in ventas %}
+                    <tr class="{% if v.esta_vencida %}table-danger{% endif %}">
+                        <td>
+                            <strong>{{ v.numero }}</strong>
+                            {% if v.referencia_externa %}
+                                <br><small>Ref. {{ v.referencia_externa }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge {% if v.es_cartera_inicial %}bg-warning text-dark{% else %}bg-info text-dark{% endif %}">
+                                {{ v.get_tipo_registro_display }}
+                            </span>
+                        </td>
+                        <td>{{ v.fecha|date:'j F Y'|lower }}</td>
+                        <td>
+                            {{ v.cliente.nombres }}
+                            <br><small>{{ v.cliente.telefono_whatsapp }}</small>
+                        </td>
+                        <td>{{ v.proximo_vencimiento|date:'j F Y'|lower|default:'—' }}</td>
+                        <td><strong>{{ v.progreso_cuotas }}</strong></td>
+                        <td>{{ v.get_estado_display }}</td>
+                        <td class="text-end">{{ v.total|floatformat:2 }} {{ v.moneda }}</td>
+                        <td class="text-end">{{ v.saldo_pendiente|floatformat:2 }} {{ v.moneda }}</td>
+                        <td>
+                            <a href="{% url 'tienda:detalle_venta' v.id %}"
+                               class="btn btn-outline-info btn-sm">Ver</a>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="10" class="text-center py-4">
+                            No hay registros de cartera en este filtro.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
 {% endblock %}

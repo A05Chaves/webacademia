@@ -17,6 +17,7 @@
 
 <div class="d-flex flex-wrap gap-2 mb-4">
   <a href="{% url 'tienda:registrar_venta' %}" class="btn btn-success"><i class="fa-solid fa-cart-shopping"></i> Nueva venta</a>
+  <a href="{% url 'tienda:registrar_cartera_inicial' %}" class="btn btn-outline-warning"><i class="fa-solid fa-file-circle-plus"></i> Cartera anterior</a>
   <a href="{% url 'tienda:registrar_compra' %}" class="btn btn-warning"><i class="fa-solid fa-boxes-stacked"></i> Registrar compra</a>
   <a href="{% url 'tienda:registrar_gasto' %}" class="btn btn-danger"><i class="fa-solid fa-arrow-trend-down"></i> Registrar gasto</a>
   <a href="{% url 'tienda:ajustar_inventario' %}" class="btn btn-info"><i class="fa-solid fa-box-open"></i> Ajustar inventario</a>
@@ -77,7 +78,7 @@
   <div class="col-lg-5"><div class="card bg-dark text-light border-secondary h-100"><div class="card-header">Ventas acumuladas por producto</div><div class="card-body" style="height:300px"><canvas id="graficoProductosTienda"></canvas></div></div></div>
 </div>
 
-{% if creditos %}<div class="card bg-dark text-light border-secondary mb-4"><div class="card-header">Créditos pendientes</div><div class="table-responsive"><table class="table table-dark table-hover mb-0"><thead><tr><th>Venta</th><th>Cliente</th><th>Vence</th><th class="text-end">Saldo</th></tr></thead><tbody>{% for v in creditos %}<tr class="{% if v.esta_vencida %}table-danger{% endif %}"><td><a href="{% url 'tienda:detalle_venta' v.id %}">{{ v.numero }}</a></td><td>{{ v.cliente.nombres }}</td><td>{{ v.fecha_vencimiento|date:'d/m/Y' }}</td><td class="text-end">{{ v.saldo_pendiente|floatformat:2 }} {{ v.moneda }}</td></tr>{% endfor %}</tbody></table></div></div>{% endif %}
+{% if creditos %}<div class="card bg-dark text-light border-secondary mb-4"><div class="card-header">Créditos pendientes</div><div class="table-responsive"><table class="table table-dark table-hover mb-0"><thead><tr><th>Registro</th><th>Cliente</th><th>Vence</th><th class="text-end">Saldo</th></tr></thead><tbody>{% for v in creditos %}<tr class="{% if v.esta_vencida %}table-danger{% endif %}"><td><a href="{% url 'tienda:detalle_venta' v.id %}">{{ v.numero }}</a>{% if v.es_cartera_inicial %}<br><small>Cartera anterior</small>{% endif %}</td><td>{{ v.cliente.nombres }}</td><td>{{ v.fecha_vencimiento|date:'j F Y'|lower }}</td><td class="text-end">{{ v.saldo_pendiente|floatformat:2 }} {{ v.moneda }}</td></tr>{% endfor %}</tbody></table></div></div>{% endif %}
 
 <div class="card bg-dark text-light border-secondary"><div class="card-header">Movimientos del período</div><div class="table-responsive"><table class="table table-dark table-hover mb-0"><thead><tr><th>Fecha</th><th>Concepto</th><th>Cuenta</th><th>Moneda</th><th class="text-end">Valor</th></tr></thead><tbody>{% for m in movimientos %}<tr><td>{{ m.fecha|date:'d/m/Y H:i' }}</td><td>{{ m.concepto }}</td><td>{{ m.cuenta.nombre }}</td><td>{{ m.moneda }}</td><td class="text-end {% if m.tipo == 'INGRESO' %}text-success{% else %}text-danger{% endif %}">{% if m.tipo == 'INGRESO' %}+{% else %}−{% endif %} {{ m.valor|floatformat:2 }}</td></tr>{% empty %}<tr><td colspan="5" class="text-center py-4">Sin movimientos.</td></tr>{% endfor %}</tbody></table></div></div>
 

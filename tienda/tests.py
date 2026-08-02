@@ -315,6 +315,82 @@ class TiendaTests(TestCase):
         self.assertFalse(MovimientoTienda.objects.exists())
         self.assertEqual(DetalleVentaTienda.objects.get().costo_unitario, 40000)
 
+    def test_cartera_anterior_se_incorpora_sin_crear_venta_caja_o_inventario(self):
+        fecha_deuda = timezone.localdate() - timedelta(days=90)
+        fecha_vencida = timezone.localdate() - timedelta(days=30)
+
+        response = self.client.post(reverse('tienda:registrar_cartera_inicial'), {
+            'registrar_comprador': 'on',
+            'comprador_nombres': 'Cliente cartera anterior',
+            'comprador_tipo_documento': 'CC',
+            'comprador_numero_documento': 'CARTERA-001',
+            'comprador_whatsapp': '573001112233',
+            'comprador_correo': 'cartera@example.com',
+            'comprador_direccion': 'Dirección anterior',
+            'moneda': 'COP',
+            'saldo_inicial': '300000',
+            'fecha_origen': fecha_deuda.isoformat(),
+            'fecha_vencimiento': fecha_vencida.isoformat(),
+            'numero_cuotas': '2',
+            'referencia_externa': 'FAC-ANT-88',
+            'observaciones': 'Saldo del sistema contable anterior',
+        })
+
+        venta = VentaTienda.objects.get()
+        self.assertRedirects(
+            response, reverse('tienda:detalle_venta', args=[venta.id])
+        )
+        self.assertEqual(
+            venta.tipo_registro, VentaTienda.TiposRegistro.CARTERA_INICIAL
+        )
+        self.assertTrue(venta.numero.startswith('CI-'))
+        self.assertEqual(venta.saldo_pendiente, Decimal('300000'))
+        self.assertEqual(venta.referencia_externa, 'FAC-ANT-88')
+        self.assertEqual(venta.cuotas.count(), 2)
+        self.assertFalse(venta.detalles.exists())
+        self.assertFalse(MovimientoTienda.objects.exists())
+        self.producto.refresh_from_db()
+        self.assertEqual(self.producto.stock, 10)
+
+        panel = self.client.get(reverse('tienda:panel'))
+        resumen_cop = next(
+            item for item in panel.context['resumenes'] if item['codigo'] == 'COP'
+        )
+        self.assertEqual(resumen_cop['ventas'], 0)
+        self.assertEqual(resumen_cop['cartera'], Decimal('300000'))
+
+    def test_cartera_anterior_admite_abonos_y_actualiza_saldo(self):
+        cliente = ClienteTienda.objects.create(
+            nombres='Cliente deuda inicial',
+            tipo_documento='CC',
+            numero_documento='CARTERA-ABONO',
+        )
+        response = self.client.post(reverse('tienda:registrar_cartera_inicial'), {
+            'cliente': cliente.id,
+            'moneda': 'COP',
+            'saldo_inicial': '200000',
+            'fecha_origen': (timezone.localdate() - timedelta(days=60)).isoformat(),
+            'fecha_vencimiento': timezone.localdate().isoformat(),
+            'numero_cuotas': '2',
+            'referencia_externa': '',
+            'observaciones': '',
+        })
+        venta = VentaTienda.objects.get()
+        self.assertEqual(response.status_code, 302)
+
+        self.client.post(reverse('tienda:registrar_abono', args=[venta.id]), {
+            'cuenta': self.cuenta.id,
+            'valor': '50000',
+            'observaciones': 'Primer abono de cartera anterior',
+        })
+
+        venta.refresh_from_db()
+        self.assertEqual(venta.estado, VentaTienda.Estados.PARCIAL)
+        self.assertEqual(venta.saldo_pendiente, Decimal('150000'))
+        movimiento = MovimientoTienda.objects.get()
+        self.assertEqual(movimiento.origen, MovimientoTienda.Origenes.ABONO)
+        self.assertEqual(movimiento.valor, Decimal('50000'))
+
     def test_abono_cierra_credito_y_habilita_paz_y_salvo(self):
         cliente = ClienteTienda.objects.create(
             nombres='Cliente paz y salvo', tipo_documento='CC', numero_documento='654321'

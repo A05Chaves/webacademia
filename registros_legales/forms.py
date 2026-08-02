@@ -267,7 +267,6 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
                     )
 
         documento = cleaned_data.get('documento')
-        correo = cleaned_data.get('correo')
         celular = cleaned_data.get('celular')
 
         if documento:
@@ -291,17 +290,6 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
                 self.add_error(
                     'documento',
                     'Ya existe un estudiante o registro con este documento, o está asignado a un instructor.'
-                )
-
-        if correo:
-            existe_correo = RegistroLegalEstudiante.objects.filter(
-                correo__iexact=correo
-            ).exists()
-
-            if existe_correo:
-                self.add_error(
-                    'correo',
-                    'Ya existe un registro con este correo.'
                 )
 
         if celular:

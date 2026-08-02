@@ -85,6 +85,11 @@
                     </div>
 
                     <div class="col-md-6">
+                        <strong>Fecha de nacimiento:</strong><br>
+                        {{ registro.fecha_nacimiento|date:"j F Y"|lower }}
+                    </div>
+
+                    <div class="col-md-6">
                         <strong>Celular:</strong><br>
                         {{ registro.celular }}
                     </div>

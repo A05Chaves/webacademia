@@ -239,6 +239,10 @@ class ProductoTienda(models.Model):
 
 
 class VentaTienda(models.Model):
+    class TiposRegistro(models.TextChoices):
+        VENTA = 'VENTA', 'Venta de tienda'
+        CARTERA_INICIAL = 'CARTERA_INICIAL', 'Cartera anterior'
+
     class Modalidades(models.TextChoices):
         CONTADO = 'CONTADO', 'Contado'
         CREDITO = 'CREDITO', 'Crédito'
@@ -250,6 +254,16 @@ class VentaTienda(models.Model):
         ANULADA = 'ANULADA', 'Anulada'
 
     numero = models.CharField(max_length=24, unique=True, blank=True)
+    tipo_registro = models.CharField(
+        max_length=20,
+        choices=TiposRegistro.choices,
+        default=TiposRegistro.VENTA,
+    )
+    referencia_externa = models.CharField(
+        max_length=80,
+        blank=True,
+        help_text='Factura, comprobante o referencia del sistema anterior.',
+    )
     cliente = models.ForeignKey(
         ClienteTienda, on_delete=models.PROTECT, related_name='ventas',
         null=True, blank=True,
@@ -285,8 +299,16 @@ class VentaTienda(models.Model):
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
         if not self.numero:
-            self.numero = f'VT-{self.fecha:%Y%m}-{self.pk:06d}'
+            prefijo = (
+                'CI' if self.tipo_registro == self.TiposRegistro.CARTERA_INICIAL
+                else 'VT'
+            )
+            self.numero = f'{prefijo}-{self.fecha:%Y%m}-{self.pk:06d}'
             super().save(update_fields=['numero'])
+
+    @property
+    def es_cartera_inicial(self):
+        return self.tipo_registro == self.TiposRegistro.CARTERA_INICIAL
 
     @property
     def esta_vencida(self):

@@ -184,6 +184,25 @@ class RegistroLegalObligatorioTests(TestCase):
         self.assertEqual(registro.estado, RegistroLegalEstudiante.Estados.APROBADO)
         enviar_correo.assert_called_once_with(registro)
 
+    def test_detalle_muestra_fecha_de_nacimiento_legible(self):
+        form = RegistroLegalEstudianteForm(
+            data=self.datos_validos(), files={'foto': self.foto_valida()}
+        )
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+        registro = form.save()
+        administrador = get_user_model().objects.create_user(
+            username='admin_detalle', password='AdminClave789!', is_staff=True
+        )
+        self.client.force_login(administrador)
+
+        response = self.client.get(
+            reverse('gestion:detalle_registro_legal', args=[registro.id])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Fecha de nacimiento:')
+        self.assertContains(response, '1 enero 2000')
+
     def test_administrador_no_aprueba_registro_automaticamente(self):
         administrador = get_user_model().objects.create_user(
             username='admin_registro',
@@ -236,9 +255,30 @@ class RegistroLegalObligatorioTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Ya existe un estudiante o registro')
-        self.assertContains(response, 'Ya existe un registro con este correo')
         self.assertContains(response, 'Ya existe un registro con este celular')
         self.assertEqual(RegistroLegalEstudiante.objects.count(), 1)
+
+    def test_dos_estudiantes_pueden_compartir_correo_familiar(self):
+        primero = self.datos_validos()
+        primero['foto'] = self.foto_valida()
+        self.client.post(reverse('registro_publico'), primero)
+
+        segundo = self.datos_validos()
+        segundo.update({
+            'documento': 'REG-002',
+            'celular': '3000000002',
+            'usuario_solicitado': 'estudiante_familia_2',
+            'foto': self.foto_valida(),
+        })
+        response = self.client.post(reverse('registro_publico'), segundo)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            RegistroLegalEstudiante.objects.filter(
+                correo=primero['correo']
+            ).count(),
+            2,
+        )
 
     def test_validacion_intermedia_detecta_datos_existentes(self):
         data = self.datos_validos()
@@ -255,7 +295,7 @@ class RegistroLegalObligatorioTests(TestCase):
         resultado = response.json()
         self.assertFalse(resultado['valido'])
         self.assertEqual(
-            set(resultado['errores']), {'documento', 'correo', 'celular'}
+            set(resultado['errores']), {'documento', 'celular'}
         )
 
     def test_validacion_intermedia_detecta_usuario_reservado(self):

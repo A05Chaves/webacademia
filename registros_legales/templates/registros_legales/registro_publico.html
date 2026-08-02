@@ -32,6 +32,30 @@
         .signature-box { border: 2px dashed #adb5bd; transition: border-color .2s; }
         .signature-box.ready { border-color: #198754; }
         .summary-item { background: #f8f9fa; border-radius: .75rem; padding: .8rem; height: 100%; }
+        .fecha-control-legible { display: flex; position: relative; width: 100%; }
+        .fecha-input-presentacion {
+            align-items: center;
+            display: flex;
+            min-height: 38px;
+            padding-right: 2.75rem;
+            width: 100%;
+        }
+        .fecha-input-presentacion::after {
+            content: '\1F4C5';
+            margin-left: auto;
+        }
+        .fecha-input-nativa {
+            cursor: pointer;
+            inset: 0;
+            opacity: 0;
+            position: absolute;
+            width: 100%;
+            z-index: 2;
+        }
+        .fecha-control-legible:focus-within .fecha-input-presentacion {
+            border-color: #86b7fe;
+            box-shadow: 0 0 0 .25rem rgba(13,110,253,.25);
+        }
         @media (max-width: 576px) {
             .container { padding-left: .75rem; padding-right: .75rem; }
             .card-body { padding: 1.25rem !important; }
@@ -83,7 +107,7 @@
                                 <div class="col-md-6"><label class="form-label" for="{{ form.fecha_nacimiento.id_for_label }}">Fecha de nacimiento <span class="required">*</span></label>{{ form.fecha_nacimiento }}<div class="field-error text-danger">{{ form.fecha_nacimiento.errors }}</div></div>
                                 <div class="col-12"><label class="form-label" for="{{ form.direccion.id_for_label }}">Dirección <span class="required">*</span></label>{{ form.direccion }}<div class="field-error text-danger">{{ form.direccion.errors }}</div></div>
                                 <div class="col-md-6"><label class="form-label" for="{{ form.celular.id_for_label }}">Celular <span class="required">*</span></label>{{ form.celular }}<div class="field-error text-danger">{{ form.celular.errors }}</div></div>
-                                <div class="col-md-6"><label class="form-label" for="{{ form.correo.id_for_label }}">Correo <span class="required">*</span></label>{{ form.correo }}<div class="field-error text-danger">{{ form.correo.errors }}</div></div>
+                                <div class="col-md-6"><label class="form-label" for="{{ form.correo.id_for_label }}">Correo <span class="required">*</span></label>{{ form.correo }}<div class="form-text">Puede ser el correo familiar o del acudiente y utilizarse en varios estudiantes.</div><div class="field-error text-danger">{{ form.correo.errors }}</div></div>
                                 <div class="col-12 mt-4"><h3 class="h5 mb-1">Datos de acceso</h3><p class="text-muted mb-0">Elige las credenciales que utilizarás cuando la academia apruebe tu registro.</p></div>
                                 <div class="col-12"><label class="form-label" for="{{ form.usuario_solicitado.id_for_label }}">Usuario <span class="required">*</span></label>{{ form.usuario_solicitado }}{% if form.usuario_solicitado.help_text %}<div class="form-text">{{ form.usuario_solicitado.help_text }}</div>{% endif %}<div class="field-error text-danger">{{ form.usuario_solicitado.errors }}</div></div>
                                 <div class="col-md-6"><label class="form-label" for="{{ form.password1.id_for_label }}">Contraseña <span class="required">*</span></label>{{ form.password1 }}{% if form.password1.help_text %}<div class="form-text small">{{ form.password1.help_text|safe }}</div>{% endif %}<div class="field-error text-danger">{{ form.password1.errors }}</div></div>
@@ -164,6 +188,54 @@
 <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+const mesesFechaLegible = [
+    'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+];
+
+function prepararFechasLegibles() {
+    document.querySelectorAll('input[type="date"], input[type="datetime-local"]').forEach(input => {
+        if (input.dataset.fechaLegibleLista === 'true') return;
+        input.dataset.fechaLegibleLista = 'true';
+        const contenedor = document.createElement('div');
+        contenedor.className = 'fecha-control-legible';
+        const salida = document.createElement('div');
+        salida.className = 'form-control fecha-input-presentacion';
+        salida.setAttribute('aria-hidden', 'true');
+        input.parentNode.insertBefore(contenedor, input);
+        contenedor.appendChild(salida);
+        contenedor.appendChild(input);
+        input.classList.add('fecha-input-nativa');
+        const actualizar = () => {
+            if (!input.value) {
+                salida.textContent = 'Selecciona una fecha';
+                return;
+            }
+            const [fechaIso, horaIso] = input.value.split('T');
+            const [anio, mes, dia] = fechaIso.split('-').map(Number);
+            if (!anio || !mes || !dia) {
+                salida.textContent = 'Selecciona una fecha';
+                return;
+            }
+            let texto = `${dia} ${mesesFechaLegible[mes - 1]} ${anio}`;
+            if (input.type === 'datetime-local' && horaIso) {
+                const [hora, minutos = 0] = horaIso.split(':').map(Number);
+                const periodo = hora >= 12 ? 'p. m.' : 'a. m.';
+                texto += `, ${hora % 12 || 12}:${String(minutos).padStart(2, '0')} ${periodo}`;
+            }
+            salida.textContent = texto;
+        };
+        input.addEventListener('click', () => {
+            if (typeof input.showPicker === 'function') input.showPicker();
+        });
+        input.addEventListener('input', actualizar);
+        input.addEventListener('change', actualizar);
+        actualizar();
+    });
+}
+
+prepararFechasLegibles();
+
 const form = document.getElementById('registroEstudianteForm');
 const steps = Array.from(document.querySelectorAll('.wizard-step'));
 const titles = steps.map(step => step.dataset.title);

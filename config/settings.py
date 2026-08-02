@@ -125,13 +125,16 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'es-co'
 
 TIME_ZONE = 'America/Bogota'
 
 USE_I18N = True
 
 USE_TZ = True
+
+DATE_FORMAT = 'j F Y'
+DATETIME_FORMAT = 'j F Y, g:i a'
 
 
 # Static files (CSS, JavaScript, Images)
@@ -180,4 +183,8 @@ EMAIL_HOST_USER = config('EMAIL_HOST_USER')
 
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
 
-DEFAULT_FROM_EMAIL = 'GalerasBJJ <pruebaslabsesur@gmail.com>'
+DEFAULT_FROM_EMAIL = config(
+    'DEFAULT_FROM_EMAIL',
+    default='Galeras BJJ <pruebaslabsesur@gmail.com>',
+)
+SERVER_EMAIL = DEFAULT_FROM_EMAIL

@@ -14,7 +14,6 @@ from .models import RegistroLegalEstudiante
 @require_POST
 def validar_datos_registro(request):
     documento = request.POST.get('documento', '').strip()
-    correo = request.POST.get('correo', '').strip()
     celular = request.POST.get('celular', '').strip()
     username = request.POST.get('usuario_solicitado', '').strip()
     errores = {}
@@ -28,11 +27,6 @@ def validar_datos_registro(request):
             'Ya existe un estudiante o registro con este documento, '
             'o está asignado a un instructor.'
         )
-
-    if correo and RegistroLegalEstudiante.objects.filter(
-        correo__iexact=correo
-    ).exists():
-        errores['correo'] = 'Ya existe un registro con este correo.'
 
     if celular and RegistroLegalEstudiante.objects.filter(
         celular=celular

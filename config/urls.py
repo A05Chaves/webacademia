@@ -22,6 +22,7 @@ from django.conf import settings
 from config.media_views import serve_media
 from django.contrib.auth import views as auth_views
 from django.urls import include
+from usuarios.forms import RecuperarPasswordIdentificadoForm
 
 
 urlpatterns = [
@@ -35,7 +36,10 @@ urlpatterns = [
     path(
         'password-reset/',
         auth_views.PasswordResetView.as_view(
-            template_name='registration/password_reset_form.html'
+            template_name='registration/password_reset_form.html',
+            form_class=RecuperarPasswordIdentificadoForm,
+            email_template_name='registration/password_reset_email.txt',
+            subject_template_name='registration/password_reset_subject.txt',
         ),
         name='password_reset'
     ),
