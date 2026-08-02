@@ -3,6 +3,8 @@ from decimal import Decimal
 from django import forms
 from django.utils import timezone
 
+from alumnos.models import Alumno
+
 from .models import (
     AjusteInventario,
     CategoriaProducto,
@@ -25,6 +27,64 @@ class BootstrapModelForm(forms.ModelForm):
             else:
                 css = 'form-select' if isinstance(field.widget, forms.Select) else 'form-control'
                 field.widget.attrs.setdefault('class', css)
+
+
+class CompradorTiendaField(forms.Field):
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault('required', False)
+        kwargs.setdefault('label', 'Comprador')
+        kwargs.setdefault(
+            'help_text',
+            'Incluye estudiantes de la academia y clientes externos registrados.',
+        )
+        kwargs.setdefault('widget', forms.Select(attrs={'class': 'form-select'}))
+        super().__init__(*args, **kwargs)
+        self.widget.choices = [('', '---------')]
+
+    def actualizar_opciones(self):
+        alumnos = Alumno.objects.select_related('user').order_by(
+            'user__first_name', 'user__last_name', 'documento'
+        )
+        documentos_alumnos = alumnos.values_list('documento', flat=True)
+        clientes = ClienteTienda.objects.filter(activo=True).exclude(
+            numero_documento__in=documentos_alumnos
+        ).order_by('nombres')
+        self.widget.choices = [
+            ('', '---------'),
+            (
+                'Estudiantes de la academia',
+                [
+                    (f'alumno:{alumno.pk}', f'{alumno} — {alumno.documento}')
+                    for alumno in alumnos
+                ],
+            ),
+            (
+                'Clientes externos',
+                [
+                    (
+                        f'cliente:{cliente.pk}',
+                        f'{cliente.nombres} — {cliente.numero_documento}',
+                    )
+                    for cliente in clientes
+                ],
+            ),
+        ]
+
+    def clean(self, value):
+        value = super().clean(value)
+        if not value:
+            return None
+        try:
+            tipo, identificador = (
+                value.split(':', 1) if ':' in value else ('cliente', value)
+            )
+            if tipo == 'alumno':
+                return Alumno.objects.select_related('user').get(pk=identificador)
+            if tipo == 'cliente':
+                return ClienteTienda.objects.get(pk=identificador, activo=True)
+        except (Alumno.DoesNotExist, ClienteTienda.DoesNotExist, ValueError):
+            pass
+        raise forms.ValidationError('El comprador seleccionado ya no está disponible.')
 
 
 class CuentaTiendaForm(BootstrapModelForm):
@@ -126,10 +186,11 @@ class VentaTiendaForm(OperacionProductoForm):
         choices=VentaTienda.Modalidades.choices,
         widget=forms.Select(attrs={'class': 'form-select'}),
     )
-    cliente = forms.ModelChoiceField(
-        queryset=ClienteTienda.objects.filter(activo=True), required=False,
-        widget=forms.Select(attrs={'class': 'form-select'}),
-        help_text='Obligatorio para ventas a crédito y para emitir paz y salvo.',
+    cliente = CompradorTiendaField(
+        help_text=(
+            'Seleccione un estudiante de la academia o un cliente externo. '
+            'Es obligatorio para ventas a crédito y para emitir paz y salvo.'
+        ),
     )
     descuento_porcentaje = forms.DecimalField(
         min_value=0, max_value=100, decimal_places=2, initial=0, required=False,
@@ -174,6 +235,7 @@ class VentaTiendaForm(OperacionProductoForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['cliente'].actualizar_opciones()
         self.fields['producto'].queryset = ProductoTienda.objects.filter(
             activo=True, stock__gt=0, precio_venta__gt=0
         )
@@ -220,12 +282,9 @@ class VentaTiendaForm(OperacionProductoForm):
 
 
 class CarteraInicialTiendaForm(forms.Form):
-    cliente = forms.ModelChoiceField(
-        queryset=ClienteTienda.objects.none(),
-        required=False,
-        label='Comprador registrado',
-        widget=forms.Select(attrs={'class': 'form-select'}),
-        help_text='Seleccione el deudor si ya existe en la tienda.',
+    cliente = CompradorTiendaField(
+        label='Comprador registrado o estudiante',
+        help_text='Seleccione el deudor si pertenece a la academia o ya existe como cliente.',
     )
     registrar_comprador = forms.BooleanField(
         required=False,
@@ -299,7 +358,7 @@ class CarteraInicialTiendaForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['cliente'].queryset = ClienteTienda.objects.filter(activo=True)
+        self.fields['cliente'].actualizar_opciones()
 
     def clean_fecha_origen(self):
         fecha = self.cleaned_data['fecha_origen']

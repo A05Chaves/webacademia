@@ -15,6 +15,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from alumnos.models import Alumno
+
 from .forms import (
     AbonoVentaForm,
     AjusteInventarioForm,
@@ -94,6 +96,40 @@ def _crear_cuotas(venta):
             valor=valor,
             saldo=valor,
         )
+
+
+def _cliente_desde_comprador(comprador):
+    if isinstance(comprador, ClienteTienda):
+        return comprador
+    if not isinstance(comprador, Alumno):
+        return None
+    cliente = ClienteTienda.objects.filter(
+        numero_documento__iexact=comprador.documento
+    ).first()
+    if cliente:
+        return cliente
+    hoy = timezone.localdate()
+    nacimiento = comprador.fecha_nacimiento
+    es_menor = bool(
+        nacimiento
+        and hoy.year - nacimiento.year - (
+            (hoy.month, hoy.day) < (nacimiento.month, nacimiento.day)
+        ) < 18
+    )
+    usuario = comprador.user
+    return ClienteTienda.objects.create(
+        nombres=str(comprador),
+        tipo_documento=(
+            ClienteTienda.TiposDocumento.TI
+            if es_menor else ClienteTienda.TiposDocumento.CC
+        ),
+        numero_documento=comprador.documento,
+        telefono_whatsapp=(
+            usuario.telefono or comprador.telefono_acudiente or ''
+        ),
+        correo=usuario.email or '',
+        direccion=comprador.direccion or '',
+    )
 
 
 def _resumen_moneda(moneda, desde, hasta):
@@ -342,7 +378,9 @@ def registrar_venta(request):
                 descuento = (subtotal * porcentaje / Decimal('100')).quantize(Decimal('0.01'))
                 total = subtotal - descuento
                 modalidad = form.cleaned_data['modalidad']
-                cliente_venta = form.cleaned_data.get('cliente')
+                cliente_venta = _cliente_desde_comprador(
+                    form.cleaned_data.get('cliente')
+                )
                 if form.cleaned_data.get('registrar_comprador'):
                     cliente_venta = ClienteTienda.objects.create(
                         nombres=form.cleaned_data['comprador_nombres'],
@@ -492,7 +530,9 @@ def registrar_cartera_inicial(request):
     form = CarteraInicialTiendaForm(request.POST or None)
     if request.method == 'POST' and form.is_valid():
         with transaction.atomic():
-            cliente_cartera = form.cleaned_data.get('cliente')
+            cliente_cartera = _cliente_desde_comprador(
+                form.cleaned_data.get('cliente')
+            )
             if form.cleaned_data.get('registrar_comprador'):
                 cliente_cartera = ClienteTienda.objects.create(
                     nombres=form.cleaned_data['comprador_nombres'],

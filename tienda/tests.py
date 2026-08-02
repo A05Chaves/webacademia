@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 from pypdf import PdfReader
 
+from alumnos.models import Alumno
 from finanzas.models import MovimientoFinanciero
 
 from .forms import VentaTiendaForm
@@ -314,6 +315,49 @@ class TiendaTests(TestCase):
         self.assertEqual(venta.saldo_pendiente, 144000)
         self.assertFalse(MovimientoTienda.objects.exists())
         self.assertEqual(DetalleVentaTienda.objects.get().costo_unitario, 40000)
+
+    def test_estudiante_aparece_como_comprador_y_se_vincula_a_la_venta(self):
+        usuario = get_user_model().objects.create_user(
+            username='comprador_alumno',
+            password='ClaveSegura789!',
+            first_name='Laura',
+            last_name='Estudiante',
+            email='laura@example.com',
+            telefono='3007654321',
+        )
+        alumno = Alumno.objects.create(
+            user=usuario,
+            documento='ALUMNO-COMPRA-01',
+            fecha_nacimiento=timezone.localdate() - timedelta(days=365 * 20),
+            direccion='Dirección del estudiante',
+        )
+
+        formulario = self.client.get(reverse('tienda:registrar_venta'))
+        self.assertContains(formulario, 'Estudiantes de la academia')
+        self.assertContains(formulario, 'Laura Estudiante')
+        self.assertContains(formulario, f'value="alumno:{alumno.id}"')
+
+        response = self.client.post(reverse('tienda:registrar_venta'), {
+            'producto': self.producto.id,
+            'cantidad': 1,
+            'modalidad': VentaTienda.Modalidades.CREDITO,
+            'cliente': f'alumno:{alumno.id}',
+            'descuento_porcentaje': 0,
+            'numero_cuotas': 1,
+            'fecha_vencimiento': (
+                timezone.localdate() + timedelta(days=30)
+            ).isoformat(),
+            'observaciones': '',
+        })
+
+        venta = VentaTienda.objects.get()
+        self.assertRedirects(
+            response, reverse('tienda:detalle_venta', args=[venta.id])
+        )
+        self.assertEqual(venta.cliente.numero_documento, alumno.documento)
+        self.assertEqual(venta.cliente.nombres, 'Laura Estudiante')
+        self.assertEqual(venta.cliente.correo, 'laura@example.com')
+        self.assertEqual(venta.cliente.telefono_whatsapp, '3007654321')
 
     def test_cartera_anterior_se_incorpora_sin_crear_venta_caja_o_inventario(self):
         fecha_deuda = timezone.localdate() - timedelta(days=90)
