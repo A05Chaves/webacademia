@@ -228,6 +228,51 @@
             border-left: 4px solid #2d6cdf;
         }
 
+        .payment-feedback-overlay {
+            align-items: center;
+            background: rgba(0, 0, 0, .78);
+            display: flex;
+            inset: 0;
+            justify-content: center;
+            padding: 20px;
+            position: fixed;
+            z-index: 2000;
+        }
+
+        .payment-feedback-card {
+            background: var(--bg-card);
+            border: 3px solid #0d6efd;
+            border-radius: 22px;
+            box-shadow: 0 24px 80px rgba(0, 0, 0, .55);
+            color: var(--text-main);
+            max-width: 620px;
+            padding: clamp(28px, 5vw, 48px);
+            text-align: center;
+            width: 100%;
+        }
+
+        .payment-feedback-card.success { border-color: #198754; }
+        .payment-feedback-card.error { border-color: #dc3545; }
+        .payment-feedback-card.warning { border-color: #ffc107; }
+
+        .payment-feedback-icon {
+            align-items: center;
+            border-radius: 50%;
+            display: inline-flex;
+            font-size: 2.8rem;
+            height: 90px;
+            justify-content: center;
+            margin-bottom: 20px;
+            width: 90px;
+        }
+
+        .payment-feedback-card.success .payment-feedback-icon { background: rgba(25,135,84,.18); color: #3ddc97; }
+        .payment-feedback-card.error .payment-feedback-icon { background: rgba(220,53,69,.18); color: #ff6b7a; }
+        .payment-feedback-card.warning .payment-feedback-icon { background: rgba(255,193,7,.18); color: #ffc107; }
+
+        .payment-feedback-card h2 { font-size: clamp(1.6rem, 4vw, 2.2rem); }
+        .payment-feedback-card p { font-size: 1.08rem; line-height: 1.55; }
+
         .badge-activo {
             background: #198754;
             padding: 6px 10px;
@@ -554,9 +599,45 @@
     {% if messages %}
         <div class="messages-container mb-3">
             {% for message in messages %}
-                <p>{{ message }}</p>
+                {% if 'pago-feedback' not in message.tags %}
+                    <p>{{ message }}</p>
+                {% endif %}
             {% endfor %}
         </div>
+
+        {% for message in messages %}
+            {% if 'pago-feedback' in message.tags %}
+                <div class="payment-feedback-overlay" role="alertdialog" aria-modal="true"
+                     aria-labelledby="tituloFeedbackPago{{ forloop.counter }}">
+                    <div class="payment-feedback-card {% if 'success' in message.tags %}success{% elif 'error' in message.tags %}error{% elif 'warning' in message.tags %}warning{% endif %}">
+                        <div class="payment-feedback-icon" aria-hidden="true">
+                            {% if 'success' in message.tags %}
+                                <i class="fa-solid fa-circle-check"></i>
+                            {% elif 'error' in message.tags %}
+                                <i class="fa-solid fa-circle-xmark"></i>
+                            {% else %}
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                            {% endif %}
+                        </div>
+                        <h2 id="tituloFeedbackPago{{ forloop.counter }}" class="mb-3">
+                            {% if 'success' in message.tags %}
+                                Pago registrado
+                            {% elif 'error' in message.tags %}
+                                No se registró el pago
+                            {% else %}
+                                Pago recibido con observación
+                            {% endif %}
+                        </h2>
+                        <p class="mb-4">{{ message }}</p>
+                        <button type="button"
+                                class="btn btn-lg {% if 'error' in message.tags %}btn-danger{% elif 'warning' in message.tags %}btn-warning{% else %}btn-success{% endif %} px-5"
+                                onclick="this.closest('.payment-feedback-overlay').remove()">
+                            Entendido
+                        </button>
+                    </div>
+                </div>
+            {% endif %}
+        {% endfor %}
     {% endif %}
 
     <div class="card-custom">
@@ -566,6 +647,44 @@
 </div>
 
 <script>
+    const patronCamposSinMayusculas = /(usuario|username|password|contrase|correo|email|url|enlace|firma|token|csrf|json|buscar|busqueda|search)/i;
+
+    function debeConvertirAMayusculas(campo) {
+        if (!campo.matches('input[type="text"], input:not([type]), textarea')) return false;
+        if (campo.disabled || campo.readOnly) return false;
+        const identidad = `${campo.name || ''} ${campo.id || ''} ${campo.autocomplete || ''}`;
+        return !patronCamposSinMayusculas.test(identidad);
+    }
+
+    function convertirCampoAMayusculas(campo) {
+        if (!debeConvertirAMayusculas(campo) || !campo.value) return;
+        const inicio = campo.selectionStart;
+        const fin = campo.selectionEnd;
+        campo.value = campo.value.toLocaleUpperCase('es-CO');
+        if (inicio !== null && fin !== null && document.activeElement === campo) {
+            campo.setSelectionRange(inicio, fin);
+        }
+    }
+
+    function normalizarTextosMayuscula(contenedor = document) {
+        if (contenedor.matches?.('input[type="text"], input:not([type]), textarea')) {
+            convertirCampoAMayusculas(contenedor);
+        }
+        contenedor.querySelectorAll('input[type="text"], input:not([type]), textarea').forEach(
+            convertirCampoAMayusculas
+        );
+    }
+
+    document.addEventListener('input', function (evento) {
+        if (evento.target instanceof HTMLInputElement || evento.target instanceof HTMLTextAreaElement) {
+            convertirCampoAMayusculas(evento.target);
+        }
+    });
+
+    document.addEventListener('submit', function (evento) {
+        normalizarTextosMayuscula(evento.target);
+    }, true);
+
     const mesesFechaLegible = [
         'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
         'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
@@ -623,6 +742,7 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
+        normalizarTextosMayuscula();
         prepararFechasDelFormulario();
         new MutationObserver(function (cambios) {
             cambios.forEach(function (cambio) {
@@ -631,6 +751,7 @@
                         if (nodo.matches?.('input[type="date"], input[type="datetime-local"]')) {
                             prepararFechaLegible(nodo);
                         }
+                        normalizarTextosMayuscula(nodo);
                         prepararFechasDelFormulario(nodo);
                     }
                 });

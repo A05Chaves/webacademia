@@ -188,6 +188,44 @@
 <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+const patronCamposSinMayusculas = /(usuario|username|password|contrase|correo|email|url|enlace|firma|token|csrf|json|buscar|busqueda|search)/i;
+
+function debeConvertirAMayusculas(campo) {
+    if (!campo.matches('input[type="text"], input:not([type]), textarea')) return false;
+    if (campo.disabled || campo.readOnly) return false;
+    const identidad = `${campo.name || ''} ${campo.id || ''} ${campo.autocomplete || ''}`;
+    return !patronCamposSinMayusculas.test(identidad);
+}
+
+function convertirCampoAMayusculas(campo) {
+    if (!debeConvertirAMayusculas(campo) || !campo.value) return;
+    const inicio = campo.selectionStart;
+    const fin = campo.selectionEnd;
+    campo.value = campo.value.toLocaleUpperCase('es-CO');
+    if (inicio !== null && fin !== null && document.activeElement === campo) {
+        campo.setSelectionRange(inicio, fin);
+    }
+}
+
+function normalizarTextosMayuscula(contenedor = document) {
+    if (contenedor.matches?.('input[type="text"], input:not([type]), textarea')) {
+        convertirCampoAMayusculas(contenedor);
+    }
+    contenedor.querySelectorAll('input[type="text"], input:not([type]), textarea').forEach(
+        convertirCampoAMayusculas
+    );
+}
+
+document.addEventListener('input', event => {
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+        convertirCampoAMayusculas(event.target);
+    }
+});
+document.addEventListener('submit', event => {
+    normalizarTextosMayuscula(event.target);
+}, true);
+normalizarTextosMayuscula();
+
 const mesesFechaLegible = [
     'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
     'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'

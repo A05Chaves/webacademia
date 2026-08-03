@@ -93,6 +93,17 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 
+def _detalle_errores_formulario(form):
+    detalles = []
+    for nombre_campo, errores in form.errors.items():
+        etiqueta = (
+            form.fields[nombre_campo].label
+            if nombre_campo in form.fields else 'Formulario'
+        )
+        detalles.extend(f'{etiqueta}: {error}' for error in errores)
+    return ' '.join(detalles)
+
+
 def plan_permite_disciplina(plan, disciplina):
     """Valida la disciplina usando la configuración vigente del plan."""
     permisos = {
@@ -251,6 +262,18 @@ def home_publica(request):
          } for item in eventos_home]),
         key=lambda item: (item['orden'], 0 if item['objeto'].destacada else 1),
     )
+    elementos_carrusel_home = list(publicaciones_home)
+    if config_home and (config_home.video_promo_archivo or promo_embed):
+        elementos_carrusel_home.append({
+            'tipo': 'VIDEO_PROMOCIONAL',
+            'objeto': config_home,
+            'orden': config_home.orden_video_promocional,
+        })
+    elementos_carrusel_home.sort(key=lambda item: (
+        item['orden'],
+        0 if item['tipo'] == 'VIDEO_PROMOCIONAL'
+        else (1 if item['objeto'].destacada else 2),
+    ))
 
     return render(request, 'gestion/home_publica.html', {
         'asistencias_hoy': asistencias_hoy,
@@ -261,6 +284,7 @@ def home_publica(request):
         'pago_form': pago_form,
         'config_home': config_home,
         'publicaciones_home': publicaciones_home,
+        'elementos_carrusel_home': elementos_carrusel_home,
     })
 
 
@@ -656,10 +680,16 @@ def crear_pago(request):
 
             messages.success(
                 request,
-                'Pago registrado correctamente y quedó pendiente por validar.'
+                'Pago registrado correctamente y quedó pendiente por validar.',
+                extra_tags='pago-feedback',
             )
 
             return redirect('gestion:lista_pagos')
+        messages.error(
+            request,
+            'No se registró el pago. ' + _detalle_errores_formulario(form),
+            extra_tags='pago-feedback',
+        )
     else:
         form = PagoForm()
 
@@ -696,6 +726,15 @@ def validar_pago(request, pago_id):
             )
 
             if pago.estado == 'APROBADO':
+                cuenta = pago.metodo_qr.cuenta_financiera
+                if cuenta and not cuenta.activa:
+                    messages.error(
+                        request,
+                        'No se puede aprobar el pago porque la cuenta financiera '
+                        'asociada está inactiva. Reactívala o cambia el método de pago.',
+                    )
+                    return redirect('gestion:validar_pago', pago_id=pago.id)
+
                 hoy = timezone.now().date()
                 if pago.tipo in (Pago.Tipos.MENSUALIDAD, Pago.Tipos.PROMOCION):
                     if not pago.alumno_id or not pago.plan_id:
@@ -768,7 +807,6 @@ def validar_pago(request, pago_id):
                 pago.fecha_comprobante = timezone.now()
                 pago.save()
 
-                cuenta = pago.metodo_qr.cuenta_financiera
                 categoria_nombre = {
                     Pago.Tipos.MENSUALIDAD: 'Mensualidades',
                     Pago.Tipos.PROMOCION: 'Promociones academia',
@@ -1433,13 +1471,18 @@ def registrar_pago_alumno(request):
         user = authenticate(request, username=username, password=password)
 
         if user is None:
-            messages.error(request, 'Usuario o contraseña incorrectos.')
+            messages.error(
+                request,
+                'No se registró el pago. Usuario o contraseña incorrectos.',
+                extra_tags='pago-feedback',
+            )
             return redirect('gestion:home_publica')
 
         if not hasattr(user, 'perfil_alumno'):
             messages.error(
                 request,
-                'Este usuario no está registrado como alumno.'
+                'No se registró el pago. Este usuario no está registrado como alumno.',
+                extra_tags='pago-feedback',
             )
             return redirect('gestion:home_publica')
 
@@ -1466,17 +1509,24 @@ def registrar_pago_alumno(request):
             if pago.posible_duplicado:
                 messages.warning(
                     request,
-                    'Pago recibido y marcado para revisión porque coincide con otro registro.',
+                    'Pago recibido correctamente, pero quedó marcado para revisión '
+                    'porque coincide con otro registro.',
+                    extra_tags='pago-feedback',
                 )
             else:
                 messages.success(
                     request,
-                    'Pago registrado correctamente. Queda pendiente de validación.'
+                    'Pago registrado correctamente. Queda pendiente de validación.',
+                    extra_tags='pago-feedback',
                 )
 
             return redirect('gestion:home_publica')
 
-        messages.error(request, 'Revisa los datos del pago.')
+        messages.error(
+            request,
+            'No se registró el pago. ' + _detalle_errores_formulario(form),
+            extra_tags='pago-feedback',
+        )
         return redirect('gestion:home_publica')
 
     return redirect('gestion:home_publica')
@@ -1506,6 +1556,7 @@ def reset_password_alumno(request, alumno_id):
 
 
 @staff_member_required
+@transaction.atomic
 def registrar_gasto(request):
     if request.method == 'POST':
         form = GastoForm(request.POST)

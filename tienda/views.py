@@ -51,7 +51,7 @@ MARCA_TIENDA = 'Bross Fight Sports'
 
 
 def _valor_tienda(valor):
-    return number_format(valor, decimal_pos=2)
+    return number_format(valor, decimal_pos=2, force_grouping=True)
 
 
 def _render_formulario(request, form, titulo, icono, texto_boton, clase_boton='btn-success', volver_url='tienda:panel'):

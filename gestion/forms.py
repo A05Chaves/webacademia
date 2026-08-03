@@ -26,6 +26,13 @@ from config.file_validation import (
 Usuario = get_user_model()
 
 
+def metodos_pago_disponibles():
+    """Métodos activos cuya cuenta asociada aún puede recibir ingresos."""
+    return MetodoPagoQR.objects.filter(activo=True).filter(
+        Q(cuenta_financiera__isnull=True) | Q(cuenta_financiera__activa=True)
+    )
+
+
 class UsuarioAlumnoForm(forms.ModelForm):
     password = forms.CharField(
         label='Contraseña',
@@ -216,9 +223,7 @@ class PagoForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.fields['metodo_qr'].queryset = MetodoPagoQR.objects.filter(
-            activo=True
-        )
+        self.fields['metodo_qr'].queryset = metodos_pago_disponibles()
 
         self.fields['plan'].queryset = Plan.objects.filter(
             activo=True
@@ -551,7 +556,7 @@ class InscripcionEventoForm(forms.ModelForm):
         self.evento = evento
         self.alumno_interno = alumno_interno
         super().__init__(*args, **kwargs)
-        self.fields['metodo_qr'].queryset = MetodoPagoQR.objects.filter(activo=True)
+        self.fields['metodo_qr'].queryset = metodos_pago_disponibles()
         self.fields['academia_registrada'].queryset = (
             AcademiaCompetidora.objects.filter(
                 activa=True, logo__isnull=False
@@ -885,7 +890,7 @@ class AplicarPromocionForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['metodo_qr'].queryset = MetodoPagoQR.objects.filter(activo=True)
+        self.fields['metodo_qr'].queryset = metodos_pago_disponibles()
 
     def clean_comprobante(self):
         archivo = self.cleaned_data['comprobante']
@@ -963,9 +968,7 @@ class PagoAlumnoForm(forms.ModelForm):
             activo=True
         )
 
-        self.fields['metodo_qr'].queryset = MetodoPagoQR.objects.filter(
-            activo=True
-        )
+        self.fields['metodo_qr'].queryset = metodos_pago_disponibles()
 
     def clean_comprobante(self):
         comprobante = self.cleaned_data.get('comprobante')
@@ -992,6 +995,16 @@ class CuentaFinancieraForm(forms.ModelForm):
 
 
 class GastoForm(forms.ModelForm):
+    nueva_categoria = forms.CharField(
+        required=False,
+        max_length=100,
+        label='Nombre de la nueva categoría',
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Ej: MANTENIMIENTO DE EQUIPOS',
+        }),
+    )
+
     class Meta:
         model = MovimientoFinanciero
         fields = [
@@ -1043,6 +1056,55 @@ class GastoForm(forms.ModelForm):
         )
         self.fields['evento'].required = False
         self.fields['evento'].empty_label = 'Gasto general (sin evento)'
+
+    def clean(self):
+        cleaned_data = super().clean()
+        categoria = cleaned_data.get('categoria')
+        nueva_categoria = (cleaned_data.get('nueva_categoria') or '').strip().upper()
+        cleaned_data['nueva_categoria'] = nueva_categoria
+
+        if nueva_categoria:
+            existente = CategoriaFinanciera.objects.filter(
+                nombre__iexact=nueva_categoria
+            ).first()
+            if existente:
+                if not existente.activa:
+                    self.add_error(
+                        'nueva_categoria',
+                        'Esta categoría ya existe, pero está inactiva.',
+                    )
+                elif existente.tipo not in (
+                    CategoriaFinanciera.Tipos.EGRESO,
+                    CategoriaFinanciera.Tipos.AMBOS,
+                ):
+                    self.add_error(
+                        'nueva_categoria',
+                        'Esta categoría existe, pero está configurada solo para ingresos.',
+                    )
+                else:
+                    cleaned_data['categoria'] = existente
+        elif not categoria:
+            self.add_error(
+                'categoria',
+                'Selecciona una categoría o agrega un tipo de gasto nuevo.',
+            )
+
+        return cleaned_data
+
+    def save(self, commit=True):
+        movimiento = super().save(commit=False)
+        nueva_categoria = self.cleaned_data.get('nueva_categoria')
+        categoria = self.cleaned_data.get('categoria')
+        if nueva_categoria and not categoria:
+            categoria = CategoriaFinanciera.objects.create(
+                nombre=nueva_categoria,
+                tipo=CategoriaFinanciera.Tipos.EGRESO,
+                activa=True,
+            )
+        movimiento.categoria = categoria
+        if commit:
+            movimiento.save()
+        return movimiento
 
     def clean_valor(self):
         valor = self.cleaned_data['valor']
@@ -1308,6 +1370,7 @@ class ConfiguracionHomeForm(forms.ModelForm):
         fields = [
             'video_promo_url',
             'video_promo_archivo',
+            'orden_video_promocional',
             'playlist_youtube_url',
             'activo',
         ]
@@ -1320,6 +1383,10 @@ class ConfiguracionHomeForm(forms.ModelForm):
             'video_promo_archivo': forms.ClearableFileInput(attrs={
                 'class': 'form-control',
                 'accept': 'video/mp4'
+            }),
+            'orden_video_promocional': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'min': 0,
             }),
             'playlist_youtube_url': forms.URLInput(attrs={
                 'class': 'form-control',

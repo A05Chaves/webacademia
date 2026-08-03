@@ -10,7 +10,7 @@ from unittest.mock import patch
 from datetime import date, datetime, time, timedelta
 
 from alumnos.models import Alumno
-from finanzas.models import CuentaFinanciera, MovimientoFinanciero
+from finanzas.models import CategoriaFinanciera, CuentaFinanciera, MovimientoFinanciero
 from pagos.models import (
     CategoriaEvento, Evento, LlaveCategoriaEvento, MetodoPagoQR, Pago,
 )
@@ -24,6 +24,73 @@ from config.file_validation import (
 )
 from gestion.models import SesionTV
 import base64
+
+
+class FormatoFiltrosFinancierosTests(TestCase):
+    def setUp(self):
+        administrador = get_user_model().objects.create_user(
+            username='admin_formato_anio',
+            password='ClaveSegura789!',
+            is_staff=True,
+        )
+        self.client.force_login(administrador)
+
+    def test_anio_financiero_no_recibe_separador_de_miles(self):
+        response = self.client.get(
+            reverse('gestion:detalle_financiero'),
+            {'anio': '2026', 'mes': '8'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'value="2026"')
+        self.assertNotContains(response, 'value="2.026"')
+
+
+class RegistroGastoCategoriaTests(TestCase):
+    def setUp(self):
+        administrador = get_user_model().objects.create_user(
+            username='admin_categoria_gasto',
+            password='ClaveSegura789!',
+            is_staff=True,
+        )
+        self.client.force_login(administrador)
+        self.cuenta = CuentaFinanciera.objects.create(
+            nombre='Caja gastos pruebas',
+            tipo=CuentaFinanciera.Tipos.EFECTIVO,
+            saldo_inicial=500000,
+        )
+
+    def test_formulario_muestra_siempre_el_campo_de_categoria_nueva(self):
+        response = self.client.get(reverse('gestion:registrar_gasto'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="id_nueva_categoria"')
+        self.assertContains(response, 'Agrega una nueva categoría')
+        self.assertNotContains(response, 'id="bloqueNuevaCategoria"')
+
+    def test_crea_categoria_nueva_desde_el_registro_del_gasto(self):
+        response = self.client.post(reverse('gestion:registrar_gasto'), {
+            'cuenta': self.cuenta.id,
+            'categoria': '',
+            'nueva_categoria': 'mantenimiento de equipos',
+            'evento': '',
+            'concepto': 'Reparación de caminadora',
+            'valor': '75000',
+            'fecha': '2026-08-02T10:30',
+            'observaciones': '',
+        })
+
+        self.assertRedirects(response, reverse('gestion:dashboard'))
+        categoria = CategoriaFinanciera.objects.get(
+            nombre='MANTENIMIENTO DE EQUIPOS'
+        )
+        self.assertEqual(categoria.tipo, CategoriaFinanciera.Tipos.EGRESO)
+        self.assertTrue(categoria.activa)
+        self.assertTrue(MovimientoFinanciero.objects.filter(
+            categoria=categoria,
+            concepto='Reparación de caminadora',
+            tipo=MovimientoFinanciero.Tipos.EGRESO,
+        ).exists())
 
 
 class CronometroLlavesPermisosTests(TestCase):

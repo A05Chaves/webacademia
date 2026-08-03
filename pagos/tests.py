@@ -16,7 +16,8 @@ from PIL import Image, ImageDraw
 from alumnos.models import Alumno
 from finanzas.models import CuentaFinanciera
 from planes.models import Plan, Suscripcion
-from gestion.forms import CategoriaEventoForm, EventoForm
+from gestion.forms import CategoriaEventoForm, EventoForm, PagoAlumnoForm, PagoForm
+from gestion.models import ConfiguracionHome
 
 from .models import (
     AcademiaCompetidora, CategoriaEvento, Evento, InscripcionEvento,
@@ -86,6 +87,39 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
         pago.save()
         return pago
 
+    def test_registro_publico_exitoso_muestra_confirmacion_grande(self):
+        response = self.client.post(reverse('gestion:registrar_pago_alumno'), {
+            'username': 'alumno-nuevos-pagos',
+            'password': 'clave-alumno',
+            'plan': self.plan.id,
+            'metodo_qr': self.metodo.id,
+            'valor': '120000',
+            'referencia_pago': 'REF-VISIBLE-1',
+            'comprobante': SimpleUploadedFile(
+                'pago-visible.pdf', b'%PDF-1.4\n%%EOF'
+            ),
+        }, follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'payment-feedback-overlay')
+        self.assertContains(response, 'Pago registrado')
+        self.assertContains(response, 'Queda pendiente de validación')
+        self.assertTrue(Pago.objects.filter(
+            alumno=self.alumno,
+            referencia_pago='REF-VISIBLE-1',
+        ).exists())
+
+    def test_registro_publico_fallido_muestra_error_grande(self):
+        response = self.client.post(reverse('gestion:registrar_pago_alumno'), {
+            'username': 'alumno-nuevos-pagos',
+            'password': 'incorrecta',
+        }, follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'payment-feedback-overlay')
+        self.assertContains(response, 'No se registró el pago')
+        self.assertContains(response, 'Usuario o contraseña incorrectos')
+
     def test_marca_archivo_o_referencia_repetidos(self):
         primero = self.nuevo_pago()
         segundo = self.nuevo_pago(nombre='copia.pdf')
@@ -107,6 +141,37 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
         self.assertEqual(pago.suscripcion.fecha_inicio.isoformat(), '2026-07-01')
         self.assertEqual(pago.suscripcion.fecha_vencimiento.isoformat(), '2026-07-30')
         self.assertTrue(pago.numero_comprobante.startswith('CP-'))
+
+    def test_cuenta_inactiva_no_aparece_en_formularios_de_pago(self):
+        self.cuenta.activa = False
+        self.cuenta.save(update_fields=['activa'])
+
+        self.assertNotIn(
+            self.metodo,
+            PagoAlumnoForm().fields['metodo_qr'].queryset,
+        )
+        self.assertNotIn(
+            self.metodo,
+            PagoForm().fields['metodo_qr'].queryset,
+        )
+
+    def test_no_aprueba_pago_si_su_cuenta_fue_inhabilitada(self):
+        pago = self.nuevo_pago()
+        self.cuenta.activa = False
+        self.cuenta.save(update_fields=['activa'])
+        self.client.force_login(self.admin)
+
+        response = self.client.post(
+            reverse('gestion:validar_pago', args=[pago.id]),
+            {'estado': Pago.Estados.APROBADO, 'fecha_inicio': '2026-07-01'},
+        )
+
+        self.assertRedirects(
+            response, reverse('gestion:validar_pago', args=[pago.id])
+        )
+        pago.refresh_from_db()
+        self.assertEqual(pago.estado, Pago.Estados.PENDIENTE)
+        self.assertIsNone(pago.suscripcion)
 
     def test_historial_filtra_por_documento_acudiente(self):
         self.nuevo_pago()
@@ -615,6 +680,59 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
         video_response = self.client.get(evento.video.url)
         self.assertEqual(video_response.status_code, 200)
         video_response.close()
+
+    def test_prioridad_define_si_evento_aparece_antes_del_video_promocional(self):
+        configuracion = ConfiguracionHome.objects.create(
+            video_promo_url='https://www.youtube.com/watch?v=abcdefghijk',
+            orden_video_promocional=50,
+            activo=True,
+        )
+        evento = Evento.objects.create(
+            tipo=Evento.Tipos.SEMINARIO,
+            nombre='Seminario prioritario',
+            descripcion='Debe aparecer antes que el video promocional.',
+            fecha_inicio=timezone.now() + timedelta(days=5),
+            fecha_fin=timezone.now() + timedelta(days=6),
+            lugar='Galeras BJJ',
+            precio_estudiante=0,
+            precio_externo=0,
+            publicada_home=True,
+            orden=5,
+        )
+
+        response = self.client.get(reverse('gestion:home_publica'))
+
+        elementos = response.context['elementos_carrusel_home']
+        self.assertEqual(
+            [elemento['tipo'] for elemento in elementos],
+            ['EVENTO', 'VIDEO_PROMOCIONAL'],
+        )
+        self.assertEqual(elementos[0]['objeto'], evento)
+        self.assertContains(
+            response,
+            'class="carousel-item active" data-tipo="EVENTO" data-prioridad="5"',
+        )
+
+        self.client.force_login(self.admin)
+        cambio = self.client.post(reverse('gestion:configurar_home'), {
+            'video_promo_url': configuracion.video_promo_url,
+            'orden_video_promocional': 1,
+            'playlist_youtube_url': '',
+            'activo': 'on',
+        })
+        self.assertRedirects(cambio, reverse('gestion:configurar_home'))
+        configuracion.refresh_from_db()
+        self.assertEqual(configuracion.orden_video_promocional, 1)
+
+        actualizado = self.client.get(reverse('gestion:home_publica'))
+        self.assertEqual(
+            actualizado.context['elementos_carrusel_home'][0]['tipo'],
+            'VIDEO_PROMOCIONAL',
+        )
+        configuracion_page = self.client.get(reverse('gestion:configurar_home'))
+        self.assertContains(
+            configuracion_page, 'id="id_orden_video_promocional"'
+        )
 
     def test_evento_en_curso_permanece_visible_hasta_su_fecha_final(self):
         evento = Evento.objects.create(

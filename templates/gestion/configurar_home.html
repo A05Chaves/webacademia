@@ -63,6 +63,22 @@
             </div>
 
             <div class="mb-3">
+                <label class="form-label" for="{{ form.orden_video_promocional.id_for_label }}">
+                    {{ form.orden_video_promocional.label }}
+                </label>
+
+                {{ form.orden_video_promocional }}
+
+                <div class="form-text text-info">
+                    {{ form.orden_video_promocional.help_text }}
+                </div>
+
+                <div class="text-danger">
+                    {{ form.orden_video_promocional.errors }}
+                </div>
+            </div>
+
+            <div class="mb-3">
                 <label class="form-label">
                     URL playlist YouTube
                 </label>

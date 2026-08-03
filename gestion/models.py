@@ -21,6 +21,15 @@ class ConfiguracionHome(models.Model):
         verbose_name='Video promo MP4'
     )
 
+    orden_video_promocional = models.PositiveIntegerField(
+        default=10,
+        verbose_name='Prioridad del video promocional',
+        help_text=(
+            'Los números menores aparecen primero. Por ejemplo, un seminario '
+            'con prioridad 5 se mostrará antes de un video con prioridad 10.'
+        ),
+    )
+
     playlist_youtube_url = models.URLField(
         verbose_name='URL playlist YouTube',
         blank=True,

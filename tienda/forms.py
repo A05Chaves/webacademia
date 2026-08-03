@@ -467,7 +467,7 @@ class AbonoVentaForm(forms.Form):
             self.fields['cuota'].initial = primera_cuota
             self.fields['cuota'].label_from_instance = lambda cuota: (
                 f'Cuota {cuota.numero} - vence {cuota.fecha_vencimiento:%d/%m/%Y} - '
-                f'saldo {number_format(cuota.saldo, decimal_pos=2)} '
+                f'saldo {number_format(cuota.saldo, decimal_pos=2, force_grouping=True)} '
                 f'{cuota.venta.moneda}'
             )
 
