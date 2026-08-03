@@ -82,6 +82,34 @@ class RegistroLegalObligatorioTests(TestCase):
             if name not in opcionales_para_adulto:
                 self.assertTrue(field.required, name)
 
+    def test_plan_interes_excluye_becas_y_planes_sin_costo(self):
+        plan_beca = Plan.objects.create(
+            nombre='BECA DEPORTIVA', precio='90000', duracion_dias=30
+        )
+        plan_gratuito = Plan.objects.create(
+            nombre='Plan sin costo', precio='0', duracion_dias=30
+        )
+
+        queryset = RegistroLegalEstudianteForm().fields['plan_interes'].queryset
+
+        self.assertIn(self.plan, queryset)
+        self.assertNotIn(plan_beca, queryset)
+        self.assertNotIn(plan_gratuito, queryset)
+
+    def test_no_permite_enviar_manualmente_un_plan_beca(self):
+        plan_beca = Plan.objects.create(
+            nombre='Plan beca especial', precio='90000', duracion_dias=30
+        )
+        data = self.datos_validos()
+        data['plan_interes'] = plan_beca.id
+
+        form = RegistroLegalEstudianteForm(
+            data=data, files={'foto': self.foto_valida()}
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('plan_interes', form.errors)
+
     def test_no_guarda_registro_sin_firma(self):
         data = self.datos_validos()
         data['firma_base64'] = ''

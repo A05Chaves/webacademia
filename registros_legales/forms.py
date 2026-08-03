@@ -7,6 +7,7 @@ from alumnos.models import Alumno
 from django.contrib.auth import get_user_model
 from config.file_validation import validate_base64_signature, validate_image
 from instructores.models import Instructor
+from planes.models import Plan
 
 User = get_user_model()
 
@@ -167,6 +168,11 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        self.fields['plan_interes'].queryset = Plan.objects.filter(
+            activo=True,
+            precio__gt=0,
+        ).exclude(nombre__icontains='beca')
 
         campos_obligatorios = [
             'tipo_estudiante',
