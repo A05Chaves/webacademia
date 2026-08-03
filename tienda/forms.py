@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django import forms
 from django.utils import timezone
+from django.utils.formats import number_format
 
 from alumnos.models import Alumno
 
@@ -466,7 +467,8 @@ class AbonoVentaForm(forms.Form):
             self.fields['cuota'].initial = primera_cuota
             self.fields['cuota'].label_from_instance = lambda cuota: (
                 f'Cuota {cuota.numero} - vence {cuota.fecha_vencimiento:%d/%m/%Y} - '
-                f'saldo {cuota.saldo:,.2f} {cuota.venta.moneda}'
+                f'saldo {number_format(cuota.saldo, decimal_pos=2)} '
+                f'{cuota.venta.moneda}'
             )
 
     def clean_valor(self):

@@ -13,6 +13,7 @@ from django.db.models import Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.formats import number_format
 from django.views.decorators.http import require_POST
 
 from alumnos.models import Alumno
@@ -47,6 +48,10 @@ from .models import (
 
 
 MARCA_TIENDA = 'Bross Fight Sports'
+
+
+def _valor_tienda(valor):
+    return number_format(valor, decimal_pos=2)
 
 
 def _render_formulario(request, form, titulo, icono, texto_boton, clase_boton='btn-success', volver_url='tienda:panel'):
@@ -419,7 +424,7 @@ def registrar_venta(request):
             messages.success(
                 request,
                 f'Venta registrada: {item.nombre_variante} ({cantidad} unidad{"es" if cantidad != 1 else ""}). '
-                f'Total: {total:,.2f} {item.moneda}. Inventario restante: {item.stock}. '
+                f'Total: {_valor_tienda(total)} {item.moneda}. Inventario restante: {item.stock}. '
                 f'Comprobante: {venta.numero}.',
             )
             if venta.cliente and venta.cliente.correo:
@@ -469,7 +474,7 @@ def registrar_compra(request):
                 stock_anterior=stock_anterior, stock_nuevo=item.stock, costo_unitario=costo_nuevo,
                 motivo='Entrada automática por compra.', registrado_por=request.user,
             )
-        messages.success(request, f'Compra registrada. Nuevo costo promedio: {item.costo_unitario:,.2f} {item.moneda}.')
+        messages.success(request, f'Compra registrada. Nuevo costo promedio: {_valor_tienda(item.costo_unitario)} {item.moneda}.')
         return redirect('tienda:panel')
     return _render_formulario(request, form, 'Registrar compra', 'fa-boxes-stacked', 'Registrar compra', 'btn-warning')
 
@@ -568,7 +573,7 @@ def registrar_cartera_inicial(request):
         messages.success(
             request,
             f'Cartera anterior {venta.numero} incorporada por '
-            f'{saldo:,.2f} {venta.moneda}. No se registró como una venta nueva ni como ingreso de caja.',
+            f'{_valor_tienda(saldo)} {venta.moneda}. No se registró como una venta nueva ni como ingreso de caja.',
         )
         return redirect('tienda:detalle_venta', venta_id=venta.id)
     return _render_formulario(
@@ -641,7 +646,11 @@ def detalle_venta(request, venta_id):
         ),
         id=venta_id,
     )
-    texto = f'Comprobante {venta.numero}\nTotal: {venta.total:,.2f} {venta.moneda}\nSaldo: {venta.saldo_pendiente:,.2f} {venta.moneda}'
+    texto = (
+        f'Comprobante {venta.numero}\n'
+        f'Total: {_valor_tienda(venta.total)} {venta.moneda}\n'
+        f'Saldo: {_valor_tienda(venta.saldo_pendiente)} {venta.moneda}'
+    )
     telefono = ''.join(filter(str.isdigit, venta.cliente.telefono_whatsapp)) if venta.cliente else ''
     whatsapp_url = f'https://wa.me/{telefono}?text={quote(texto)}' if telefono else ''
     return render(request, 'tienda/detalle_venta.html', {
@@ -720,8 +729,9 @@ def _pdf_comprobante(venta):
     for detalle in venta.detalles.all():
         filas.append([
             detalle.descripcion, str(detalle.cantidad),
-            f'{detalle.precio_unitario:,.2f}', f'{detalle.descuento:,.2f}',
-            f'{detalle.total:,.2f}',
+            _valor_tienda(detalle.precio_unitario),
+            _valor_tienda(detalle.descuento),
+            _valor_tienda(detalle.total),
         ])
     tabla = Table(filas, colWidths=[78 * mm, 16 * mm, 28 * mm, 25 * mm, 28 * mm], repeatRows=1)
     tabla.setStyle(TableStyle([
@@ -736,10 +746,10 @@ def _pdf_comprobante(venta):
     ]))
     historia.extend([tabla, Spacer(1, 5 * mm)])
     totales = Table([
-        ['Subtotal', f'{venta.subtotal:,.2f} {venta.moneda}'],
-        ['Descuento', f'{venta.descuento:,.2f} {venta.moneda}'],
-        ['TOTAL', f'{venta.total:,.2f} {venta.moneda}'],
-        ['Saldo pendiente', f'{venta.saldo_pendiente:,.2f} {venta.moneda}'],
+        ['Subtotal', f'{_valor_tienda(venta.subtotal)} {venta.moneda}'],
+        ['Descuento', f'{_valor_tienda(venta.descuento)} {venta.moneda}'],
+        ['TOTAL', f'{_valor_tienda(venta.total)} {venta.moneda}'],
+        ['Saldo pendiente', f'{_valor_tienda(venta.saldo_pendiente)} {venta.moneda}'],
     ], colWidths=[45 * mm, 45 * mm], hAlign='RIGHT')
     totales.setStyle(TableStyle([
         ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
@@ -765,10 +775,13 @@ def _enviar_comprobante_correo(venta):
     cuerpo = (
         f'Hola {venta.cliente.nombres},\n\n'
         f'Adjuntamos el comprobante de su compra {venta.numero} por '
-        f'{venta.total:,.2f} {venta.moneda}.\n'
+        f'{_valor_tienda(venta.total)} {venta.moneda}.\n'
     )
     if venta.saldo_pendiente:
-        cuerpo += f'Saldo pendiente: {venta.saldo_pendiente:,.2f} {venta.moneda}.\n'
+        cuerpo += (
+            f'Saldo pendiente: {_valor_tienda(venta.saldo_pendiente)} '
+            f'{venta.moneda}.\n'
+        )
     cuerpo += f'\nGracias por su compra.\n{MARCA_TIENDA}'
     mensaje = EmailMessage(
         subject=asunto,

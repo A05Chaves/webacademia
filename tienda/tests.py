@@ -296,6 +296,11 @@ class TiendaTests(TestCase):
         self.assertEqual(resumenes['USD']['saldo'], 125)
         self.assertEqual(resumenes['COP']['saldo'], 200000)
 
+    def test_dashboard_muestra_separadores_de_miles_en_valores(self):
+        response = self.client.get(reverse('tienda:panel'))
+
+        self.assertContains(response, '$ 200.000,00')
+
     def test_venta_credito_exige_cliente_y_registra_cartera_sin_ingreso(self):
         cliente = ClienteTienda.objects.create(
             nombres='Cliente crédito', tipo_documento='CC', numero_documento='123456',
