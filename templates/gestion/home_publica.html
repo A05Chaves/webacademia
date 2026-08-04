@@ -166,7 +166,7 @@
                     <div class="border-bottom border-secondary py-2">
 
                         <strong>
-                            {{ asistencia.alumno.user.get_full_name|default:asistencia.alumno.user.username }}
+                            {{ asistencia.alumno.user.get_full_name|title|default:asistencia.alumno.user.username }}
                         </strong>
 
                         <br>

@@ -1,0 +1,144 @@
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+<div class="page-heading">
+    <div class="page-heading-main">
+        <h2 class="page-heading-title">
+            <i class="fa-solid fa-address-card"></i><span>Mi perfil</span>
+        </h2>
+        <p class="page-heading-subtitle text-secondary">
+            Actualiza tu información personal y de contacto.
+        </p>
+    </div>
+    <div class="page-heading-actions">
+        <a href="{% url 'gestion:home_publica' %}"
+           class="btn btn-outline-light page-heading-action">
+            <i class="fa-solid fa-arrow-left"></i><span>Volver</span>
+        </a>
+    </div>
+</div>
+
+<div class="alert alert-info">
+    <i class="fa-solid fa-circle-info me-1"></i>
+    El usuario de acceso y el documento no se modifican desde esta pantalla.
+    Los registros legales firmados se conservan sin cambios como historial.
+</div>
+
+<div class="card bg-dark text-light border-secondary">
+    <div class="card-body">
+        <div class="row g-3 mb-4">
+            <div class="col-md-6">
+                <div class="border border-secondary rounded p-3 h-100">
+                    <small class="text-secondary">Usuario de acceso</small>
+                    <div class="fw-bold">{{ request.user.username }}</div>
+                </div>
+            </div>
+            {% if alumno %}
+                <div class="col-md-6">
+                    <div class="border border-secondary rounded p-3 h-100">
+                        <small class="text-secondary">Documento</small>
+                        <div class="fw-bold">{{ alumno.documento }}</div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+
+        <form method="post" enctype="multipart/form-data" novalidate>
+            {% csrf_token %}
+
+            {% if usuario_form.errors or alumno_form.errors %}
+                <div class="alert alert-danger">
+                    Revisa los campos marcados antes de guardar.
+                </div>
+            {% endif %}
+
+            <h5 class="mb-3"><i class="fa-solid fa-user me-1"></i> Datos personales</h5>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label" for="{{ usuario_form.first_name.id_for_label }}">Nombres</label>
+                    {{ usuario_form.first_name }}
+                    <div class="text-danger">{{ usuario_form.first_name.errors }}</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="{{ usuario_form.last_name.id_for_label }}">Apellidos</label>
+                    {{ usuario_form.last_name }}
+                    <div class="text-danger">{{ usuario_form.last_name.errors }}</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="{{ usuario_form.email.id_for_label }}">Correo</label>
+                    {{ usuario_form.email }}
+                    <div class="text-danger">{{ usuario_form.email.errors }}</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="{{ usuario_form.telefono.id_for_label }}">Celular</label>
+                    {{ usuario_form.telefono }}
+                    <div class="text-danger">{{ usuario_form.telefono.errors }}</div>
+                </div>
+            </div>
+
+            {% if alumno_form %}
+                <hr class="border-secondary my-4">
+                <h5 class="mb-3"><i class="fa-solid fa-id-card me-1"></i> Información del estudiante</h5>
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label" for="{{ alumno_form.foto.id_for_label }}">Foto de perfil</label>
+                        <div class="d-flex flex-wrap align-items-center gap-3">
+                            {% if alumno.foto %}
+                                <img src="{{ alumno.foto.url }}" alt="Foto actual de perfil"
+                                     class="rounded-circle border border-secondary"
+                                     style="width:96px;height:96px;object-fit:cover;">
+                            {% endif %}
+                            <div class="flex-grow-1">
+                                {{ alumno_form.foto }}
+                                <div class="form-text text-secondary">JPG, PNG o WEBP. Máximo 5 MB.</div>
+                                <div class="text-danger">{{ alumno_form.foto.errors }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="{{ alumno_form.fecha_nacimiento.id_for_label }}">Fecha de nacimiento</label>
+                        {{ alumno_form.fecha_nacimiento }}
+                        <div class="text-danger">{{ alumno_form.fecha_nacimiento.errors }}</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="{{ alumno_form.direccion.id_for_label }}">Dirección</label>
+                        {{ alumno_form.direccion }}
+                        <div class="text-danger">{{ alumno_form.direccion.errors }}</div>
+                    </div>
+                </div>
+
+                <hr class="border-secondary my-4">
+                <h5 class="mb-3"><i class="fa-solid fa-people-roof me-1"></i> Datos del acudiente</h5>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label" for="{{ alumno_form.nombre_acudiente.id_for_label }}">Nombre</label>
+                        {{ alumno_form.nombre_acudiente }}
+                        <div class="text-danger">{{ alumno_form.nombre_acudiente.errors }}</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="{{ alumno_form.documento_acudiente.id_for_label }}">Documento</label>
+                        {{ alumno_form.documento_acudiente }}
+                        <div class="text-danger">{{ alumno_form.documento_acudiente.errors }}</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="{{ alumno_form.parentesco_acudiente.id_for_label }}">Parentesco</label>
+                        {{ alumno_form.parentesco_acudiente }}
+                        <div class="text-danger">{{ alumno_form.parentesco_acudiente.errors }}</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="{{ alumno_form.telefono_acudiente.id_for_label }}">Teléfono</label>
+                        {{ alumno_form.telefono_acudiente }}
+                        <div class="text-danger">{{ alumno_form.telefono_acudiente.errors }}</div>
+                    </div>
+                </div>
+            {% endif %}
+
+            <div class="d-flex justify-content-end mt-4">
+                <button type="submit" class="btn btn-success">
+                    <i class="fa-solid fa-floppy-disk me-1"></i> Guardar cambios
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

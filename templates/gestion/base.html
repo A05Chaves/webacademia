@@ -484,11 +484,6 @@
                 </a>
                 {% endif %}
 
-                <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'registro_publico' %}"
-                   aria-label="Registro" data-nav-tooltip title="Registro">
-                    <i class="fa-solid fa-user-plus"></i><span class="menu-label">Registro</span>
-                </a>
-
                 {% if user.is_authenticated and user.is_staff %}
 
                     <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'gestion:dashboard' %}"
@@ -556,6 +551,12 @@
                 </button>
 
                 {% if user.is_authenticated %}
+
+                    <a class="btn btn-outline-light btn-sm menu-btn"
+                       href="{% url 'gestion:mi_perfil' %}"
+                       aria-label="Mi perfil" data-nav-tooltip title="Mi perfil">
+                        <i class="fa-solid fa-address-card"></i><span class="menu-label">Mi perfil</span>
+                    </a>
 
                     {% if not user.username_modificado %}
                         <a class="btn btn-outline-light btn-sm menu-btn"
@@ -648,6 +649,14 @@
 
 <script>
     const patronCamposSinMayusculas = /(usuario|username|password|contrase|correo|email|url|enlace|firma|token|csrf|json|buscar|busqueda|search)/i;
+    const patronCamposNombrePropio = /(nombre|apellido|first_name|last_name)/i;
+
+    function convertirANombrePropio(valor) {
+        return valor.toLocaleLowerCase('es-CO').replace(
+            /(^|[\s'’-])(\p{L})/gu,
+            (coincidencia, separador, letra) => separador + letra.toLocaleUpperCase('es-CO')
+        );
+    }
 
     function debeConvertirAMayusculas(campo) {
         if (!campo.matches('input[type="text"], input:not([type]), textarea')) return false;
@@ -660,7 +669,10 @@
         if (!debeConvertirAMayusculas(campo) || !campo.value) return;
         const inicio = campo.selectionStart;
         const fin = campo.selectionEnd;
-        campo.value = campo.value.toLocaleUpperCase('es-CO');
+        const identidad = `${campo.name || ''} ${campo.id || ''}`;
+        campo.value = patronCamposNombrePropio.test(identidad)
+            ? convertirANombrePropio(campo.value)
+            : campo.value.toLocaleUpperCase('es-CO');
         if (inicio !== null && fin !== null && document.activeElement === campo) {
             campo.setSelectionRange(inicio, fin);
         }
@@ -675,13 +687,26 @@
         );
     }
 
+    function normalizarCamposNumericos(contenedor = document) {
+        if (contenedor.matches?.('[data-solo-numeros="true"]')) {
+            contenedor.value = contenedor.value.replace(/\D/g, '');
+        }
+        contenedor.querySelectorAll('[data-solo-numeros="true"]').forEach(campo => {
+            campo.value = campo.value.replace(/\D/g, '');
+        });
+    }
+
     document.addEventListener('input', function (evento) {
         if (evento.target instanceof HTMLInputElement || evento.target instanceof HTMLTextAreaElement) {
+            if (evento.target.matches('[data-solo-numeros="true"]')) {
+                evento.target.value = evento.target.value.replace(/\D/g, '');
+            }
             convertirCampoAMayusculas(evento.target);
         }
     });
 
     document.addEventListener('submit', function (evento) {
+        normalizarCamposNumericos(evento.target);
         normalizarTextosMayuscula(evento.target);
     }, true);
 
@@ -743,6 +768,7 @@
 
     document.addEventListener('DOMContentLoaded', function () {
         normalizarTextosMayuscula();
+        normalizarCamposNumericos();
         prepararFechasDelFormulario();
         new MutationObserver(function (cambios) {
             cambios.forEach(function (cambio) {
@@ -752,6 +778,7 @@
                             prepararFechaLegible(nodo);
                         }
                         normalizarTextosMayuscula(nodo);
+                        normalizarCamposNumericos(nodo);
                         prepararFechasDelFormulario(nodo);
                     }
                 });

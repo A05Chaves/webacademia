@@ -23,6 +23,11 @@ class Alumno(models.Model):
         on_delete=models.CASCADE,
         related_name='perfil_alumno'
     )
+    foto = models.ImageField(
+        upload_to='alumnos/fotos/',
+        blank=True,
+        null=True,
+    )
     documento = models.CharField(max_length=20, unique=True)
     fecha_nacimiento = models.DateField(blank=True, null=True)
     direccion = models.CharField(max_length=255, blank=True, null=True)

@@ -23,6 +23,7 @@ from config.file_validation import (
     validate_payment_receipt,
 )
 from gestion.models import SesionTV
+from registros_legales.models import RegistroLegalEstudiante
 import base64
 
 
@@ -91,6 +92,154 @@ class RegistroGastoCategoriaTests(TestCase):
             concepto='Reparación de caminadora',
             tipo=MovimientoFinanciero.Tipos.EGRESO,
         ).exists())
+
+
+class RegistrosLegalesFiltroTests(TestCase):
+    def setUp(self):
+        administrador = get_user_model().objects.create_user(
+            username='admin_busqueda_legal', password='clave', is_staff=True
+        )
+        self.client.force_login(administrador)
+        self._crear_registro('María', 'Pérez Gómez', 'DOC-100')
+        self._crear_registro('Carlos', 'Ramírez', 'DOC-200')
+
+    def _crear_registro(self, nombres, apellidos, documento):
+        return RegistroLegalEstudiante.objects.create(
+            tipo_estudiante='ADULTO', nombres=nombres, apellidos=apellidos,
+            documento=documento, fecha_nacimiento='2000-01-01',
+            direccion='DIRECCIÓN', celular='3000000000',
+            usuario_solicitado=f'usuario_{documento}', password_hash='hash',
+            fecha_ingreso='2026-08-01', contacto_emergencia_nombre='CONTACTO',
+            contacto_emergencia_celular='3000000001', eps='EPS',
+            condicion_medica='NINGUNA', texto_consentimiento='CONSENTIMIENTO',
+            firma_base64='FIRMA',
+        )
+
+    def test_filtra_por_nombre_completo_o_documento(self):
+        por_nombre = self.client.get(
+            reverse('gestion:lista_registros_legales'), {'q': 'María Pérez'}
+        )
+        self.assertContains(por_nombre, 'DOC-100')
+        self.assertNotContains(por_nombre, 'DOC-200')
+
+        por_documento = self.client.get(
+            reverse('gestion:lista_registros_legales'), {'q': 'DOC-200'}
+        )
+        self.assertContains(por_documento, 'Carlos')
+        self.assertNotContains(por_documento, 'DOC-100')
+
+
+class MiPerfilTests(TestCase):
+    def setUp(self):
+        self.directorio_media = TemporaryDirectory()
+        self.configuracion_media = self.settings(
+            MEDIA_ROOT=self.directorio_media.name
+        )
+        self.configuracion_media.enable()
+        self.addCleanup(self.configuracion_media.disable)
+        self.addCleanup(self.directorio_media.cleanup)
+        self.usuario = get_user_model().objects.create_user(
+            username='mi_perfil_usuario', password='clave',
+            first_name='Nombre anterior', email='anterior@example.com',
+        )
+        self.alumno = Alumno.objects.create(
+            user=self.usuario, documento='PERFIL-100', direccion='ANTERIOR'
+        )
+        self.client.force_login(self.usuario)
+
+    def test_usuario_actualiza_solo_sus_datos_editables(self):
+        response = self.client.post(reverse('gestion:mi_perfil'), {
+            'first_name': 'Andrea',
+            'last_name': 'Pérez',
+            'email': 'andrea@example.com',
+            'telefono': '3001234567',
+            'fecha_nacimiento': '2001-05-10',
+            'direccion': 'Nueva dirección',
+            'nombre_acudiente': '',
+            'documento_acudiente': '',
+            'parentesco_acudiente': '',
+            'telefono_acudiente': '',
+        })
+
+        self.assertRedirects(response, reverse('gestion:mi_perfil'))
+        self.usuario.refresh_from_db()
+        self.alumno.refresh_from_db()
+        self.assertEqual(self.usuario.first_name, 'Andrea')
+        self.assertEqual(self.usuario.email, 'andrea@example.com')
+        self.assertEqual(self.alumno.direccion, 'Nueva dirección')
+        self.assertEqual(self.alumno.documento, 'PERFIL-100')
+
+    def test_perfil_no_expone_estado_grado_ni_documento_editables(self):
+        response = self.client.get(reverse('gestion:mi_perfil'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'PERFIL-100')
+        self.assertNotContains(response, 'name="documento"')
+        self.assertNotContains(response, 'name="estado"')
+        self.assertNotContains(response, 'name="grado"')
+        self.assertNotContains(response, 'aria-label="Registro"')
+
+    def test_estudiante_puede_actualizar_su_foto(self):
+        foto = SimpleUploadedFile(
+            'perfil.png',
+            base64.b64decode(
+                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+            ),
+            content_type='image/png',
+        )
+        response = self.client.post(reverse('gestion:mi_perfil'), {
+            'first_name': 'Andrea',
+            'last_name': 'Pérez',
+            'email': 'andrea@example.com',
+            'telefono': '3001234567',
+            'fecha_nacimiento': '2001-05-10',
+            'direccion': 'Nueva dirección',
+            'nombre_acudiente': '',
+            'documento_acudiente': '',
+            'parentesco_acudiente': '',
+            'telefono_acudiente': '',
+            'foto': foto,
+        })
+
+        self.assertRedirects(response, reverse('gestion:mi_perfil'))
+        self.alumno.refresh_from_db()
+        self.assertTrue(self.alumno.foto.name.startswith('alumnos/fotos/'))
+
+
+class ListaAlumnosFiltroTests(TestCase):
+    def setUp(self):
+        administrador = get_user_model().objects.create_user(
+            username='admin_filtro_alumnos', password='clave', is_staff=True
+        )
+        angel = get_user_model().objects.create_user(
+            username='angel.herrera', password='clave',
+            first_name='ANGEL', last_name='HERRERA',
+        )
+        lucia = get_user_model().objects.create_user(
+            username='lucia.egas', password='clave',
+            first_name='LUCIA', last_name='EGAS',
+        )
+        Alumno.objects.create(user=angel, documento='1085000001')
+        Alumno.objects.create(user=lucia, documento='1085000002')
+        self.client.force_login(administrador)
+
+    def test_busca_por_nombre_completo_y_muestra_nombre_propio(self):
+        response = self.client.get(
+            reverse('gestion:lista_alumnos'), {'q': 'ANGEL HERRERA'}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '<td>Angel Herrera</td>', html=True)
+        self.assertNotContains(response, '<td>ANGEL HERRERA</td>', html=True)
+        self.assertNotContains(response, 'Lucia Egas')
+
+    def test_busca_por_documento(self):
+        response = self.client.get(
+            reverse('gestion:lista_alumnos'), {'q': '1085000002'}
+        )
+
+        self.assertContains(response, 'Lucia Egas')
+        self.assertNotContains(response, 'Angel Herrera')
 
 
 class CronometroLlavesPermisosTests(TestCase):

@@ -57,6 +57,8 @@ from .forms import (
     PlanForm,
     SuscripcionForm,
     PagoForm,
+    MiPerfilAlumnoForm,
+    MiPerfilUsuarioForm,
 
 )
 
@@ -471,15 +473,25 @@ def dashboard(request):
 
 @staff_member_required
 def lista_alumnos(request):
+    consulta = request.GET.get('q', '').strip()
     alumnos = Alumno.objects.select_related('user').all()
 
     for alumno in alumnos:
         alumno.actualizar_estado()
 
     alumnos = Alumno.objects.select_related('user').all()
+    if consulta:
+        for termino in consulta.split():
+            alumnos = alumnos.filter(
+                Q(documento__icontains=termino)
+                | Q(user__first_name__icontains=termino)
+                | Q(user__last_name__icontains=termino)
+                | Q(user__username__icontains=termino)
+            )
 
     return render(request, 'gestion/lista_alumnos.html', {
-        'alumnos': alumnos
+        'alumnos': alumnos,
+        'consulta': consulta,
     })
 
 
@@ -957,6 +969,41 @@ def editar_alumno(request, alumno_id):
             'alumno': alumno,
         }
     )
+
+
+@login_required
+@transaction.atomic
+def mi_perfil(request):
+    alumno = getattr(request.user, 'perfil_alumno', None)
+    usuario_form = MiPerfilUsuarioForm(
+        request.POST or None,
+        instance=request.user,
+    )
+    alumno_form = (
+        MiPerfilAlumnoForm(
+            request.POST or None,
+            request.FILES or None,
+            instance=alumno,
+        )
+        if alumno else None
+    )
+
+    if request.method == 'POST':
+        formularios_validos = usuario_form.is_valid()
+        if alumno_form is not None:
+            formularios_validos = alumno_form.is_valid() and formularios_validos
+        if formularios_validos:
+            usuario_form.save()
+            if alumno_form is not None:
+                alumno_form.save()
+            messages.success(request, 'Tu información de perfil fue actualizada correctamente.')
+            return redirect('gestion:mi_perfil')
+
+    return render(request, 'gestion/mi_perfil.html', {
+        'usuario_form': usuario_form,
+        'alumno_form': alumno_form,
+        'alumno': alumno,
+    })
 
 
 @staff_member_required
@@ -1809,10 +1856,19 @@ def registrar_transferencia(request):
 
 @staff_member_required
 def lista_registros_legales(request):
-    registros = RegistroLegalEstudiante.objects.all()
+    consulta = request.GET.get('q', '').strip()
+    registros = RegistroLegalEstudiante.objects.all().order_by('-creado')
+    if consulta:
+        for termino in consulta.split():
+            registros = registros.filter(
+                Q(nombres__icontains=termino)
+                | Q(apellidos__icontains=termino)
+                | Q(documento__icontains=termino)
+            )
 
     return render(request, 'gestion/lista_registros_legales.html', {
-        'registros': registros
+        'registros': registros,
+        'consulta': consulta,
     })
 
 # DETALLE DE REGISTRO LEGAL

@@ -66,6 +66,7 @@ urlpatterns = [
 
     path('alumnos/<int:alumno_id>/editar/',
          views.editar_alumno, name='editar_alumno'),
+    path('mi-perfil/', views.mi_perfil, name='mi_perfil'),
     path('alumnos/<int:alumno_id>/eliminar/',
          views.eliminar_alumno, name='eliminar_alumno'),
 

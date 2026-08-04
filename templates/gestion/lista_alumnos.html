@@ -17,6 +17,29 @@
 
 </div>
 
+<form method="get" class="card bg-dark text-light border-secondary mb-4">
+    <div class="card-body">
+        <label for="buscarAlumno" class="form-label">
+            Buscar por nombre, documento o usuario
+        </label>
+        <div class="input-group">
+            <span class="input-group-text"><i class="fa-solid fa-magnifying-glass"></i></span>
+            <input type="search" id="buscarAlumno" name="q" class="form-control"
+                   value="{{ consulta }}" placeholder="Ej: ÁNGEL HERRERA o 1085000000">
+            <button type="submit" class="btn btn-primary">Buscar</button>
+            {% if consulta %}
+                <a href="{% url 'gestion:lista_alumnos' %}"
+                   class="btn btn-outline-light">Limpiar</a>
+            {% endif %}
+        </div>
+        {% if consulta %}
+            <div class="form-text text-secondary mt-2">
+                Resultados encontrados: {{ alumnos|length }}
+            </div>
+        {% endif %}
+    </div>
+</form>
+
 <div class="table-responsive">
 
     <table class="table table-dark table-hover table-dark-custom">
@@ -39,7 +62,7 @@
         {% for alumno in alumnos %}
         <tr>
             <td>{{ alumno.id }}</td>
-            <td>{{ alumno.user.get_full_name|default:alumno.user.username }}</td>
+            <td>{{ alumno.user.get_full_name|title|default:alumno.user.username }}</td>
             <td>{{ alumno.documento }}</td>
             <td>{{ alumno.disciplina }}</td>
             <td>{{ alumno.grado }}</td>
@@ -94,6 +117,16 @@
             <td>{{ alumno.fecha_vencimiento_actual|default:"Sin suscripción" }}</td>
             <td>{{ alumno.dias_vencido }}</td>
             <td>{{ alumno.mensualidades_pendientes }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="11" class="text-center py-4">
+                {% if consulta %}
+                    No se encontraron alumnos para “{{ consulta }}”.
+                {% else %}
+                    No hay alumnos registrados.
+                {% endif %}
+            </td>
         </tr>
         {% endfor %}
     </table>

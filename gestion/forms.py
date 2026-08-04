@@ -1361,6 +1361,99 @@ class UsuarioAlumnoEditForm(forms.ModelForm):
         }
 
 
+class MiPerfilUsuarioForm(forms.ModelForm):
+    class Meta:
+        model = Usuario
+        fields = ['first_name', 'last_name', 'email', 'telefono']
+        widgets = {
+            'first_name': forms.TextInput(attrs={'class': 'form-control'}),
+            'last_name': forms.TextInput(attrs={'class': 'form-control'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control'}),
+            'telefono': forms.TextInput(attrs={
+                'class': 'form-control',
+                'inputmode': 'numeric',
+                'pattern': '[0-9]*',
+                'data-solo-numeros': 'true',
+            }),
+        }
+
+    def clean_first_name(self):
+        return self.cleaned_data['first_name'].strip().title()
+
+    def clean_last_name(self):
+        return self.cleaned_data['last_name'].strip().title()
+
+    def clean_telefono(self):
+        telefono = (self.cleaned_data.get('telefono') or '').strip()
+        if telefono and not telefono.isdigit():
+            raise forms.ValidationError('El celular solo puede contener números.')
+        return telefono
+
+
+class MiPerfilAlumnoForm(forms.ModelForm):
+    class Meta:
+        model = Alumno
+        fields = [
+            'foto',
+            'fecha_nacimiento',
+            'direccion',
+            'nombre_acudiente',
+            'documento_acudiente',
+            'parentesco_acudiente',
+            'telefono_acudiente',
+        ]
+        widgets = {
+            'foto': forms.ClearableFileInput(attrs={
+                'class': 'form-control',
+                'accept': '.jpg,.jpeg,.png,.webp',
+            }),
+            'fecha_nacimiento': forms.DateInput(attrs={
+                'type': 'date',
+                'class': 'form-control',
+            }),
+            'direccion': forms.TextInput(attrs={'class': 'form-control'}),
+            'nombre_acudiente': forms.TextInput(attrs={'class': 'form-control'}),
+            'documento_acudiente': forms.TextInput(attrs={
+                'class': 'form-control',
+                'inputmode': 'numeric',
+                'pattern': '[0-9]*',
+                'data-solo-numeros': 'true',
+            }),
+            'parentesco_acudiente': forms.TextInput(attrs={'class': 'form-control'}),
+            'telefono_acudiente': forms.TextInput(attrs={
+                'class': 'form-control',
+                'inputmode': 'numeric',
+                'pattern': '[0-9]*',
+                'data-solo-numeros': 'true',
+            }),
+        }
+
+    def clean_foto(self):
+        foto = self.cleaned_data.get('foto')
+        if foto:
+            validate_image(foto)
+        return foto
+
+    def clean_nombre_acudiente(self):
+        return (self.cleaned_data.get('nombre_acudiente') or '').strip().title()
+
+    def clean_documento_acudiente(self):
+        documento = (self.cleaned_data.get('documento_acudiente') or '').strip()
+        if documento and not documento.isdigit():
+            raise forms.ValidationError(
+                'El documento del acudiente solo puede contener números.'
+            )
+        return documento
+
+    def clean_telefono_acudiente(self):
+        telefono = (self.cleaned_data.get('telefono_acudiente') or '').strip()
+        if telefono and not telefono.isdigit():
+            raise forms.ValidationError(
+                'El teléfono del acudiente solo puede contener números.'
+            )
+        return telefono
+
+
 # FORMULARIO PARA AGREGAR VIDEO Y MUSICA
 
 

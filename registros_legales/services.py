@@ -30,6 +30,7 @@ def crear_alumno_desde_registro(registro):
 
     alumno = Alumno.objects.create(
         user=user,
+        foto=registro.foto,
         documento=registro.documento,
         fecha_nacimiento=registro.fecha_nacimiento,
         direccion=registro.direccion,

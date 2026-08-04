@@ -1,7 +1,9 @@
 from django import forms
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import PasswordResetForm
 from django.db.models import Q
+from urllib.parse import urlparse
 
 
 class RecuperarPasswordIdentificadoForm(PasswordResetForm):
@@ -39,3 +41,9 @@ class RecuperarPasswordIdentificadoForm(PasswordResetForm):
             | Q(perfil_alumno__documento__iexact=identificador)
         ).distinct()
         return (usuario for usuario in usuarios if usuario.has_usable_password())
+
+    def save(self, *args, **kwargs):
+        sitio_publico = urlparse(settings.PUBLIC_BASE_URL)
+        kwargs['domain_override'] = sitio_publico.netloc
+        kwargs['use_https'] = sitio_publico.scheme.lower() == 'https'
+        return super().save(*args, **kwargs)

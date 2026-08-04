@@ -19,7 +19,9 @@ def validar_datos_registro(request):
     errores = {}
 
     if documento and (
-        RegistroLegalEstudiante.objects.filter(documento=documento).exists()
+        RegistroLegalEstudiante.objects.filter(documento=documento).exclude(
+            estado=RegistroLegalEstudiante.Estados.RECHAZADO
+        ).exists()
         or Alumno.objects.filter(documento=documento).exists()
         or Instructor.objects.filter(documento=documento).exists()
     ):
@@ -30,6 +32,8 @@ def validar_datos_registro(request):
 
     if celular and RegistroLegalEstudiante.objects.filter(
         celular=celular
+    ).exclude(
+        estado=RegistroLegalEstudiante.Estados.RECHAZADO
     ).exists():
         errores['celular'] = 'Ya existe un registro con este celular.'
 

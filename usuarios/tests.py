@@ -43,6 +43,9 @@ class RecuperacionPasswordFamiliarTests(TestCase):
         self.assertIn('Usuario: familiar_dos', mail.outbox[0].body)
         self.assertNotIn('Usuario: familiar_uno', mail.outbox[0].body)
         self.assertEqual(mail.outbox[0].to, ['familia@example.com'])
+        self.assertIn('https://bjj.lu-a.com/reset/', mail.outbox[0].body)
+        self.assertNotIn('testserver', mail.outbox[0].body)
+        self.assertNotIn('localhost', mail.outbox[0].body)
 
     def test_datos_que_no_coinciden_no_envian_y_no_revelan_la_cuenta(self):
         response = self.client.post(reverse('password_reset'), {

@@ -36,6 +36,11 @@ ALLOWED_HOSTS = [
     'localhost',
 ]
 
+PUBLIC_BASE_URL = config(
+    'PUBLIC_BASE_URL',
+    default='https://bjj.lu-a.com',
+).rstrip('/')
+
 
 # Application definition
 

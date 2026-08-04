@@ -47,7 +47,7 @@ class RegistroLegalObligatorioTests(TestCase):
             'tipo_estudiante': 'ADULTO',
             'nombres': 'Estudiante',
             'apellidos': 'Prueba',
-            'documento': 'REG-001',
+            'documento': '1000000001',
             'fecha_nacimiento': '2000-01-01',
             'direccion': 'Dirección de prueba',
             'celular': '3000000001',
@@ -244,12 +244,12 @@ class RegistroLegalObligatorioTests(TestCase):
         response = self.client.post(reverse('registro_publico'), data)
 
         self.assertRedirects(response, reverse('registro_exitoso'))
-        registro = RegistroLegalEstudiante.objects.get(documento='REG-001')
+        registro = RegistroLegalEstudiante.objects.get(documento='1000000001')
         self.assertEqual(
             registro.estado,
             RegistroLegalEstudiante.Estados.PENDIENTE_VALIDACION,
         )
-        self.assertFalse(Alumno.objects.filter(documento='REG-001').exists())
+        self.assertFalse(Alumno.objects.filter(documento='1000000001').exists())
 
     def test_pantalla_exitosa_regresa_al_inicio_sin_restaurar_formulario(self):
         response = self.client.get(reverse('registro_exitoso'))
@@ -286,6 +286,60 @@ class RegistroLegalObligatorioTests(TestCase):
         self.assertContains(response, 'Ya existe un registro con este celular')
         self.assertEqual(RegistroLegalEstudiante.objects.count(), 1)
 
+    def test_registro_rechazado_no_bloquea_una_nueva_solicitud(self):
+        primer_envio = self.datos_validos()
+        primer_envio['foto'] = self.foto_valida()
+        self.client.post(reverse('registro_publico'), primer_envio)
+        anterior = RegistroLegalEstudiante.objects.get(
+            documento=primer_envio['documento']
+        )
+        anterior.estado = RegistroLegalEstudiante.Estados.RECHAZADO
+        anterior.save(update_fields=['estado'])
+
+        validacion = self.client.post(reverse('validar_datos_registro'), {
+            'documento': primer_envio['documento'],
+            'celular': primer_envio['celular'],
+            'usuario_solicitado': primer_envio['usuario_solicitado'],
+        })
+        self.assertTrue(validacion.json()['valido'])
+
+        segundo_envio = self.datos_validos()
+        segundo_envio['foto'] = self.foto_valida()
+        response = self.client.post(reverse('registro_publico'), segundo_envio)
+
+        self.assertRedirects(response, reverse('registro_exitoso'))
+        self.assertEqual(
+            RegistroLegalEstudiante.objects.filter(
+                documento=primer_envio['documento']
+            ).count(),
+            2,
+        )
+
+    def test_nombres_se_guardan_como_nombre_propio(self):
+        data = self.datos_validos()
+        data['nombres'] = 'mARÍA jOSÉ'
+        data['apellidos'] = 'péREZ góMEZ'
+        form = RegistroLegalEstudianteForm(
+            data=data, files={'foto': self.foto_valida()}
+        )
+
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+        registro = form.save()
+        self.assertEqual(registro.nombres, 'María José')
+        self.assertEqual(registro.apellidos, 'Pérez Gómez')
+
+    def test_documentos_y_celulares_solo_aceptan_numeros(self):
+        data = self.datos_validos()
+        data['documento'] = 'ABC-123'
+        data['celular'] = '300 123 4567'
+        form = RegistroLegalEstudianteForm(
+            data=data, files={'foto': self.foto_valida()}
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('documento', form.errors)
+        self.assertIn('celular', form.errors)
+
     def test_dos_estudiantes_pueden_compartir_correo_familiar(self):
         primero = self.datos_validos()
         primero['foto'] = self.foto_valida()
@@ -293,7 +347,7 @@ class RegistroLegalObligatorioTests(TestCase):
 
         segundo = self.datos_validos()
         segundo.update({
-            'documento': 'REG-002',
+            'documento': '1000000002',
             'celular': '3000000002',
             'usuario_solicitado': 'estudiante_familia_2',
             'foto': self.foto_valida(),
@@ -314,7 +368,7 @@ class RegistroLegalObligatorioTests(TestCase):
         self.client.post(reverse('registro_publico'), data)
 
         response = self.client.post(reverse('validar_datos_registro'), {
-            'documento': 'REG-001',
+            'documento': '1000000001',
             'correo': 'REGISTRO@example.com',
             'celular': '3000000001',
         })
@@ -344,12 +398,12 @@ class RegistroLegalObligatorioTests(TestCase):
         )
         Instructor.objects.create(
             user=usuario_instructor,
-            documento='DOC-INSTRUCTOR-1',
+            documento='9000000001',
             especialidad='Jiu Jitsu',
         )
 
         response = self.client.post(reverse('validar_datos_registro'), {
-            'documento': 'DOC-INSTRUCTOR-1',
+            'documento': '9000000001',
             'correo': 'nuevo@example.com',
             'celular': '3110000000',
         })
@@ -357,7 +411,7 @@ class RegistroLegalObligatorioTests(TestCase):
         self.assertIn('documento', response.json()['errores'])
 
         data = self.datos_validos()
-        data['documento'] = 'DOC-INSTRUCTOR-1'
+        data['documento'] = '9000000001'
         form = RegistroLegalEstudianteForm(
             data=data, files={'foto': self.foto_valida()}
         )

@@ -98,7 +98,10 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
             }),
 
             'documento': forms.TextInput(attrs={
-                'class': 'form-control'
+                'class': 'form-control',
+                'inputmode': 'numeric',
+                'pattern': '[0-9]*',
+                'data-solo-numeros': 'true',
             }),
 
             'fecha_nacimiento': forms.DateInput(attrs={
@@ -111,7 +114,10 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
             }),
 
             'celular': forms.TextInput(attrs={
-                'class': 'form-control'
+                'class': 'form-control',
+                'inputmode': 'numeric',
+                'pattern': '[0-9]*',
+                'data-solo-numeros': 'true',
             }),
 
             'correo': forms.EmailInput(attrs={
@@ -132,7 +138,10 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
             }),
 
             'contacto_emergencia_celular': forms.TextInput(attrs={
-                'class': 'form-control'
+                'class': 'form-control',
+                'inputmode': 'numeric',
+                'pattern': '[0-9]*',
+                'data-solo-numeros': 'true',
             }),
 
             'eps': forms.TextInput(attrs={
@@ -151,7 +160,10 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
             }),
 
             'documento_acudiente': forms.TextInput(attrs={
-                'class': 'form-control'
+                'class': 'form-control',
+                'inputmode': 'numeric',
+                'pattern': '[0-9]*',
+                'data-solo-numeros': 'true',
             }),
 
             'parentesco_acudiente': forms.TextInput(attrs={
@@ -159,7 +171,10 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
             }),
 
             'celular_acudiente': forms.TextInput(attrs={
-                'class': 'form-control'
+                'class': 'form-control',
+                'inputmode': 'numeric',
+                'pattern': '[0-9]*',
+                'data-solo-numeros': 'true',
             }),
 
             'firma_base64': forms.HiddenInput(),
@@ -205,6 +220,13 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
 
+        for campo in (
+            'nombres', 'apellidos', 'contacto_emergencia_nombre',
+            'nombre_acudiente',
+        ):
+            if cleaned_data.get(campo):
+                cleaned_data[campo] = cleaned_data[campo].strip().title()
+
         tipo = cleaned_data.get('tipo_estudiante')
 
         campos_obligatorios = [
@@ -225,7 +247,7 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
         ]
 
         for campo in campos_obligatorios:
-            if not cleaned_data.get(campo):
+            if not cleaned_data.get(campo) and campo not in self.errors:
                 self.add_error(
                     campo,
                     'Este campo es obligatorio.'
@@ -278,6 +300,8 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
         if documento:
             existe_registro = RegistroLegalEstudiante.objects.filter(
                 documento=documento
+            ).exclude(
+                estado=RegistroLegalEstudiante.Estados.RECHAZADO
             ).exists()
 
             existe_alumno = Alumno.objects.filter(
@@ -301,6 +325,8 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
         if celular:
             existe_celular = RegistroLegalEstudiante.objects.filter(
                 celular=celular
+            ).exclude(
+                estado=RegistroLegalEstudiante.Estados.RECHAZADO
             ).exists()
 
             if existe_celular:
@@ -310,6 +336,35 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
                 )
 
         return cleaned_data
+
+    def _validar_solo_numeros(self, campo, etiqueta):
+        valor = (self.cleaned_data.get(campo) or '').strip()
+        if valor and not valor.isdigit():
+            raise forms.ValidationError(
+                f'{etiqueta} solo puede contener números.'
+            )
+        return valor
+
+    def clean_documento(self):
+        return self._validar_solo_numeros('documento', 'El documento')
+
+    def clean_celular(self):
+        return self._validar_solo_numeros('celular', 'El celular')
+
+    def clean_contacto_emergencia_celular(self):
+        return self._validar_solo_numeros(
+            'contacto_emergencia_celular', 'El celular de emergencia'
+        )
+
+    def clean_documento_acudiente(self):
+        return self._validar_solo_numeros(
+            'documento_acudiente', 'El documento del acudiente'
+        )
+
+    def clean_celular_acudiente(self):
+        return self._validar_solo_numeros(
+            'celular_acudiente', 'El celular del acudiente'
+        )
 
     def clean_usuario_solicitado(self):
         username = self.cleaned_data['usuario_solicitado'].strip()

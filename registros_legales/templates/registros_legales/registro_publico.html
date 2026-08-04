@@ -189,6 +189,14 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 const patronCamposSinMayusculas = /(usuario|username|password|contrase|correo|email|url|enlace|firma|token|csrf|json|buscar|busqueda|search)/i;
+const patronCamposNombrePropio = /(nombre|apellido|first_name|last_name)/i;
+
+function convertirANombrePropio(valor) {
+    return valor.toLocaleLowerCase('es-CO').replace(
+        /(^|[\s'’-])(\p{L})/gu,
+        (coincidencia, separador, letra) => separador + letra.toLocaleUpperCase('es-CO')
+    );
+}
 
 function debeConvertirAMayusculas(campo) {
     if (!campo.matches('input[type="text"], input:not([type]), textarea')) return false;
@@ -201,7 +209,10 @@ function convertirCampoAMayusculas(campo) {
     if (!debeConvertirAMayusculas(campo) || !campo.value) return;
     const inicio = campo.selectionStart;
     const fin = campo.selectionEnd;
-    campo.value = campo.value.toLocaleUpperCase('es-CO');
+    const identidad = `${campo.name || ''} ${campo.id || ''}`;
+    campo.value = patronCamposNombrePropio.test(identidad)
+        ? convertirANombrePropio(campo.value)
+        : campo.value.toLocaleUpperCase('es-CO');
     if (inicio !== null && fin !== null && document.activeElement === campo) {
         campo.setSelectionRange(inicio, fin);
     }
@@ -216,15 +227,29 @@ function normalizarTextosMayuscula(contenedor = document) {
     );
 }
 
+function normalizarCamposNumericos(contenedor = document) {
+    if (contenedor.matches?.('[data-solo-numeros="true"]')) {
+        contenedor.value = contenedor.value.replace(/\D/g, '');
+    }
+    contenedor.querySelectorAll('[data-solo-numeros="true"]').forEach(campo => {
+        campo.value = campo.value.replace(/\D/g, '');
+    });
+}
+
 document.addEventListener('input', event => {
     if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+        if (event.target.matches('[data-solo-numeros="true"]')) {
+            event.target.value = event.target.value.replace(/\D/g, '');
+        }
         convertirCampoAMayusculas(event.target);
     }
 });
 document.addEventListener('submit', event => {
+    normalizarCamposNumericos(event.target);
     normalizarTextosMayuscula(event.target);
 }, true);
 normalizarTextosMayuscula();
+normalizarCamposNumericos();
 
 const mesesFechaLegible = [
     'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
