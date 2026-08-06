@@ -1,11 +1,16 @@
 import base64
+from datetime import timedelta
 from io import BytesIO
 
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.test import TestCase
+from django.test import override_settings
 from django.urls import reverse
+from django.utils import timezone
 from PIL import Image, ImageDraw
 
+from alumnos.models import Alumno
 from clases.models import ClaseProgramada
 from instructores.models import Instructor
 from .forms import ClaseCortesiaForm
@@ -24,13 +29,13 @@ def firma_visible():
 
 class FlujoCortesiaTests(TestCase):
     def setUp(self):
-        usuario = get_user_model().objects.create_user(
+        self.usuario_instructor = get_user_model().objects.create_user(
             username='instructor_cortesia',
             password='clave-pruebas',
             first_name='Instructor',
         )
         self.instructor = Instructor.objects.create(
-            user=usuario,
+            user=self.usuario_instructor,
             documento='INST-CORTESIA',
             especialidad='Jiu Jitsu',
         )
@@ -84,7 +89,8 @@ class FlujoCortesiaTests(TestCase):
         self.assertContains(response, 'Adultos')
         self.assertContains(response, 'Clase familiar')
         self.assertNotContains(response, 'Niños')
-        self.assertContains(response, 'Selecciona la clase de cortesía')
+        self.assertContains(response, 'Haz clic en uno de los cuadros de color')
+        self.assertNotContains(response, 'Disponible')
         self.assertNotContains(response, 'id="modalAsistencia"')
         self.assertContains(
             response,
@@ -119,6 +125,143 @@ class FlujoCortesiaTests(TestCase):
 
         self.assertFalse(form.is_valid())
         self.assertIn('edad', form.errors)
+
+    def test_desde_15_ve_clases_de_adultos_pero_requiere_firma_del_acudiente(self):
+        datos = self.datos_menor_validos()
+        datos.update({
+            'edad': 15,
+            'tipo_persona': ClaseCortesia.TiposPersona.ADULTO,
+        })
+        form = ClaseCortesiaForm(
+            data=datos,
+            tipo_persona=ClaseCortesia.TiposPersona.ADULTO,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_consentimiento_primero_redirige_al_horario_filtrado(self):
+        response = self.client.post(
+            reverse('cortesias:iniciar_cortesia') + '?tipo=MENOR',
+            self.datos_menor_validos(),
+        )
+
+        cortesia = ClaseCortesia.objects.get()
+        self.assertIsNone(cortesia.clase)
+        self.assertRedirects(
+            response,
+            f"{reverse('gestion:horario_clases')}?cortesia=MENOR&solicitud={cortesia.id}",
+        )
+        horario = self.client.get(response.url)
+        self.assertContains(horario, 'Consentimiento registrado')
+        self.assertContains(horario, 'Niños')
+        self.assertNotContains(horario, 'Adultos')
+
+    def test_la_edad_corrige_el_grupo_elegido_inicialmente(self):
+        datos = self.datos_menor_validos()
+        datos['tipo_persona'] = ClaseCortesia.TiposPersona.ADULTO
+        response = self.client.post(
+            reverse('cortesias:iniciar_cortesia') + '?tipo=ADULTO',
+            datos,
+        )
+
+        cortesia = ClaseCortesia.objects.get()
+        self.assertEqual(cortesia.tipo_persona, ClaseCortesia.TiposPersona.MENOR)
+        self.assertIn('cortesia=MENOR', response.url)
+
+    def test_seleccionar_clase_agenda_fecha_y_alerta_al_instructor(self):
+        self.client.post(
+            reverse('cortesias:iniciar_cortesia') + '?tipo=MENOR',
+            self.datos_menor_validos(),
+        )
+        cortesia = ClaseCortesia.objects.get()
+        response = self.client.post(reverse(
+            'cortesias:seleccionar_clase_cortesia',
+            args=[cortesia.id, self.clase_menores.id],
+        ))
+
+        self.assertRedirects(response, reverse('gestion:home_publica'))
+        cortesia.refresh_from_db()
+        self.assertEqual(cortesia.clase, self.clase_menores)
+        self.assertIsNotNone(cortesia.fecha_clase)
+
+        self.client.force_login(self.usuario_instructor)
+        lista = self.client.get(reverse('cortesias:lista_cortesias'))
+        self.assertEqual(lista.status_code, 200)
+        self.assertContains(lista, 'Clases próximas agendadas')
+        self.assertContains(lista, 'Niños')
+
+    def crear_cortesia_agendada(self):
+        self.client.post(
+            reverse('cortesias:iniciar_cortesia') + '?tipo=MENOR',
+            self.datos_menor_validos(),
+        )
+        cortesia = ClaseCortesia.objects.get()
+        self.client.post(reverse(
+            'cortesias:seleccionar_clase_cortesia',
+            args=[cortesia.id, self.clase_menores.id],
+        ))
+        cortesia.refresh_from_db()
+        return cortesia
+
+    def test_instructor_puede_cambiar_contactado_y_asistencia(self):
+        cortesia = self.crear_cortesia_agendada()
+        self.client.force_login(self.usuario_instructor)
+
+        self.client.post(reverse('cortesias:cambiar_contactado', args=[cortesia.id]))
+        self.client.post(reverse('cortesias:cambiar_asistencia', args=[cortesia.id]))
+        cortesia.refresh_from_db()
+
+        self.assertTrue(cortesia.contactado)
+        self.assertEqual(cortesia.contactado_por, self.usuario_instructor)
+        self.assertIsNotNone(cortesia.fecha_contacto)
+        self.assertTrue(cortesia.asistio)
+        self.assertEqual(cortesia.asistencia_confirmada_por, self.usuario_instructor)
+
+    def test_conversion_muestra_fecha_de_registro_del_estudiante(self):
+        cortesia = self.crear_cortesia_agendada()
+        alumno_user = get_user_model().objects.create_user(
+            username='convertido_cortesia',
+            password='clave-pruebas',
+            first_name='Participante',
+            last_name='Menor',
+        )
+        alumno = Alumno.objects.create(
+            user=alumno_user,
+            documento=cortesia.documento,
+        )
+        self.client.force_login(self.usuario_instructor)
+
+        response = self.client.get(reverse('cortesias:lista_cortesias'))
+        cortesia.refresh_from_db()
+
+        self.assertTrue(cortesia.se_convirtio)
+        self.assertEqual(cortesia.alumno_convertido, alumno)
+        self.assertEqual(cortesia.fecha_conversion, alumno.fecha_registro)
+        self.assertContains(response, alumno.fecha_registro.strftime('%Y'))
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    def test_campana_envia_solo_a_quien_asistio_y_no_se_convirtio(self):
+        cortesia = self.crear_cortesia_agendada()
+        cortesia.asistio = True
+        cortesia.fecha_clase = timezone.localdate() - timedelta(days=5)
+        cortesia.save(update_fields=['asistio', 'fecha_clase'])
+        self.client.force_login(self.usuario_instructor)
+
+        response = self.client.post(reverse('cortesias:lista_cortesias'), {
+            'activo': 'on',
+            'dias_espera': 3,
+            'intervalo_dias': 30,
+            'maximo_envios': 2,
+            'asunto': 'Vuelve a entrenar',
+            'mensaje': 'Tenemos una invitación para ti.',
+            'accion': 'enviar',
+        })
+
+        self.assertRedirects(response, reverse('cortesias:lista_cortesias'))
+        cortesia.refresh_from_db()
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [cortesia.correo])
+        self.assertEqual(cortesia.cantidad_correos_seguimiento, 1)
 
     def test_registro_de_menor_guarda_firma_como_acudiente(self):
         url = (

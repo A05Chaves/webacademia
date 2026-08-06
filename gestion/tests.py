@@ -22,7 +22,8 @@ from config.file_validation import (
     validate_image,
     validate_payment_receipt,
 )
-from gestion.models import SesionTV
+from gestion.models import ConfiguracionClases, SesionTV
+from gestion.views import limites_confirmacion_clase
 from registros_legales.models import RegistroLegalEstudiante
 import base64
 
@@ -240,6 +241,79 @@ class ListaAlumnosFiltroTests(TestCase):
 
         self.assertContains(response, 'Lucia Egas')
         self.assertNotContains(response, 'Angel Herrera')
+
+
+class ConfiguracionYAsistenciaClasesTests(TestCase):
+    def setUp(self):
+        self.admin = get_user_model().objects.create_user(
+            username='admin_config_clases', password='clave', is_staff=True
+        )
+        usuario_instructor = get_user_model().objects.create_user(
+            username='instructor_config_clases', password='clave'
+        )
+        self.instructor = Instructor.objects.create(
+            user=usuario_instructor,
+            documento='7000000001',
+            especialidad='Jiu Jitsu',
+        )
+        self.clase = ClaseProgramada.objects.create(
+            dia=ClaseProgramada.DiasSemana.LUNES,
+            hora_inicio=time(10, 0),
+            hora_fin=time(11, 0),
+            disciplina=ClaseProgramada.Disciplinas.JIU_JITSU,
+            instructor=self.instructor,
+            cupo_maximo=20,
+        )
+        self.client.force_login(self.admin)
+
+    def test_configura_minutos_antes_y_despues(self):
+        response = self.client.post(reverse('gestion:configurar_horario'), {
+            'minutos_antes_confirmacion': '45',
+            'minutos_despues_confirmacion': '25',
+        })
+
+        self.assertRedirects(response, reverse('gestion:configurar_horario'))
+        configuracion = ConfiguracionClases.cargar()
+        self.assertEqual(configuracion.minutos_antes_confirmacion, 45)
+        self.assertEqual(configuracion.minutos_despues_confirmacion, 25)
+
+        ahora = timezone.make_aware(datetime(2026, 8, 3, 9, 30))
+        inicio, fin = limites_confirmacion_clase(
+            self.clase, ahora, configuracion
+        )
+        self.assertEqual(inicio.time(), time(9, 15))
+        self.assertEqual(fin.time(), time(10, 25))
+
+    def test_consulta_asistentes_de_una_fecha_especifica(self):
+        usuario_uno = get_user_model().objects.create_user(
+            username='asistente_uno', first_name='Laura', last_name='Pérez'
+        )
+        usuario_dos = get_user_model().objects.create_user(
+            username='asistente_dos', first_name='Carlos', last_name='López'
+        )
+        alumno_uno = Alumno.objects.create(
+            user=usuario_uno, documento='8000000001'
+        )
+        alumno_dos = Alumno.objects.create(
+            user=usuario_dos, documento='8000000002'
+        )
+        AsistenciaClase.objects.create(
+            alumno=alumno_uno, clase=self.clase, fecha_clase='2026-08-03'
+        )
+        AsistenciaClase.objects.create(
+            alumno=alumno_dos, clase=self.clase, fecha_clase='2026-07-27'
+        )
+
+        response = self.client.get(
+            reverse('gestion:asistentes_clase', args=[self.clase.id]),
+            {'fecha': '2026-08-03'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Laura Pérez')
+        self.assertNotContains(response, 'Carlos López')
+        self.assertContains(response, '?fecha=2026-08-03')
+        self.assertContains(response, '?fecha=2026-07-27')
 
 
 class CronometroLlavesPermisosTests(TestCase):
@@ -1282,6 +1356,66 @@ class CalendarioAsistenciaTests(TestCase):
             fecha_clase=hoy,
             estado=AsistenciaClase.Estados.CONFIRMADA,
         ).exists())
+
+    def test_estudiante_con_sesion_confirma_sin_credenciales_y_conserva_sesion(self):
+        hoy = date(2026, 7, 15)
+        plan = Plan.objects.create(
+            nombre='Plan confirmación rápida',
+            precio='100000',
+            duracion_dias=30,
+            clases_mes=8,
+        )
+        Suscripcion.objects.create(
+            alumno=self.alumno,
+            plan=plan,
+            fecha_inicio=hoy - timedelta(days=1),
+            fecha_vencimiento=hoy + timedelta(days=29),
+            estado=Suscripcion.Estados.ACTIVA,
+        )
+        self.client.force_login(self.usuario)
+        momento_clase = timezone.make_aware(datetime(2026, 7, 15, 18, 5))
+
+        with patch('gestion.views.timezone.localtime', return_value=momento_clase):
+            response = self.client.post(
+                reverse('gestion:confirmar_clase_home'),
+                {'clase_id': self.clase.id},
+                follow=True,
+            )
+
+        self.assertTrue(AsistenciaClase.objects.filter(
+            alumno=self.alumno,
+            clase=self.clase,
+            fecha_clase=hoy,
+        ).exists())
+        self.assertIn('_auth_user_id', self.client.session)
+        self.assertContains(response, 'data-clase-feedback')
+        self.assertContains(response, 'Clase confirmada')
+        self.assertContains(response, 'data-voz="Clase confirmada"')
+        self.assertContains(response, 'fa-circle-check')
+
+    def test_error_de_confirmacion_muestra_alerta_grande_con_x_roja(self):
+        self.client.force_login(self.usuario)
+        momento_clase = timezone.make_aware(datetime(2026, 7, 15, 18, 5))
+
+        with patch('gestion.views.timezone.localtime', return_value=momento_clase):
+            response = self.client.post(
+                reverse('gestion:confirmar_clase_home'),
+                {'clase_id': self.clase.id},
+                follow=True,
+            )
+
+        self.assertContains(response, 'No se confirmó la clase')
+        self.assertContains(response, 'fa-circle-xmark')
+        self.assertContains(response, 'No tienes una suscripción activa')
+
+    def test_horario_reconoce_sesion_del_estudiante_para_confirmacion_rapida(self):
+        self.usuario.debe_cambiar_password = False
+        self.usuario.save(update_fields=['debe_cambiar_password'])
+        self.client.force_login(self.usuario)
+        response = self.client.get(reverse('gestion:horario_clases'))
+
+        self.assertContains(response, 'Confirmarás clase como')
+        self.assertContains(response, 'próximas confirmaciones', count=0)
 
     def test_panel_solo_muestra_asistentes_de_clase_realmente_activa(self):
         siguiente = ClaseProgramada.objects.create(

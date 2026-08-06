@@ -1,4 +1,4 @@
-from .models import ConfiguracionHome
+from .models import ConfiguracionClases, ConfiguracionHome
 from datetime import timedelta
 
 from django.utils import timezone
@@ -991,6 +991,23 @@ class CuentaFinancieraForm(forms.ModelForm):
                 'step': '0.01',
             }),
             'activa': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+
+class ConfiguracionClasesForm(forms.ModelForm):
+    class Meta:
+        model = ConfiguracionClases
+        fields = [
+            'minutos_antes_confirmacion',
+            'minutos_despues_confirmacion',
+        ]
+        widgets = {
+            'minutos_antes_confirmacion': forms.NumberInput(attrs={
+                'class': 'form-control', 'min': 0, 'max': 180,
+            }),
+            'minutos_despues_confirmacion': forms.NumberInput(attrs={
+                'class': 'form-control', 'min': 0, 'max': 180,
+            }),
         }
 
 

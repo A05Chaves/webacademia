@@ -100,6 +100,30 @@
             color: var(--bg-main) !important;
         }
 
+        @keyframes alerta-cortesia {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, .65); }
+            50% { box-shadow: 0 0 0 7px rgba(255, 193, 7, 0); }
+        }
+
+        .cortesia-alerta-btn {
+            animation: alerta-cortesia 1.4s ease-in-out infinite;
+            position: relative;
+        }
+
+        .cortesia-alerta-contador {
+            align-items: center;
+            background: #dc3545;
+            border-radius: 999px;
+            color: #fff;
+            display: inline-flex;
+            font-size: .68rem;
+            font-weight: 700;
+            height: 19px;
+            justify-content: center;
+            min-width: 19px;
+            padding: 0 5px;
+        }
+
         .guest-register-btn {
             align-items: center;
             display: inline-flex;
@@ -484,6 +508,18 @@
                 </a>
                 {% endif %}
 
+                {% if puede_gestionar_cortesias %}
+                <a class="btn btn-warning btn-sm menu-btn {% if cortesias_agendadas_pendientes %}cortesia-alerta-btn{% endif %}"
+                   href="{% url 'cortesias:lista_cortesias' %}"
+                   aria-label="Cortesías agendadas"
+                   data-nav-tooltip
+                   title="{% if cortesias_agendadas_pendientes %}{{ cortesias_agendadas_pendientes }} cortesía{{ cortesias_agendadas_pendientes|pluralize }} agendada{{ cortesias_agendadas_pendientes|pluralize }}{% else %}Cortesías{% endif %}">
+                    <i class="fa-solid fa-user-clock"></i>
+                    {% if cortesias_agendadas_pendientes %}<span class="cortesia-alerta-contador">{{ cortesias_agendadas_pendientes }}</span>{% endif %}
+                    <span class="menu-label">Cortesías</span>
+                </a>
+                {% endif %}
+
                 {% if user.is_authenticated and user.is_staff %}
 
                     <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'gestion:dashboard' %}"
@@ -600,19 +636,21 @@
     {% if messages %}
         <div class="messages-container mb-3">
             {% for message in messages %}
-                {% if 'pago-feedback' not in message.tags %}
+                {% if 'pago-feedback' not in message.tags and 'clase-feedback' not in message.tags %}
                     <p>{{ message }}</p>
                 {% endif %}
             {% endfor %}
         </div>
 
         {% for message in messages %}
-            {% if 'pago-feedback' in message.tags %}
+            {% if 'pago-feedback' in message.tags or 'clase-feedback' in message.tags %}
                 <div class="payment-feedback-overlay" role="alertdialog" aria-modal="true"
-                     aria-labelledby="tituloFeedbackPago{{ forloop.counter }}">
-                    <div class="payment-feedback-card {% if 'success' in message.tags %}success{% elif 'error' in message.tags %}error{% elif 'warning' in message.tags %}warning{% endif %}">
+                     aria-live="assertive"
+                     {% if 'clase-feedback' in message.tags %}data-clase-feedback data-voz="{% if 'success' in message.tags %}Clase confirmada{% elif 'error' in message.tags %}No fue posible confirmar la clase{% endif %}"{% endif %}
+                     aria-labelledby="tituloFeedback{{ forloop.counter }}">
+                    <div class="payment-feedback-card {% if 'success' in message.tags or 'info' in message.tags %}success{% elif 'error' in message.tags %}error{% elif 'warning' in message.tags %}warning{% endif %}">
                         <div class="payment-feedback-icon" aria-hidden="true">
-                            {% if 'success' in message.tags %}
+                            {% if 'success' in message.tags or 'info' in message.tags %}
                                 <i class="fa-solid fa-circle-check"></i>
                             {% elif 'error' in message.tags %}
                                 <i class="fa-solid fa-circle-xmark"></i>
@@ -620,13 +658,25 @@
                                 <i class="fa-solid fa-triangle-exclamation"></i>
                             {% endif %}
                         </div>
-                        <h2 id="tituloFeedbackPago{{ forloop.counter }}" class="mb-3">
-                            {% if 'success' in message.tags %}
-                                Pago registrado
-                            {% elif 'error' in message.tags %}
-                                No se registró el pago
+                        <h2 id="tituloFeedback{{ forloop.counter }}" class="mb-3">
+                            {% if 'clase-feedback' in message.tags %}
+                                {% if 'success' in message.tags %}
+                                    Clase confirmada
+                                {% elif 'info' in message.tags %}
+                                    Clase ya confirmada
+                                {% elif 'error' in message.tags %}
+                                    No se confirmó la clase
+                                {% else %}
+                                    Revisa la confirmación
+                                {% endif %}
                             {% else %}
-                                Pago recibido con observación
+                                {% if 'success' in message.tags %}
+                                    Pago registrado
+                                {% elif 'error' in message.tags %}
+                                    No se registró el pago
+                                {% else %}
+                                    Pago recibido con observación
+                                {% endif %}
                             {% endif %}
                         </h2>
                         <p class="mb-4">{{ message }}</p>
@@ -770,6 +820,15 @@
         normalizarTextosMayuscula();
         normalizarCamposNumericos();
         prepararFechasDelFormulario();
+        const alertaClase = document.querySelector('[data-clase-feedback][data-voz]');
+        const textoVoz = alertaClase?.dataset.voz?.trim();
+        if (textoVoz && 'speechSynthesis' in window) {
+            const voz = new SpeechSynthesisUtterance(textoVoz);
+            voz.lang = 'es-CO';
+            voz.rate = 0.92;
+            window.speechSynthesis.cancel();
+            window.speechSynthesis.speak(voz);
+        }
         new MutationObserver(function (cambios) {
             cambios.forEach(function (cambio) {
                 cambio.addedNodes.forEach(function (nodo) {

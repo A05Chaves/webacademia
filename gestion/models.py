@@ -1,5 +1,6 @@
 from django.db import models
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator
 from django.conf import settings
 from django.utils import timezone
 import uuid
@@ -119,6 +120,35 @@ class HoraHorario(models.Model):
 
     def __str__(self):
         return self.hora.strftime('%H:%M')
+
+
+class ConfiguracionClases(models.Model):
+    minutos_antes_confirmacion = models.PositiveSmallIntegerField(
+        default=30,
+        validators=[MaxValueValidator(180)],
+        verbose_name='Minutos antes de la clase',
+    )
+    minutos_despues_confirmacion = models.PositiveSmallIntegerField(
+        default=20,
+        validators=[MaxValueValidator(180)],
+        verbose_name='Minutos después de iniciar',
+    )
+    actualizado = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Configuración de clases'
+        verbose_name_plural = 'Configuración de clases'
+
+    @classmethod
+    def cargar(cls):
+        configuracion, _ = cls.objects.get_or_create(pk=1)
+        return configuracion
+
+    def __str__(self):
+        return (
+            f'Confirmación: {self.minutos_antes_confirmacion} min antes / '
+            f'{self.minutos_despues_confirmacion} min después'
+        )
 
 
 def estado_tv_inicial():

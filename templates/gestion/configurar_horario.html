@@ -31,6 +31,48 @@
 
 </div>
 
+<div class="card bg-dark text-light border-info mb-4">
+    <div class="card-body">
+        <div class="row align-items-center g-4">
+            <div class="col-lg-5">
+                <h5 class="mb-2">
+                    <i class="fa-solid fa-stopwatch me-1"></i>
+                    Ventana para confirmar asistencia
+                </h5>
+                <p class="text-secondary mb-0">
+                    Define cuánto tiempo antes y después del inicio pueden confirmar
+                    los estudiantes desde el home, horario o kiosco.
+                </p>
+            </div>
+            <div class="col-lg-7">
+                <form method="post" class="row g-3 align-items-end">
+                    {% csrf_token %}
+                    <div class="col-md-5">
+                        <label class="form-label" for="{{ form_configuracion.minutos_antes_confirmacion.id_for_label }}">
+                            Minutos antes
+                        </label>
+                        {{ form_configuracion.minutos_antes_confirmacion }}
+                        <div class="text-danger">{{ form_configuracion.minutos_antes_confirmacion.errors }}</div>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label" for="{{ form_configuracion.minutos_despues_confirmacion.id_for_label }}">
+                            Minutos después de iniciar
+                        </label>
+                        {{ form_configuracion.minutos_despues_confirmacion }}
+                        <div class="text-danger">{{ form_configuracion.minutos_despues_confirmacion.errors }}</div>
+                    </div>
+                    <div class="col-md-2 d-grid">
+                        <button type="submit" class="btn btn-info">
+                            <i class="fa-solid fa-floppy-disk"></i>
+                            Guardar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="card bg-dark text-light border-secondary">
 
     <div class="card-body">
@@ -110,6 +152,12 @@
 
                                 <i class="fa-solid fa-pen"></i>
 
+                            </a>
+
+                            <a href="{% url 'gestion:asistentes_clase' clase.id %}"
+                               class="btn btn-outline-info btn-sm"
+                               title="Ver asistencia por fecha">
+                                <i class="fa-solid fa-users-viewfinder"></i>
                             </a>
 
                             <form method="post"

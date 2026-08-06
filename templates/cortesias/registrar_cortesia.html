@@ -17,10 +17,17 @@
 <div class="card bg-dark text-light border-secondary">
     <div class="card-body">
 
-        <p>
-            <strong>Clase:</strong> {{ clase.get_disciplina_display }} |
-            <strong>Hora:</strong> {{ clase.hora_inicio }} - {{ clase.hora_fin }}
-        </p>
+        {% if clase %}
+            <p>
+                <strong>Clase:</strong> {{ clase.get_disciplina_display }} |
+                <strong>Hora:</strong> {{ clase.hora_inicio }} - {{ clase.hora_fin }}
+            </p>
+        {% else %}
+            <div class="alert alert-info">
+                Primero diligencia y firma el consentimiento. Después te mostraremos únicamente
+                las clases correspondientes a la edad informada para que elijas un cuadro de color.
+            </div>
+        {% endif %}
 
         <form method="post" onsubmit="guardarFirma()">
             {% csrf_token %}
@@ -71,7 +78,7 @@
                 </div>
 
                 <div class="col-md-6 mb-3">
-                    <label class="form-label">Tipo de participante</label>
+                    <label class="form-label">Grupo de clase</label>
                     {{ form.tipo_persona }}
                 </div>
                 <div class="col-md-6 mb-3">
@@ -176,6 +183,7 @@
 
 <script>
 const tipoPersona = document.getElementById("id_tipo_persona");
+const edadParticipante = document.getElementById("id_edad");
 const consentimientoAdulto = document.getElementById("consentimientoAdulto");
 const consentimientoMenor = document.getElementById("consentimientoMenor");
 const tituloFirma = document.getElementById("tituloFirma");
@@ -184,8 +192,12 @@ const etiquetaConsentimiento = document.getElementById("etiquetaConsentimiento")
 
 function cambiarConsentimiento() {
     const datosAcudiente = document.getElementById("datosAcudiente");
+    const edad = Number.parseInt(edadParticipante.value, 10);
+    const esMenorLegal = Number.isFinite(edad)
+        ? edad < 18
+        : tipoPersona.value === "MENOR";
 
-    if (tipoPersona.value === "MENOR") {
+    if (esMenorLegal) {
         consentimientoAdulto.style.display = "none";
         consentimientoMenor.style.display = "block";
         datosAcudiente.style.display = "block";
@@ -200,9 +212,14 @@ function cambiarConsentimiento() {
         ayudaFirma.innerText = "Firma dentro del recuadro para aceptar el consentimiento.";
         etiquetaConsentimiento.innerText = "Acepto el consentimiento informado";
     }
+
+    datosAcudiente.querySelectorAll("input").forEach((campo) => {
+        campo.required = esMenorLegal;
+    });
 }
 
 tipoPersona.addEventListener("change", cambiarConsentimiento);
+edadParticipante.addEventListener("input", cambiarConsentimiento);
 cambiarConsentimiento();
 
 const canvas = document.getElementById("firmaCanvas");

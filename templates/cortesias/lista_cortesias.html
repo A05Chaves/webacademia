@@ -6,7 +6,7 @@
 
     <h2 class="mb-0">
         <i class="fa-solid fa-user-plus"></i>
-        Posibles estudiantes
+        Clases de cortesía solicitadas
     </h2>
 
     <a href="{% url 'gestion:dashboard' %}"
@@ -16,9 +16,9 @@
 
 </div>
 
-<div class="row mb-4">
+<div class="row mb-4 g-3">
 
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="card bg-dark text-light border-secondary">
             <div class="card-body text-center">
                 <h2>{{ total_cortesias }}</h2>
@@ -27,7 +27,7 @@
         </div>
     </div>
 
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="card bg-dark text-light border-secondary">
             <div class="card-body text-center">
                 <h2>{{ total_contactados }}</h2>
@@ -36,7 +36,7 @@
         </div>
     </div>
 
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="card bg-dark text-light border-secondary">
             <div class="card-body text-center">
                 <h2>{{ total_convertidos }}</h2>
@@ -45,6 +45,78 @@
         </div>
     </div>
 
+    <div class="col-md-3">
+        <div class="card bg-dark text-light border-warning">
+            <div class="card-body text-center">
+                <h2>{{ total_agendadas }}</h2>
+                <small>Clases próximas agendadas</small>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div class="card bg-dark text-light border-info mb-4">
+    <div class="card-body">
+        <div class="d-flex flex-column flex-lg-row justify-content-between gap-2 mb-3">
+            <div>
+                <h3 class="h5 mb-1"><i class="fa-solid fa-envelope-open-text"></i> Seguimiento por correo</h3>
+                <p class="text-secondary mb-0">
+                    Se dirige únicamente a quienes tienen asistencia confirmada, correo registrado y todavía no se convirtieron en estudiantes.
+                </p>
+            </div>
+            <span class="badge bg-info text-dark align-self-lg-start fs-6">{{ total_elegibles_correo }} destinatario{{ total_elegibles_correo|pluralize }}</span>
+        </div>
+
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            {% if form_campana.non_field_errors %}<div class="alert alert-danger">{{ form_campana.non_field_errors }}</div>{% endif %}
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Primer correo después de</label>
+                    <div class="input-group">{{ form_campana.dias_espera }}<span class="input-group-text">días</span></div>
+                    <div class="text-danger">{{ form_campana.dias_espera.errors }}</div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Intervalo entre correos</label>
+                    <div class="input-group">{{ form_campana.intervalo_dias }}<span class="input-group-text">días</span></div>
+                    <div class="text-danger">{{ form_campana.intervalo_dias.errors }}</div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Máximo por persona</label>
+                    {{ form_campana.maximo_envios }}
+                    <div class="text-danger">{{ form_campana.maximo_envios.errors }}</div>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <div class="form-check mb-2">{{ form_campana.activo }} <label class="form-check-label" for="{{ form_campana.activo.id_for_label }}">Campaña activa</label></div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Asunto</label>{{ form_campana.asunto }}
+                    <div class="text-danger">{{ form_campana.asunto.errors }}</div>
+                </div>
+                <div class="col-lg-8">
+                    <label class="form-label">Mensaje</label>{{ form_campana.mensaje }}
+                    <div class="text-danger">{{ form_campana.mensaje.errors }}</div>
+                </div>
+                <div class="col-lg-4">
+                    <label class="form-label">Publicidad</label>{{ form_campana.publicidad }}
+                    <div class="form-text">Puedes cargar una imagen JPG, PNG o WEBP para incluirla en el correo.</div>
+                    <div class="text-danger">{{ form_campana.publicidad.errors }}</div>
+                    {% if form_campana.instance.publicidad %}
+                        <img src="{{ form_campana.instance.publicidad.url }}" alt="Publicidad configurada" class="img-fluid rounded mt-2" style="max-height:150px">
+                    {% endif %}
+                </div>
+            </div>
+            <div class="d-flex flex-wrap justify-content-end gap-2 mt-3">
+                <button class="btn btn-outline-info" type="submit" name="accion" value="guardar">
+                    <i class="fa-solid fa-floppy-disk"></i> Guardar configuración
+                </button>
+                <button class="btn btn-info" type="submit" name="accion" value="enviar">
+                    <i class="fa-solid fa-paper-plane"></i> Enviar ahora a {{ total_elegibles_correo }}
+                </button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <div class="card bg-dark text-light border-secondary">
@@ -63,6 +135,8 @@
                         <th>Correo</th>
                         <th>Edad</th>
                         <th>Clase</th>
+                        <th>Fecha agendada</th>
+                        <th>Asistió</th>
                         <th>Contactado</th>
                         <th>Convertido</th>
                     </tr>
@@ -85,22 +159,49 @@
                         <td>{{ c.edad }}</td>
 
                         <td>
-                            {{ c.clase.titulo|default:c.clase.get_disciplina_display }}
+                            {% if c.clase %}
+                                {{ c.clase.titulo|default:c.clase.get_disciplina_display }}<br>
+                                <small>{{ c.clase.get_dia_display }} · {{ c.clase.hora_inicio|time:"g:i a" }}</small>
+                            {% else %}
+                                <span class="badge bg-secondary">Pendiente de elegir clase</span>
+                            {% endif %}
+                        </td>
+
+                        <td>{{ c.fecha_clase|date:"j F Y"|default:"-" }}</td>
+
+                        <td>
+                            <form method="post" action="{% url 'cortesias:cambiar_asistencia' c.id %}">
+                                {% csrf_token %}
+                                <button class="btn btn-sm {% if c.asistio %}btn-success{% else %}btn-outline-secondary{% endif %}" type="submit">
+                                    {% if c.asistio %}<i class="fa-solid fa-check"></i> Sí{% else %}No{% endif %}
+                                </button>
+                            </form>
+                            {% if c.fecha_confirmacion_asistencia %}<small class="d-block text-secondary mt-1">{{ c.fecha_confirmacion_asistencia|date:"j M Y" }}</small>{% endif %}
                         </td>
 
                         <td>
-                            {% if c.contactado %}
-                                <span class="badge bg-success">Sí</span>
-                            {% else %}
-                                <span class="badge bg-warning text-dark">No</span>
+                            <form method="post" action="{% url 'cortesias:cambiar_contactado' c.id %}">
+                                {% csrf_token %}
+                                <button class="btn btn-sm {% if c.contactado %}btn-success{% else %}btn-outline-warning{% endif %}" type="submit">
+                                    {% if c.contactado %}<i class="fa-solid fa-phone"></i> Sí{% else %}No{% endif %}
+                                </button>
+                            </form>
+                            {% if c.fecha_contacto %}
+                                <small class="d-block text-secondary mt-1">
+                                    {{ c.fecha_contacto|date:"j M Y" }}{% if c.contactado_por %}<br>{{ c.contactado_por.get_full_name|default:c.contactado_por.username }}{% endif %}
+                                </small>
                             {% endif %}
                         </td>
 
                         <td>
                             {% if c.se_convirtio %}
                                 <span class="badge bg-success">Sí</span>
+                                <small class="d-block text-secondary mt-1">{{ c.fecha_conversion|date:"j F Y" }}</small>
                             {% else %}
                                 <span class="badge bg-secondary">No</span>
+                            {% endif %}
+                            {% if c.cantidad_correos_seguimiento %}
+                                <small class="d-block text-info mt-1">{{ c.cantidad_correos_seguimiento }} correo{{ c.cantidad_correos_seguimiento|pluralize }}</small>
                             {% endif %}
                         </td>
 
@@ -109,7 +210,7 @@
                     {% empty %}
 
                     <tr>
-                        <td colspan="8" class="text-center">
+                        <td colspan="10" class="text-center">
                             No hay registros de cortesía.
                         </td>
                     </tr>

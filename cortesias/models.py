@@ -1,4 +1,6 @@
 from django.db import models
+from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.utils import timezone
 
 
@@ -30,7 +32,15 @@ class ClaseCortesia(models.Model):
     clase = models.ForeignKey(
         'clases.ClaseProgramada',
         on_delete=models.CASCADE,
-        related_name='cortesias'
+        related_name='cortesias',
+        blank=True,
+        null=True,
+    )
+
+    fecha_clase = models.DateField(
+        blank=True,
+        null=True,
+        verbose_name='Fecha de la clase solicitada',
     )
 
     nombres = models.CharField(max_length=100)
@@ -72,7 +82,41 @@ class ClaseCortesia(models.Model):
 
     contactado = models.BooleanField(default=False)
 
+    contactado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='cortesias_contactadas',
+    )
+
+    asistio = models.BooleanField(default=False)
+
+    asistencia_confirmada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='cortesias_asistencia_confirmada',
+    )
+
+    fecha_confirmacion_asistencia = models.DateTimeField(blank=True, null=True)
+
     se_convirtio = models.BooleanField(default=False)
+
+    alumno_convertido = models.ForeignKey(
+        'alumnos.Alumno',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='cortesias_origen',
+    )
+
+    fecha_conversion = models.DateTimeField(blank=True, null=True)
+
+    cantidad_correos_seguimiento = models.PositiveSmallIntegerField(default=0)
+
+    fecha_ultimo_correo = models.DateTimeField(blank=True, null=True)
 
     observacion_seguimiento = models.TextField(
         blank=True,
@@ -88,3 +132,50 @@ class ClaseCortesia(models.Model):
 
     def __str__(self):
         return f"{self.nombres} {self.apellidos} - Cortesía"
+
+
+class ConfiguracionSeguimientoCortesia(models.Model):
+    asunto = models.CharField(
+        max_length=180,
+        default='Queremos verte nuevamente en Galeras BJJ',
+    )
+    mensaje = models.TextField(
+        default=(
+            'Gracias por acompañarnos en tu clase de cortesía. '
+            'Nos gustaría invitarte a continuar entrenando con nosotros.'
+        )
+    )
+    publicidad = models.ImageField(
+        upload_to='cortesias/publicidad/',
+        blank=True,
+        null=True,
+    )
+    dias_espera = models.PositiveSmallIntegerField(
+        default=3,
+        validators=[MaxValueValidator(365)],
+        verbose_name='Días después de la clase para el primer correo',
+    )
+    intervalo_dias = models.PositiveSmallIntegerField(
+        default=30,
+        validators=[MinValueValidator(1), MaxValueValidator(365)],
+        verbose_name='Intervalo mínimo entre correos',
+    )
+    maximo_envios = models.PositiveSmallIntegerField(
+        default=2,
+        validators=[MinValueValidator(1), MaxValueValidator(10)],
+        verbose_name='Máximo de correos por persona',
+    )
+    activo = models.BooleanField(default=True)
+    actualizado = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Seguimiento de cortesías por correo'
+        verbose_name_plural = 'Seguimiento de cortesías por correo'
+
+    @classmethod
+    def cargar(cls):
+        configuracion, _ = cls.objects.get_or_create(pk=1)
+        return configuracion
+
+    def __str__(self):
+        return 'Seguimiento de cortesías por correo'

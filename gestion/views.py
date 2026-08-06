@@ -31,6 +31,7 @@ from django.urls import reverse
 from django.contrib import messages
 
 from alumnos.models import Alumno
+from cortesias.models import ClaseCortesia
 from planes.models import Plan, Suscripcion
 from pagos.models import (
     AcademiaCompetidora, AplicacionPromocion, CategoriaEvento, Evento,
@@ -63,21 +64,23 @@ from .forms import (
 )
 
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from notificaciones.models import Notificacion
 from instructores.models import Instructor
 
 from datetime import datetime, time
 from clases.models import ClaseProgramada, AsistenciaClase
-from .forms import ClaseProgramadaForm
+from .forms import ClaseProgramadaForm, ConfiguracionClasesForm
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth import logout
 from django.db.models import Count, Q
 from django.db import IntegrityError, models, transaction
 
 from django.contrib.auth import authenticate
 from django.views.decorators.http import require_POST
 from django.templatetags.static import static
-from .models import DiaHorario, HoraHorario, SesionTV, estado_tv_inicial
+from .models import (
+    ConfiguracionClases, DiaHorario, HoraHorario, SesionTV, estado_tv_inicial,
+)
 from .forms import DiaHorarioForm, HoraHorarioForm
 
 from .forms import PagoAlumnoForm
@@ -104,6 +107,23 @@ def _detalle_errores_formulario(form):
         )
         detalles.extend(f'{etiqueta}: {error}' for error in errores)
     return ' '.join(detalles)
+
+
+def limites_confirmacion_clase(clase, ahora=None, configuracion=None):
+    ahora = ahora or timezone.localtime()
+    configuracion = configuracion or ConfiguracionClases.cargar()
+    inicio_clase = timezone.make_aware(
+        datetime.combine(ahora.date(), clase.hora_inicio),
+        timezone.get_current_timezone(),
+    )
+    return (
+        inicio_clase - timedelta(
+            minutes=configuracion.minutos_antes_confirmacion
+        ),
+        inicio_clase + timedelta(
+            minutes=configuracion.minutos_despues_confirmacion
+        ),
+    )
 
 
 def plan_permite_disciplina(plan, disciplina):
@@ -220,16 +240,13 @@ def home_publica(request):
         )
 
     clase_confirmable = None
+    configuracion_clases = ConfiguracionClases.cargar()
 
     for clase in clases_hoy:
 
-        inicio_clase = timezone.make_aware(
-            datetime.combine(hoy, clase.hora_inicio),
-            timezone.get_current_timezone()
+        ventana_inicio, ventana_fin = limites_confirmacion_clase(
+            clase, ahora, configuracion_clases
         )
-
-        ventana_inicio = inicio_clase - timedelta(minutes=20)
-        ventana_fin = inicio_clase + timedelta(minutes=30)
 
         if ventana_inicio <= ahora <= ventana_fin:
             clase_confirmable = clase
@@ -1206,6 +1223,23 @@ def horario_clases(request):
     if modo_cortesia not in tipos_cortesia:
         modo_cortesia = None
 
+    solicitud_cortesia = None
+    solicitud_id = request.GET.get('solicitud')
+    if solicitud_id:
+        try:
+            solicitud_id = int(solicitud_id)
+        except (TypeError, ValueError):
+            solicitud_id = None
+        if request.session.get('solicitud_cortesia_id') == solicitud_id:
+            solicitud_cortesia = ClaseCortesia.objects.filter(
+                id=solicitud_id,
+                clase__isnull=True,
+            ).first()
+        if not solicitud_cortesia:
+            messages.error(request, 'No encontramos una solicitud de cortesía pendiente para seleccionar clase.')
+            return redirect('gestion:home_publica')
+        modo_cortesia = solicitud_cortesia.tipo_persona
+
     if not request.user.is_authenticated and not modo_cortesia:
         return redirect('gestion:home_publica')
 
@@ -1287,32 +1321,39 @@ def horario_clases(request):
         'metodos_pago': metodos_pago,
         'pago_form': pago_form,
         'modo_cortesia': modo_cortesia,
+        'solicitud_cortesia': solicitud_cortesia,
     })
 
 
 @login_required
+@require_POST
 def confirmar_asistencia(request, clase_id):
     clase = get_object_or_404(ClaseProgramada, id=clase_id, activa=True)
 
     if not hasattr(request.user, 'perfil_alumno'):
         messages.error(
-            request, 'Solo los alumnos pueden confirmar asistencia.')
+            request, 'Solo los alumnos pueden confirmar asistencia.',
+            extra_tags='clase-feedback',
+        )
         return redirect('gestion:horario_clases')
 
     alumno = request.user.perfil_alumno
     ahora = timezone.localtime()
     hoy = ahora.date()
 
-    inicio_clase = datetime.combine(hoy, clase.hora_inicio)
-    inicio_clase = timezone.make_aware(inicio_clase)
-
-    ventana_inicio = inicio_clase - timedelta(minutes=20)
-    ventana_fin = inicio_clase + timedelta(minutes=10)
+    configuracion_clases = ConfiguracionClases.cargar()
+    ventana_inicio, ventana_fin = limites_confirmacion_clase(
+        clase, ahora, configuracion_clases
+    )
 
     if not (ventana_inicio <= ahora <= ventana_fin):
         messages.warning(
             request,
-            'La asistencia solo puede confirmarse desde 20 minutos antes hasta 10 minutos después de iniciar la clase.'
+            'La asistencia solo puede confirmarse desde '
+            f'{configuracion_clases.minutos_antes_confirmacion} minutos antes '
+            f'hasta {configuracion_clases.minutos_despues_confirmacion} minutos '
+            'después de iniciar la clase.',
+            extra_tags='clase-feedback',
         )
         return redirect('gestion:horario_clases')
 
@@ -1331,8 +1372,11 @@ def confirmar_asistencia(request, clase_id):
     ).exists()
 
     if not ya_confirmo and total_asistentes >= clase.cupo_maximo:
-        messages.error(request, 'No hay cupos disponibles para esta clase.')
-        logout(request)
+        messages.error(
+            request,
+            'No hay cupos disponibles para esta clase.',
+            extra_tags='clase-feedback',
+        )
         return redirect('gestion:horario_clases')
 
     asistencia, creada = AsistenciaClase.objects.get_or_create(
@@ -1347,12 +1391,17 @@ def confirmar_asistencia(request, clase_id):
 
     if not creada:
         messages.info(
-            request, 'Ya habías confirmado asistencia para esta clase.'
+            request,
+            'Ya habías confirmado asistencia para esta clase.',
+            extra_tags='clase-feedback',
         )
     else:
-        messages.success(request, 'Asistencia confirmada correctamente.')
+        messages.success(
+            request,
+            'Clase confirmada correctamente.',
+            extra_tags='clase-feedback',
+        )
 
-    logout(request)
     return redirect('gestion:horario_clases')
 
 
@@ -1425,30 +1474,35 @@ def confirmar_asistencia_kiosko(request):
 
     clase = get_object_or_404(ClaseProgramada, id=clase_id, activa=True)
 
-    user = authenticate(request, username=username, password=password)
+    user = request.user if (
+        request.user.is_authenticated and hasattr(request.user, 'perfil_alumno')
+    ) else authenticate(request, username=username, password=password)
 
     if user is None:
-        messages.error(request, 'Usuario o contraseña incorrectos.')
+        messages.error(request, 'Usuario o contraseña incorrectos.', extra_tags='clase-feedback')
         return redirect('gestion:horario_clases')
 
     if not hasattr(user, 'perfil_alumno'):
-        messages.error(request, 'Este usuario no está registrado como alumno.')
+        messages.error(request, 'Este usuario no está registrado como alumno.', extra_tags='clase-feedback')
         return redirect('gestion:horario_clases')
 
     alumno = user.perfil_alumno
     ahora = timezone.localtime()
     hoy = ahora.date()
 
-    inicio_clase = datetime.combine(hoy, clase.hora_inicio)
-    inicio_clase = timezone.make_aware(inicio_clase)
-
-    ventana_inicio = inicio_clase - timedelta(minutes=20)
-    ventana_fin = inicio_clase + timedelta(minutes=10)
+    configuracion_clases = ConfiguracionClases.cargar()
+    ventana_inicio, ventana_fin = limites_confirmacion_clase(
+        clase, ahora, configuracion_clases
+    )
 
     if not (ventana_inicio <= ahora <= ventana_fin):
         messages.warning(
             request,
-            'La asistencia solo puede confirmarse desde 20 minutos antes hasta 10 minutos después de iniciar la clase.'
+            'La asistencia solo puede confirmarse desde '
+            f'{configuracion_clases.minutos_antes_confirmacion} minutos antes '
+            f'hasta {configuracion_clases.minutos_despues_confirmacion} minutos '
+            'después de iniciar la clase.',
+            extra_tags='clase-feedback',
         )
         return redirect('gestion:horario_clases')
 
@@ -1466,7 +1520,11 @@ def confirmar_asistencia_kiosko(request):
     ).exists()
 
     if not ya_confirmo and total_asistentes >= clase.cupo_maximo:
-        messages.error(request, 'No hay cupos disponibles para esta clase.')
+        messages.error(
+            request,
+            'No hay cupos disponibles para esta clase.',
+            extra_tags='clase-feedback',
+        )
         return redirect('gestion:horario_clases')
 
     asistencia, creada = AsistenciaClase.objects.get_or_create(
@@ -1480,10 +1538,17 @@ def confirmar_asistencia_kiosko(request):
     )
 
     if creada:
-        messages.success(request, 'Asistencia confirmada correctamente.')
+        messages.success(
+            request,
+            'Clase confirmada correctamente.',
+            extra_tags='clase-feedback',
+        )
     else:
         messages.info(
-            request, 'Ya habías confirmado asistencia para esta clase.')
+            request,
+            'Ya habías confirmado asistencia para esta clase.',
+            extra_tags='clase-feedback',
+        )
 
     return redirect('gestion:horario_clases')
 
@@ -1493,20 +1558,30 @@ def confirmar_asistencia_kiosko(request):
 @staff_member_required
 def asistentes_clase(request, clase_id):
     clase = get_object_or_404(ClaseProgramada, id=clase_id)
-
-    hoy = timezone.now().date()
+    fecha_solicitada = request.GET.get('fecha', '')
+    fecha_clase = parse_date(fecha_solicitada) if fecha_solicitada else None
+    fecha_clase = fecha_clase or timezone.localdate()
 
     asistencias = AsistenciaClase.objects.filter(
         clase=clase,
-        fecha_clase=hoy,
-        estado='CONFIRMADA'
-    ).select_related('alumno__user')
+        fecha_clase=fecha_clase,
+        estado=AsistenciaClase.Estados.CONFIRMADA,
+    ).select_related('alumno__user').order_by(
+        'alumno__user__first_name', 'alumno__user__last_name'
+    )
+    sesiones = AsistenciaClase.objects.filter(
+        clase=clase,
+        estado=AsistenciaClase.Estados.CONFIRMADA,
+    ).values('fecha_clase').annotate(
+        total=Count('id')
+    ).order_by('-fecha_clase')
 
     return render(request, 'gestion/asistentes_clase.html', {
         'clase': clase,
         'asistencias': asistencias,
         'total_asistentes': asistencias.count(),
-        'hoy': hoy,
+        'fecha_clase': fecha_clase,
+        'sesiones': sesiones,
     })
 
 
@@ -2957,18 +3032,20 @@ def confirmar_clase_home(request):
         activa=True
     )
 
-    user = authenticate(
+    user = request.user if (
+        request.user.is_authenticated and hasattr(request.user, 'perfil_alumno')
+    ) else authenticate(
         request,
         username=username,
-        password=password
+        password=password,
     )
 
     if user is None:
-        messages.error(request, 'Usuario o contraseña incorrectos.')
+        messages.error(request, 'Usuario o contraseña incorrectos.', extra_tags='clase-feedback')
         return redirect('gestion:home_publica')
 
     if not hasattr(user, 'perfil_alumno'):
-        messages.error(request, 'Este usuario no está registrado como alumno.')
+        messages.error(request, 'Este usuario no está registrado como alumno.', extra_tags='clase-feedback')
         return redirect('gestion:home_publica')
 
     alumno = user.perfil_alumno
@@ -2984,12 +3061,10 @@ def confirmar_clase_home(request):
         5: ClaseProgramada.DiasSemana.SABADO,
         6: ClaseProgramada.DiasSemana.DOMINGO,
     }
-    inicio_clase = timezone.make_aware(
-        datetime.combine(hoy, clase.hora_inicio),
-        timezone.get_current_timezone(),
+    configuracion_clases = ConfiguracionClases.cargar()
+    ventana_inicio, ventana_fin = limites_confirmacion_clase(
+        clase, ahora, configuracion_clases
     )
-    ventana_inicio = inicio_clase - timedelta(minutes=20)
-    ventana_fin = inicio_clase + timedelta(minutes=30)
 
     if clase.dia != dias_semana[ahora.weekday()] or not (
         ventana_inicio <= ahora <= ventana_fin
@@ -2997,6 +3072,7 @@ def confirmar_clase_home(request):
         messages.error(
             request,
             'Esta clase ya no está disponible para confirmar. Actualiza la página y selecciona la clase vigente.',
+            extra_tags='clase-feedback',
         )
         return redirect('gestion:home_publica')
 
@@ -3008,28 +3084,24 @@ def confirmar_clase_home(request):
     if not suscripcion:
         messages.error(
             request,
-            'No tienes una suscripción activa para confirmar clases.'
+            'No tienes una suscripción activa para confirmar clases.',
+            extra_tags='clase-feedback',
         )
         return redirect('gestion:home_publica')
 
     if suscripcion.fecha_inicio > hoy:
         messages.error(
             request,
-            f'Tu suscripción inicia el {suscripcion.fecha_inicio}. Aún no puedes confirmar clases.'
+            f'Tu suscripción inicia el {suscripcion.fecha_inicio}. Aún no puedes confirmar clases.',
+            extra_tags='clase-feedback',
         )
         return redirect('gestion:home_publica')
 
     if suscripcion.fecha_vencimiento < hoy:
         messages.error(
             request,
-            f'Tu suscripción venció el {suscripcion.fecha_vencimiento}. Debes renovar.'
-        )
-        return redirect('gestion:home_publica')
-
-    if not suscripcion:
-        messages.error(
-            request,
-            'No tienes una suscripción activa para confirmar clases.'
+            f'Tu suscripción venció el {suscripcion.fecha_vencimiento}. Debes renovar.',
+            extra_tags='clase-feedback',
         )
         return redirect('gestion:home_publica')
 
@@ -3038,7 +3110,8 @@ def confirmar_clase_home(request):
     if not plan_permite_disciplina(plan, clase.disciplina):
         messages.error(
             request,
-            'La disciplina de esta clase no está incluida en tu plan.'
+            'La disciplina de esta clase no está incluida en tu plan.',
+            extra_tags='clase-feedback',
         )
         return redirect('gestion:home_publica')
 
@@ -3063,7 +3136,8 @@ def confirmar_clase_home(request):
     ):
         messages.error(
             request,
-            f'Ya consumiste tus {plan.clases_mes} clases disponibles de este plan.'
+            f'Ya consumiste tus {plan.clases_mes} clases disponibles de este plan.',
+            extra_tags='clase-feedback',
         )
         return redirect('gestion:home_publica')
 
@@ -3074,7 +3148,7 @@ def confirmar_clase_home(request):
     ).count()
 
     if not ya_confirmo and total_asistentes >= clase.cupo_maximo:
-        messages.error(request, 'No hay cupos disponibles para esta clase.')
+        messages.error(request, 'No hay cupos disponibles para esta clase.', extra_tags='clase-feedback')
         return redirect('gestion:home_publica')
 
     asistencia, creada = AsistenciaClase.objects.get_or_create(
@@ -3089,15 +3163,24 @@ def confirmar_clase_home(request):
 
     if creada:
         if plan.asistencia_ilimitada:
-            messages.success(request, 'Clase confirmada correctamente.')
+            messages.success(
+                request,
+                'Clase confirmada correctamente.',
+                extra_tags='clase-feedback',
+            )
         else:
             restantes = plan.clases_mes - (clases_consumidas + 1)
             messages.success(
                 request,
-                f'Clase confirmada correctamente. Te quedan {restantes} clases disponibles.'
+                f'Clase confirmada correctamente. Te quedan {restantes} clases disponibles.',
+                extra_tags='clase-feedback',
             )
     else:
-        messages.info(request, 'Ya habías confirmado esta clase.')
+        messages.info(
+            request,
+            'Ya habías confirmado esta clase.',
+            extra_tags='clase-feedback',
+        )
 
     return redirect('gestion:home_publica')
 
@@ -3143,6 +3226,18 @@ def configurar_cuentas(request, cuenta_id=None):
 
 @staff_member_required
 def configurar_horario(request):
+    configuracion_clases = ConfiguracionClases.cargar()
+    form_configuracion = ConfiguracionClasesForm(
+        request.POST or None,
+        instance=configuracion_clases,
+    )
+    if request.method == 'POST' and form_configuracion.is_valid():
+        form_configuracion.save()
+        messages.success(
+            request,
+            'Ventana de confirmación de asistencia actualizada correctamente.',
+        )
+        return redirect('gestion:configurar_horario')
 
     clases = ClaseProgramada.objects.select_related(
         'instructor'
@@ -3155,7 +3250,8 @@ def configurar_horario(request):
         request,
         'gestion/configurar_horario.html',
         {
-            'clases': clases
+            'clases': clases,
+            'form_configuracion': form_configuracion,
         }
     )
 

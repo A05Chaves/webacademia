@@ -288,12 +288,12 @@
                     Esta selección permite mostrar únicamente los horarios apropiados.
                 </p>
                 <div class="d-grid gap-3">
-                    <a href="{% url 'gestion:horario_clases' %}?cortesia=ADULTO"
+                    <a href="{% url 'cortesias:iniciar_cortesia' %}?tipo=ADULTO"
                        class="btn btn-outline-light py-3">
                         <i class="fa-solid fa-person me-2"></i>
                         Clase para adulto
                     </a>
-                    <a href="{% url 'gestion:horario_clases' %}?cortesia=MENOR"
+                    <a href="{% url 'cortesias:iniciar_cortesia' %}?tipo=MENOR"
                        class="btn btn-outline-warning py-3">
                         <i class="fa-solid fa-child-reaching me-2"></i>
                         Clase para menor de edad
@@ -353,6 +353,12 @@
                                name="clase_id"
                                value="{{ clase_confirmable.id }}">
 
+                        {% if user.is_authenticated and user.perfil_alumno %}
+                            <div class="alert alert-info mb-0">
+                                <i class="fa-solid fa-bolt"></i>
+                                Confirmarás clase como <strong>{{ user.get_full_name|default:user.username }}</strong>
+                            </div>
+                        {% else %}
                         <div class="mb-3">
 
                             <label class="form-label">
@@ -362,6 +368,7 @@
                             <input type="text"
                                    name="username"
                                    class="form-control"
+                                   autocomplete="username"
                                    required>
 
                         </div>
@@ -375,9 +382,14 @@
                             <input type="password"
                                    name="password"
                                    class="form-control"
+                                   autocomplete="current-password"
                                    required>
 
                         </div>
+                        <p class="text-secondary small mb-0">
+                            En tu celular personal, inicia sesión para confirmar posteriormente con un solo toque.
+                        </p>
+                        {% endif %}
 
                     {% else %}
 

@@ -142,6 +142,32 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
         self.assertEqual(pago.suscripcion.fecha_vencimiento.isoformat(), '2026-07-30')
         self.assertTrue(pago.numero_comprobante.startswith('CP-'))
 
+    def test_renovacion_con_dias_activos_inicia_despues_del_vencimiento(self):
+        hoy = timezone.localdate()
+        vigente = Suscripcion.objects.create(
+            alumno=self.alumno,
+            plan=self.plan,
+            fecha_inicio=hoy - timedelta(days=10),
+            fecha_vencimiento=hoy + timedelta(days=12),
+            estado=Suscripcion.Estados.ACTIVA,
+        )
+        pago = self.nuevo_pago(nombre='renovacion.pdf')
+        self.client.force_login(self.admin)
+
+        response = self.client.post(
+            reverse('gestion:validar_pago', args=[pago.id]),
+            {'estado': Pago.Estados.APROBADO},
+        )
+
+        self.assertRedirects(response, reverse('gestion:lista_pagos'))
+        pago.refresh_from_db()
+        vigente.refresh_from_db()
+        self.assertEqual(
+            pago.suscripcion.fecha_inicio,
+            vigente.fecha_vencimiento + timedelta(days=1),
+        )
+        self.assertEqual(vigente.estado, Suscripcion.Estados.ACTIVA)
+
     def test_cuenta_inactiva_no_aparece_en_formularios_de_pago(self):
         self.cuenta.activa = False
         self.cuenta.save(update_fields=['activa'])

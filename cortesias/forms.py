@@ -1,6 +1,6 @@
 from django import forms
 from config.file_validation import validate_base64_signature
-from .models import ClaseCortesia
+from .models import ClaseCortesia, ConfiguracionSeguimientoCortesia
 
 
 class ClaseCortesiaForm(forms.ModelForm):
@@ -27,7 +27,16 @@ class ClaseCortesiaForm(forms.ModelForm):
             self.fields['tipo_persona'].initial = tipo_persona
             self.fields['tipo_persona'].disabled = True
 
-        if tipo_persona == ClaseCortesia.TiposPersona.MENOR:
+        edad_informada = None
+        if self.is_bound:
+            try:
+                edad_informada = int(self.data.get(self.add_prefix('edad'), ''))
+            except (TypeError, ValueError):
+                pass
+
+        if tipo_persona == ClaseCortesia.TiposPersona.MENOR or (
+            edad_informada is not None and edad_informada < 18
+        ):
             for field_name in (
                 'nombre_acudiente',
                 'documento_acudiente',
@@ -42,15 +51,23 @@ class ClaseCortesiaForm(forms.ModelForm):
         edad = cleaned_data.get('edad')
 
         if edad is not None:
-            if tipo_persona == ClaseCortesia.TiposPersona.ADULTO and edad < 18:
+            tipo_por_edad = (
+                ClaseCortesia.TiposPersona.ADULTO
+                if edad >= 15
+                else ClaseCortesia.TiposPersona.MENOR
+            )
+            if self.publico_objetivo is None:
+                tipo_persona = tipo_por_edad
+                cleaned_data['tipo_persona'] = tipo_por_edad
+            elif tipo_persona == ClaseCortesia.TiposPersona.ADULTO and edad < 15:
                 self.add_error(
                     'edad',
-                    'Para una cortesía de adulto, la edad debe ser de 18 años o más.'
+                    'Las clases de adultos están disponibles desde los 15 años.'
                 )
-            elif tipo_persona == ClaseCortesia.TiposPersona.MENOR and edad >= 18:
+            elif tipo_persona == ClaseCortesia.TiposPersona.MENOR and edad >= 15:
                 self.add_error(
                     'edad',
-                    'Para una cortesía de menor, la edad debe ser inferior a 18 años.'
+                    'Las clases para niños están disponibles hasta los 14 años.'
                 )
 
         if (
@@ -63,7 +80,7 @@ class ClaseCortesiaForm(forms.ModelForm):
                 'La clase seleccionada no corresponde a este tipo de participante.'
             )
 
-        if tipo_persona == ClaseCortesia.TiposPersona.MENOR:
+        if edad is not None and edad < 18:
             guardian_fields = {
                 'nombre_acudiente': 'Ingresa el nombre del acudiente.',
                 'documento_acudiente': 'Ingresa el documento del acudiente.',
@@ -136,4 +153,22 @@ class ClaseCortesiaForm(forms.ModelForm):
             'documento_acudiente': forms.TextInput(attrs={'class': 'form-control'}),
             'telefono_acudiente': forms.TextInput(attrs={'class': 'form-control'}),
             'parentesco_acudiente': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+
+
+class ConfiguracionSeguimientoCortesiaForm(forms.ModelForm):
+    class Meta:
+        model = ConfiguracionSeguimientoCortesia
+        fields = [
+            'activo', 'dias_espera', 'intervalo_dias', 'maximo_envios',
+            'asunto', 'mensaje', 'publicidad',
+        ]
+        widgets = {
+            'activo': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'dias_espera': forms.NumberInput(attrs={'class': 'form-control', 'min': 0, 'max': 365}),
+            'intervalo_dias': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 365}),
+            'maximo_envios': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 10}),
+            'asunto': forms.TextInput(attrs={'class': 'form-control'}),
+            'mensaje': forms.Textarea(attrs={'class': 'form-control', 'rows': 5}),
+            'publicidad': forms.ClearableFileInput(attrs={'class': 'form-control', 'accept': 'image/*'}),
         }

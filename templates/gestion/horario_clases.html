@@ -235,17 +235,26 @@
 </div>
 
 {% if modo_cortesia %}
-    <div class="alert alert-info d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+    <div class="alert alert-info border-info shadow d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
         <div>
-            <strong>Selecciona la clase de cortesía que quieres tomar.</strong>
+            <strong>
+                {% if solicitud_cortesia %}Consentimiento registrado. {% endif %}
+                Haz clic en uno de los cuadros de color para elegir la clase de cortesía.
+            </strong>
             Solo estás viendo clases para
-            {% if modo_cortesia == 'MENOR' %}menores de edad{% else %}adultos{% endif %}.
-            Al elegir una clase abrirás directamente el consentimiento; no necesitas iniciar sesión.
+            {% if modo_cortesia == 'MENOR' %}niños de hasta 14 años{% else %}participantes desde los 15 años{% endif %}.
+            Los espacios sin un cuadro de color no corresponden a una clase.
         </div>
         <a href="{% url 'gestion:home_publica' %}" class="btn btn-outline-dark btn-sm text-nowrap">
             Cambiar participante
         </a>
     </div>
+{% endif %}
+
+{% if solicitud_cortesia %}
+    <form id="formSeleccionCortesia" method="post" class="d-none">
+        {% csrf_token %}
+    </form>
 {% endif %}
 
 <div class="horario-wrapper">
@@ -281,8 +290,13 @@
                                 <button type="button"
                                         class="clase-card {{ item.clase.disciplina }}"
                                         {% if modo_cortesia %}
-                                            data-cortesia-url="{% url 'cortesias:registrar_cortesia' item.clase.id %}?tipo={{ modo_cortesia }}"
-                                            onclick="window.location.href=this.dataset.cortesiaUrl"
+                                            {% if solicitud_cortesia %}
+                                                data-cortesia-url="{% url 'cortesias:seleccionar_clase_cortesia' solicitud_cortesia.id item.clase.id %}"
+                                                onclick="seleccionarClaseCortesia(this.dataset.cortesiaUrl)"
+                                            {% else %}
+                                                data-cortesia-url="{% url 'cortesias:registrar_cortesia' item.clase.id %}?tipo={{ modo_cortesia }}"
+                                                onclick="window.location.href=this.dataset.cortesiaUrl"
+                                            {% endif %}
                                         {% else %}
                                             onclick="abrirModal('{{ item.clase.id }}', '{{ item.clase.get_disciplina_display }}')"
                                         {% endif %}>
@@ -325,11 +339,6 @@
                                 </button>
 
                             {% else %}
-
-                                <div class="libre">
-                                    Disponible
-                                </div>
-
                             {% endif %}
 
                         </td>
@@ -364,21 +373,25 @@
 
             <input type="hidden" name="clase_id" id="claseId">
 
-            <div class="mb-3">
-                <label class="form-label">Usuario</label>
-                <input type="text"
-                       name="username"
-                       required
-                       class="form-control">
-            </div>
+            {% if user.is_authenticated and user.perfil_alumno %}
+                <div class="alert alert-success">
+                    <i class="fa-solid fa-user-check"></i>
+                    Confirmarás clase como <strong>{{ user.get_full_name|default:user.username }}</strong>
+                </div>
+            {% else %}
+                <div class="mb-3">
+                    <label class="form-label">Usuario</label>
+                    <input type="text" name="username" required class="form-control" autocomplete="username">
+                </div>
 
-            <div class="mb-4">
-                <label class="form-label">Contraseña</label>
-                <input type="password"
-                       name="password"
-                       required
-                       class="form-control">
-            </div>
+                <div class="mb-4">
+                    <label class="form-label">Contraseña</label>
+                    <input type="password" name="password" required class="form-control" autocomplete="current-password">
+                </div>
+                <p class="text-secondary small">
+                    En un celular personal puedes iniciar sesión una vez y las próximas confirmaciones serán de un solo toque.
+                </p>
+            {% endif %}
 
             <div class="d-flex justify-content-end gap-2">
 
@@ -420,6 +433,13 @@
 
     function cerrarModal() {
         document.getElementById('modalAsistencia').style.display = 'none';
+    }
+
+    function seleccionarClaseCortesia(url) {
+        const form = document.getElementById('formSeleccionCortesia');
+        if (!form) return;
+        form.action = url;
+        form.submit();
     }
 
     function abrirModalPago() {
