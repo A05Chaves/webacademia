@@ -51,6 +51,75 @@ class TiendaTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn('/login/', response.url)
 
+    def test_transferencia_mueve_saldo_sin_inflar_resultados_de_tienda(self):
+        destino = CuentaTienda.objects.create(
+            nombre='Banco tienda',
+            tipo=CuentaTienda.Tipos.BANCO,
+            saldo_inicial=50000,
+            moneda='COP',
+        )
+        response = self.client.post(reverse('tienda:registrar_transferencia'), {
+            'cuenta_origen': self.cuenta.id,
+            'cuenta_destino': destino.id,
+            'valor': '75000',
+            'concepto': 'Consignación diaria',
+            'fecha': timezone.localtime().strftime('%Y-%m-%dT%H:%M'),
+            'observaciones': 'Traslado interno',
+        })
+
+        self.assertRedirects(response, reverse('tienda:panel'))
+        movimientos = list(MovimientoTienda.objects.order_by('tipo'))
+        self.assertEqual(len(movimientos), 2)
+        self.assertTrue(all(
+            movimiento.origen == MovimientoTienda.Origenes.TRANSFERENCIA
+            for movimiento in movimientos
+        ))
+        self.assertEqual(movimientos[0].transferencia_id, movimientos[1].transferencia_id)
+        self.assertEqual(self.cuenta.saldo_actual, Decimal('125000'))
+        self.assertEqual(destino.saldo_actual, Decimal('125000'))
+
+        panel = self.client.get(reverse('tienda:panel'))
+        resumen_cop = next(r for r in panel.context['resumenes'] if r['codigo'] == 'COP')
+        self.assertEqual(resumen_cop['entradas'], Decimal('0'))
+        self.assertEqual(resumen_cop['salidas'], Decimal('0'))
+
+    def test_transferencia_rechaza_cuentas_de_monedas_diferentes(self):
+        destino_usd = CuentaTienda.objects.create(
+            nombre='Banco dólares',
+            tipo=CuentaTienda.Tipos.BANCO,
+            saldo_inicial=100,
+            moneda='USD',
+        )
+        response = self.client.post(reverse('tienda:registrar_transferencia'), {
+            'cuenta_origen': self.cuenta.id,
+            'cuenta_destino': destino_usd.id,
+            'valor': '50',
+            'concepto': 'Cambio no permitido',
+            'fecha': timezone.localtime().strftime('%Y-%m-%dT%H:%M'),
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'misma moneda')
+        self.assertFalse(MovimientoTienda.objects.exists())
+
+    def test_transferencia_rechaza_valor_superior_al_saldo(self):
+        destino = CuentaTienda.objects.create(
+            nombre='Billetera tienda',
+            tipo=CuentaTienda.Tipos.BILLETERA,
+            moneda='COP',
+        )
+        response = self.client.post(reverse('tienda:registrar_transferencia'), {
+            'cuenta_origen': self.cuenta.id,
+            'cuenta_destino': destino.id,
+            'valor': '250000',
+            'concepto': 'Valor excesivo',
+            'fecha': timezone.localtime().strftime('%Y-%m-%dT%H:%M'),
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'solo tiene')
+        self.assertFalse(MovimientoTienda.objects.exists())
+
     def test_crear_producto_registra_inventario_inicial(self):
         response = self.client.post(reverse('tienda:crear_producto'), {
             'nombre': 'Guantes de entrenamiento',

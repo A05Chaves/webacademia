@@ -433,6 +433,72 @@ class GastoTiendaForm(forms.Form):
         self.fields['cuenta'].queryset = CuentaTienda.objects.filter(activa=True)
 
 
+class TransferenciaTiendaForm(forms.Form):
+    cuenta_origen = forms.ModelChoiceField(
+        label='Cuenta de origen',
+        queryset=CuentaTienda.objects.none(),
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    cuenta_destino = forms.ModelChoiceField(
+        label='Cuenta de destino',
+        queryset=CuentaTienda.objects.none(),
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    valor = forms.DecimalField(
+        min_value=Decimal('0.01'),
+        max_digits=14,
+        decimal_places=2,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control', 'min': '0.01', 'step': '0.01',
+        }),
+    )
+    concepto = forms.CharField(
+        max_length=160,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Ej. Traslado de efectivo a cuenta bancaria',
+        }),
+    )
+    fecha = forms.DateTimeField(
+        initial=timezone.now,
+        widget=forms.DateTimeInput(
+            attrs={'class': 'form-control', 'type': 'datetime-local'},
+            format='%Y-%m-%dT%H:%M',
+        ),
+        input_formats=['%Y-%m-%dT%H:%M'],
+    )
+    observaciones = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        cuentas_activas = CuentaTienda.objects.filter(activa=True)
+        self.fields['cuenta_origen'].queryset = cuentas_activas
+        self.fields['cuenta_destino'].queryset = cuentas_activas
+
+    def clean(self):
+        cleaned = super().clean()
+        origen = cleaned.get('cuenta_origen')
+        destino = cleaned.get('cuenta_destino')
+        valor = cleaned.get('valor')
+        if origen and destino:
+            if origen == destino:
+                self.add_error('cuenta_destino', 'La cuenta de destino debe ser diferente.')
+            elif origen.moneda != destino.moneda:
+                self.add_error(
+                    'cuenta_destino',
+                    'Las transferencias solo se permiten entre cuentas de la misma moneda.',
+                )
+        if origen and valor and valor > origen.saldo_actual:
+            self.add_error(
+                'valor',
+                f'La cuenta de origen solo tiene {number_format(origen.saldo_actual, decimal_pos=2, force_grouping=True)} {origen.moneda}.',
+            )
+        return cleaned
+
+
 class AbonoVentaForm(forms.Form):
     cuota = forms.ModelChoiceField(
         queryset=CuotaVentaTienda.objects.none(),

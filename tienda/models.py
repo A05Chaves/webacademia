@@ -414,11 +414,12 @@ class MovimientoTienda(models.Model):
         ABONO = 'ABONO', 'Abono de venta a crédito'
         COMPRA = 'COMPRA', 'Compra de producto'
         GASTO = 'GASTO', 'Gasto general'
+        TRANSFERENCIA = 'TRANSFERENCIA', 'Transferencia entre cuentas'
 
     cuenta = models.ForeignKey(
         CuentaTienda, on_delete=models.PROTECT, related_name='movimientos')
     tipo = models.CharField(max_length=10, choices=Tipos.choices)
-    origen = models.CharField(max_length=10, choices=Origenes.choices)
+    origen = models.CharField(max_length=20, choices=Origenes.choices)
     concepto = models.CharField(max_length=200)
     valor = models.DecimalField(
         max_digits=14, decimal_places=2, validators=[MinValueValidator(0.01)]
@@ -441,6 +442,12 @@ class MovimientoTienda(models.Model):
     registrado_por = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='movimientos_tienda_registrados',
+    )
+    transferencia_id = models.UUIDField(
+        blank=True,
+        null=True,
+        db_index=True,
+        help_text='Identificador compartido por la salida y la entrada de una transferencia.',
     )
 
     class Meta:

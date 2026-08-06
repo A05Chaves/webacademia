@@ -1,4 +1,5 @@
 import calendar
+import uuid
 from datetime import date, datetime, time
 from decimal import Decimal
 from io import BytesIO
@@ -29,6 +30,7 @@ from .forms import (
     GastoTiendaForm,
     ProductoTiendaForm,
     SubcategoriaProductoForm,
+    TransferenciaTiendaForm,
     VentaTiendaForm,
 )
 from .models import (
@@ -143,10 +145,13 @@ def _resumen_moneda(moneda, desde, hasta):
     movimientos = MovimientoTienda.objects.filter(
         moneda=moneda, fecha__date__range=(desde, hasta)
     )
-    entradas = movimientos.filter(tipo=MovimientoTienda.Tipos.INGRESO).aggregate(
+    movimientos_operativos = movimientos.exclude(
+        origen=MovimientoTienda.Origenes.TRANSFERENCIA,
+    )
+    entradas = movimientos_operativos.filter(tipo=MovimientoTienda.Tipos.INGRESO).aggregate(
         total=Sum('valor')
     )['total'] or Decimal('0')
-    salidas = movimientos.filter(tipo=MovimientoTienda.Tipos.EGRESO).aggregate(
+    salidas = movimientos_operativos.filter(tipo=MovimientoTienda.Tipos.EGRESO).aggregate(
         total=Sum('valor')
     )['total'] or Decimal('0')
     ventas = VentaTienda.objects.filter(
@@ -213,11 +218,15 @@ def panel(request):
             total = MovimientoTienda.objects.filter(
                 moneda=moneda, tipo=MovimientoTienda.Tipos.INGRESO,
                 fecha__year=anio, fecha__month=mes,
+            ).exclude(
+                origen=MovimientoTienda.Origenes.TRANSFERENCIA,
             ).aggregate(total=Sum('valor'))['total'] or 0
             series[moneda].append(float(total))
         egreso_cop = MovimientoTienda.objects.filter(
             moneda=Monedas.COP, tipo=MovimientoTienda.Tipos.EGRESO,
             fecha__year=anio, fecha__month=mes,
+        ).exclude(
+            origen=MovimientoTienda.Origenes.TRANSFERENCIA,
         ).aggregate(total=Sum('valor'))['total'] or 0
         egresos_cop.append(float(egreso_cop))
 
@@ -242,6 +251,8 @@ def panel(request):
         'saldo_total': cop['saldo'], 'ventas_mes': cop['ventas'],
         'egresos_mes': cop['salidas'], 'egresos_acumulados': MovimientoTienda.objects.filter(
             moneda=Monedas.COP, tipo=MovimientoTienda.Tipos.EGRESO
+        ).exclude(
+            origen=MovimientoTienda.Origenes.TRANSFERENCIA,
         ).aggregate(total=Sum('valor'))['total'] or 0,
         'utilidad_mes': cop['ventas'] - cop['salidas'],
         'valor_inventario': cop['inventario'],
@@ -494,6 +505,70 @@ def registrar_gasto(request):
         messages.success(request, 'Gasto de tienda registrado.')
         return redirect('tienda:panel')
     return _render_formulario(request, form, 'Registrar gasto', 'fa-arrow-trend-down', 'Registrar gasto', 'btn-danger')
+
+
+@staff_member_required
+def registrar_transferencia(request):
+    form = TransferenciaTiendaForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        with transaction.atomic():
+            cuentas = CuentaTienda.objects.select_for_update().in_bulk([
+                form.cleaned_data['cuenta_origen'].id,
+                form.cleaned_data['cuenta_destino'].id,
+            ])
+            origen = cuentas[form.cleaned_data['cuenta_origen'].id]
+            destino = cuentas[form.cleaned_data['cuenta_destino'].id]
+            valor = form.cleaned_data['valor']
+
+            if not origen.activa or not destino.activa:
+                form.add_error(None, 'Las dos cuentas deben estar activas.')
+            elif origen.moneda != destino.moneda:
+                form.add_error(
+                    'cuenta_destino',
+                    'Las transferencias solo se permiten entre cuentas de la misma moneda.',
+                )
+            elif valor > origen.saldo_actual:
+                form.add_error(
+                    'valor',
+                    f'El saldo disponible es {_valor_tienda(origen.saldo_actual)} {origen.moneda}.',
+                )
+            else:
+                transferencia_id = uuid.uuid4()
+                datos_comunes = {
+                    'origen': MovimientoTienda.Origenes.TRANSFERENCIA,
+                    'valor': valor,
+                    'moneda': origen.moneda,
+                    'fecha': form.cleaned_data['fecha'],
+                    'observaciones': form.cleaned_data['observaciones'],
+                    'registrado_por': request.user,
+                    'transferencia_id': transferencia_id,
+                }
+                concepto = form.cleaned_data['concepto']
+                MovimientoTienda.objects.create(
+                    cuenta=origen,
+                    tipo=MovimientoTienda.Tipos.EGRESO,
+                    concepto=f'Transferencia a {destino.nombre} - {concepto}',
+                    **datos_comunes,
+                )
+                MovimientoTienda.objects.create(
+                    cuenta=destino,
+                    tipo=MovimientoTienda.Tipos.INGRESO,
+                    concepto=f'Transferencia desde {origen.nombre} - {concepto}',
+                    **datos_comunes,
+                )
+                messages.success(
+                    request,
+                    f'Transferencia de {_valor_tienda(valor)} {origen.moneda} registrada correctamente.',
+                )
+                return redirect('tienda:panel')
+    return _render_formulario(
+        request,
+        form,
+        'Transferencia entre cuentas de tienda',
+        'fa-right-left',
+        'Registrar transferencia',
+        'btn-primary',
+    )
 
 
 @staff_member_required

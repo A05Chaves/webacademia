@@ -38,6 +38,7 @@ urlpatterns = [
     ),
     path('compras/nueva/', views.registrar_compra, name='registrar_compra'),
     path('gastos/nuevo/', views.registrar_gasto, name='registrar_gasto'),
+    path('transferencias/nueva/', views.registrar_transferencia, name='registrar_transferencia'),
     path('inventario/ajustar/', views.ajustar_inventario, name='ajustar_inventario'),
     path('consultas/', views.consultas, name='consultas'),
 ]
