@@ -64,6 +64,7 @@ from .forms import (
 )
 
 from django.utils import timezone
+from django.utils.formats import number_format
 from django.utils.dateparse import parse_date
 from notificaciones.models import Notificacion
 from instructores.models import Instructor
@@ -148,6 +149,154 @@ def plan_permite_disciplina(plan, disciplina):
     ))
     return sin_configuracion or permisos.get(disciplina, False)
 
+
+def _periodo_asistencia_plan(suscripcion, hoy):
+    if hoy <= suscripcion.fecha_vencimiento:
+        return suscripcion.fecha_inicio, suscripcion.fecha_vencimiento
+
+    duracion = max(suscripcion.plan.duracion_dias, 1)
+    primer_dia_vencido = suscripcion.fecha_vencimiento + timedelta(days=1)
+    ciclos_transcurridos = (hoy - primer_dia_vencido).days // duracion
+    inicio = primer_dia_vencido + timedelta(days=ciclos_transcurridos * duracion)
+    return inicio, inicio + timedelta(days=duracion - 1)
+
+
+def _notificar_asistencia_con_mensualidad_vencida(alumno, clase, dias_vencida):
+    destinatarios = list(
+        User.objects.filter(is_staff=True, is_active=True)
+        .exclude(email='')
+        .values_list('email', flat=True)
+        .distinct()
+    )
+    if not destinatarios:
+        return
+    send_mail(
+        subject='Asistencia con mensualidad vencida',
+        message=(
+            f'El estudiante {alumno} ({alumno.documento}) confirmó asistencia '
+            f'a {clase.titulo or clase.get_disciplina_display()} del '
+            f'{timezone.localdate():%d/%m/%Y}. Su mensualidad tiene '
+            f'{dias_vencida} día(s) de vencimiento.'
+        ),
+        from_email=None,
+        recipient_list=destinatarios,
+        fail_silently=True,
+    )
+
+
+def _confirmar_asistencia_con_plan(alumno, clase, ahora):
+    hoy = ahora.date()
+    if alumno.estado == Alumno.Estados.SUSPENDIDO:
+        return {'error': 'Tu acceso está suspendido por la administración.'}
+
+    suscripcion = Suscripcion.objects.filter(
+        alumno=alumno,
+        fecha_inicio__lte=hoy,
+    ).select_related('plan').order_by('-fecha_vencimiento').first()
+    if not suscripcion:
+        return {'error': 'No tienes un plan iniciado para confirmar clases.'}
+
+    plan = suscripcion.plan
+    dias_vencida = max((hoy - suscripcion.fecha_vencimiento).days, 0)
+    if dias_vencida and suscripcion.estado != Suscripcion.Estados.VENCIDA:
+        Suscripcion.objects.filter(pk=suscripcion.pk).update(
+            estado=Suscripcion.Estados.VENCIDA
+        )
+    if dias_vencida and alumno.estado != Alumno.Estados.VENCIDO:
+        alumno.estado = Alumno.Estados.VENCIDO
+        alumno.save(update_fields=['estado'])
+    if dias_vencida and not alumno.permitir_asistencia_vencida:
+        return {
+            'error': (
+                f'Tu mensualidad está vencida hace {dias_vencida} día(s). '
+                'No tienes autorización para confirmar clases mientras esté vencida.'
+            )
+        }
+
+    if not plan_permite_disciplina(plan, clase.disciplina):
+        return {'error': 'La disciplina de esta clase no está incluida en tu plan.'}
+
+    ya_confirmo = AsistenciaClase.objects.filter(
+        alumno=alumno,
+        clase=clase,
+        fecha_clase=hoy,
+        estado=AsistenciaClase.Estados.CONFIRMADA,
+    ).exists()
+    inicio_periodo, fin_periodo = _periodo_asistencia_plan(suscripcion, hoy)
+    clases_consumidas = AsistenciaClase.objects.filter(
+        alumno=alumno,
+        estado=AsistenciaClase.Estados.CONFIRMADA,
+        fecha_clase__range=(inicio_periodo, fin_periodo),
+    ).count()
+    if (
+        not plan.asistencia_ilimitada
+        and not ya_confirmo
+        and clases_consumidas >= plan.clases_mes
+    ):
+        return {
+            'error': f'Ya consumiste tus {plan.clases_mes} clases disponibles de este plan.'
+        }
+
+    total_asistentes = AsistenciaClase.objects.filter(
+        clase=clase,
+        fecha_clase=hoy,
+        estado=AsistenciaClase.Estados.CONFIRMADA,
+    ).count()
+    if not ya_confirmo and total_asistentes >= clase.cupo_maximo:
+        return {'error': 'No hay cupos disponibles para esta clase.'}
+
+    asistencia, creada = AsistenciaClase.objects.get_or_create(
+        alumno=alumno,
+        clase=clase,
+        fecha_clase=hoy,
+        defaults={
+            'estado': AsistenciaClase.Estados.CONFIRMADA,
+            'fecha_confirmacion': ahora,
+        },
+    )
+    if creada and dias_vencida:
+        _notificar_asistencia_con_mensualidad_vencida(
+            alumno, clase, dias_vencida
+        )
+
+    restantes = None
+    if not plan.asistencia_ilimitada:
+        restantes = max(plan.clases_mes - clases_consumidas - int(creada), 0)
+    return {
+        'asistencia': asistencia,
+        'creada': creada,
+        'dias_vencida': dias_vencida,
+        'restantes': restantes,
+    }
+
+
+def _mostrar_resultado_confirmacion(request, resultado):
+    if resultado.get('error'):
+        messages.error(
+            request,
+            resultado['error'],
+            extra_tags='clase-feedback',
+        )
+        return False
+    if not resultado['creada']:
+        messages.info(
+            request,
+            'Ya habías confirmado asistencia para esta clase.',
+            extra_tags='clase-feedback',
+        )
+        return True
+
+    mensaje = 'Clase confirmada correctamente.'
+    if resultado['dias_vencida']:
+        mensaje += (
+            f' Recordatorio: tu mensualidad está vencida hace '
+            f'{resultado["dias_vencida"]} día(s).'
+        )
+    elif resultado['restantes'] is not None:
+        mensaje += f' Te quedan {resultado["restantes"]} clases disponibles.'
+    messages.success(request, mensaje, extra_tags='clase-feedback')
+    return True
+
 # CONVIERTE VIDEOS YOUTUBE
 
 
@@ -188,7 +337,6 @@ def home_publica(request):
 
     ahora = timezone.localtime()
     hoy = ahora.date()
-    hora_actual = ahora.time()
 
     dias_semana = {
         0: 'LUNES',
@@ -207,17 +355,20 @@ def home_publica(request):
         dia=dia_actual
     ).order_by('hora_inicio')
 
-    # El panel "Entrenando ahora" solo muestra la clase que está ocurriendo.
-    # La ventana anticipada de 20 minutos se usa únicamente para confirmar.
-    clase_en_ventana = clases_hoy.filter(
-        hora_inicio__lte=hora_actual,
-        hora_fin__gt=hora_actual,
-    ).order_by('hora_inicio')[:1]
+    clase_confirmable = None
+    configuracion_clases = ConfiguracionClases.cargar()
+    for clase in clases_hoy:
+        ventana_inicio, ventana_fin = limites_confirmacion_clase(
+            clase, ahora, configuracion_clases
+        )
+        if ventana_inicio <= ahora <= ventana_fin:
+            clase_confirmable = clase
+            break
 
     asistencias_hoy = AsistenciaClase.objects.filter(
         fecha_clase=hoy,
         estado=AsistenciaClase.Estados.CONFIRMADA,
-        clase__in=clase_en_ventana,
+        clase=clase_confirmable,
     ).select_related(
         'alumno__user',
         'clase'
@@ -238,19 +389,6 @@ def home_publica(request):
         playlist_embed = convertir_youtube_embed(
             config_home.playlist_youtube_url
         )
-
-    clase_confirmable = None
-    configuracion_clases = ConfiguracionClases.cargar()
-
-    for clase in clases_hoy:
-
-        ventana_inicio, ventana_fin = limites_confirmacion_clase(
-            clase, ahora, configuracion_clases
-        )
-
-        if ventana_inicio <= ahora <= ventana_fin:
-            clase_confirmable = clase
-            break
 
     pago_form = PagoAlumnoForm()
 
@@ -304,6 +442,57 @@ def home_publica(request):
         'config_home': config_home,
         'publicaciones_home': publicaciones_home,
         'elementos_carrusel_home': elementos_carrusel_home,
+    })
+
+
+@login_required
+def asistencias_home_actuales(request):
+    ahora = timezone.localtime()
+    dias_semana = {
+        0: ClaseProgramada.DiasSemana.LUNES,
+        1: ClaseProgramada.DiasSemana.MARTES,
+        2: ClaseProgramada.DiasSemana.MIERCOLES,
+        3: ClaseProgramada.DiasSemana.JUEVES,
+        4: ClaseProgramada.DiasSemana.VIERNES,
+        5: ClaseProgramada.DiasSemana.SABADO,
+        6: ClaseProgramada.DiasSemana.DOMINGO,
+    }
+    clases = ClaseProgramada.objects.filter(
+        activa=True,
+        dia=dias_semana[ahora.weekday()],
+    ).order_by('hora_inicio')
+    configuracion = ConfiguracionClases.cargar()
+    clase = None
+    for item in clases:
+        ventana_inicio, ventana_fin = limites_confirmacion_clase(
+            item, ahora, configuracion
+        )
+        if ventana_inicio <= ahora <= ventana_fin:
+            clase = item
+            break
+    if not clase:
+        return JsonResponse({'clase': None, 'asistencias': []})
+
+    asistencias = AsistenciaClase.objects.filter(
+        clase=clase,
+        fecha_clase=ahora.date(),
+        estado=AsistenciaClase.Estados.CONFIRMADA,
+    ).select_related('alumno__user').order_by('-fecha_confirmacion')
+    return JsonResponse({
+        'clase': {
+            'nombre': clase.titulo or clase.get_disciplina_display(),
+            'disciplina': clase.get_disciplina_display(),
+            'hora': clase.hora_inicio.strftime('%H:%M'),
+        },
+        'asistencias': [
+            {
+                'nombre': str(asistencia.alumno),
+                'hora_confirmacion': timezone.localtime(
+                    asistencia.fecha_confirmacion
+                ).strftime('%H:%M:%S'),
+            }
+            for asistencia in asistencias
+        ],
     })
 
 
@@ -774,11 +963,12 @@ def validar_pago(request, pago_id):
                         return redirect('gestion:validar_pago', pago_id=pago.id)
                     fecha_inicio = form.cleaned_data['fecha_inicio']
                     fecha_vencimiento = form.fecha_vencimiento_calculada()
-                    estado_suscripcion = (
-                        Suscripcion.Estados.ACTIVA
-                        if fecha_inicio <= hoy <= fecha_vencimiento
-                        else Suscripcion.Estados.PROGRAMADA
-                    )
+                    if fecha_vencimiento < hoy:
+                        estado_suscripcion = Suscripcion.Estados.VENCIDA
+                    elif fecha_inicio <= hoy:
+                        estado_suscripcion = Suscripcion.Estados.ACTIVA
+                    else:
+                        estado_suscripcion = Suscripcion.Estados.PROGRAMADA
                     if estado_suscripcion == Suscripcion.Estados.ACTIVA:
                         Suscripcion.objects.filter(
                             alumno=pago.alumno,
@@ -805,7 +995,10 @@ def validar_pago(request, pago_id):
                         f'{pago.plan.nombre}'
                         + (f' - {pago.promocion.nombre}' if pago.promocion_id else '')
                     )
-                    if estado_suscripcion == Suscripcion.Estados.ACTIVA:
+                    if (
+                        estado_suscripcion == Suscripcion.Estados.ACTIVA
+                        and pago.alumno.estado != Alumno.Estados.SUSPENDIDO
+                    ):
                         pago.alumno.estado = Alumno.Estados.ACTIVO
                         pago.alumno.save(update_fields=['estado'])
                     if hasattr(pago, 'aplicacion_promocion'):
@@ -1339,7 +1532,6 @@ def confirmar_asistencia(request, clase_id):
 
     alumno = request.user.perfil_alumno
     ahora = timezone.localtime()
-    hoy = ahora.date()
 
     configuracion_clases = ConfiguracionClases.cargar()
     ventana_inicio, ventana_fin = limites_confirmacion_clase(
@@ -1357,50 +1549,8 @@ def confirmar_asistencia(request, clase_id):
         )
         return redirect('gestion:horario_clases')
 
-    # CUPO LLENO
-    total_asistentes = AsistenciaClase.objects.filter(
-        clase=clase,
-        fecha_clase=hoy,
-        estado='CONFIRMADA'
-    ).count()
-
-    ya_confirmo = AsistenciaClase.objects.filter(
-        alumno=alumno,
-        clase=clase,
-        fecha_clase=hoy,
-        estado='CONFIRMADA'
-    ).exists()
-
-    if not ya_confirmo and total_asistentes >= clase.cupo_maximo:
-        messages.error(
-            request,
-            'No hay cupos disponibles para esta clase.',
-            extra_tags='clase-feedback',
-        )
-        return redirect('gestion:horario_clases')
-
-    asistencia, creada = AsistenciaClase.objects.get_or_create(
-        alumno=alumno,
-        clase=clase,
-        fecha_clase=hoy,
-        defaults={
-            'estado': 'CONFIRMADA',
-            'fecha_confirmacion': ahora,
-        }
-    )
-
-    if not creada:
-        messages.info(
-            request,
-            'Ya habías confirmado asistencia para esta clase.',
-            extra_tags='clase-feedback',
-        )
-    else:
-        messages.success(
-            request,
-            'Clase confirmada correctamente.',
-            extra_tags='clase-feedback',
-        )
+    resultado = _confirmar_asistencia_con_plan(alumno, clase, ahora)
+    _mostrar_resultado_confirmacion(request, resultado)
 
     return redirect('gestion:horario_clases')
 
@@ -1506,49 +1656,8 @@ def confirmar_asistencia_kiosko(request):
         )
         return redirect('gestion:horario_clases')
 
-    total_asistentes = AsistenciaClase.objects.filter(
-        clase=clase,
-        fecha_clase=hoy,
-        estado='CONFIRMADA'
-    ).count()
-
-    ya_confirmo = AsistenciaClase.objects.filter(
-        alumno=alumno,
-        clase=clase,
-        fecha_clase=hoy,
-        estado='CONFIRMADA'
-    ).exists()
-
-    if not ya_confirmo and total_asistentes >= clase.cupo_maximo:
-        messages.error(
-            request,
-            'No hay cupos disponibles para esta clase.',
-            extra_tags='clase-feedback',
-        )
-        return redirect('gestion:horario_clases')
-
-    asistencia, creada = AsistenciaClase.objects.get_or_create(
-        alumno=alumno,
-        clase=clase,
-        fecha_clase=hoy,
-        defaults={
-            'estado': 'CONFIRMADA',
-            'fecha_confirmacion': ahora,
-        }
-    )
-
-    if creada:
-        messages.success(
-            request,
-            'Clase confirmada correctamente.',
-            extra_tags='clase-feedback',
-        )
-    else:
-        messages.info(
-            request,
-            'Ya habías confirmado asistencia para esta clase.',
-            extra_tags='clase-feedback',
-        )
+    resultado = _confirmar_asistencia_con_plan(alumno, clase, ahora)
+    _mostrar_resultado_confirmacion(request, resultado)
 
     return redirect('gestion:horario_clases')
 
@@ -1590,7 +1699,9 @@ def registrar_pago_alumno(request):
         username = request.POST.get('username')
         password = request.POST.get('password')
 
-        user = authenticate(request, username=username, password=password)
+        user = request.user if (
+            request.user.is_authenticated and hasattr(request.user, 'perfil_alumno')
+        ) else authenticate(request, username=username, password=password)
 
         if user is None:
             messages.error(
@@ -1628,16 +1739,23 @@ def registrar_pago_alumno(request):
             marcar_posible_duplicado(pago)
             pago.save()
 
+            resumen_pago = (
+                f'Valor pagado: $ {number_format(pago.valor, decimal_pos=0, force_grouping=True)}. '
+                f'Plan seleccionado: {pago.plan.nombre}. '
+            )
+
             if pago.posible_duplicado:
                 messages.warning(
                     request,
-                    'Pago recibido correctamente, pero quedó marcado para revisión '
+                    resumen_pago +
+                    'El pago fue recibido, pero quedó marcado para revisión '
                     'porque coincide con otro registro.',
                     extra_tags='pago-feedback',
                 )
             else:
                 messages.success(
                     request,
+                    resumen_pago +
                     'Pago registrado correctamente. Queda pendiente de validación.',
                     extra_tags='pago-feedback',
                 )
@@ -3050,7 +3168,6 @@ def confirmar_clase_home(request):
 
     alumno = user.perfil_alumno
     ahora = timezone.localtime()
-    hoy = ahora.date()
 
     dias_semana = {
         0: ClaseProgramada.DiasSemana.LUNES,
@@ -3076,111 +3193,8 @@ def confirmar_clase_home(request):
         )
         return redirect('gestion:home_publica')
 
-    suscripcion = Suscripcion.objects.filter(
-        alumno=alumno,
-        estado='ACTIVA'
-    ).select_related('plan').order_by('-fecha_vencimiento').first()
-
-    if not suscripcion:
-        messages.error(
-            request,
-            'No tienes una suscripción activa para confirmar clases.',
-            extra_tags='clase-feedback',
-        )
-        return redirect('gestion:home_publica')
-
-    if suscripcion.fecha_inicio > hoy:
-        messages.error(
-            request,
-            f'Tu suscripción inicia el {suscripcion.fecha_inicio}. Aún no puedes confirmar clases.',
-            extra_tags='clase-feedback',
-        )
-        return redirect('gestion:home_publica')
-
-    if suscripcion.fecha_vencimiento < hoy:
-        messages.error(
-            request,
-            f'Tu suscripción venció el {suscripcion.fecha_vencimiento}. Debes renovar.',
-            extra_tags='clase-feedback',
-        )
-        return redirect('gestion:home_publica')
-
-    plan = suscripcion.plan
-
-    if not plan_permite_disciplina(plan, clase.disciplina):
-        messages.error(
-            request,
-            'La disciplina de esta clase no está incluida en tu plan.',
-            extra_tags='clase-feedback',
-        )
-        return redirect('gestion:home_publica')
-
-    ya_confirmo = AsistenciaClase.objects.filter(
-        alumno=alumno,
-        clase=clase,
-        fecha_clase=hoy,
-        estado=AsistenciaClase.Estados.CONFIRMADA,
-    ).exists()
-
-    clases_consumidas = AsistenciaClase.objects.filter(
-        alumno=alumno,
-        estado=AsistenciaClase.Estados.CONFIRMADA,
-        fecha_clase__gte=suscripcion.fecha_inicio,
-        fecha_clase__lte=suscripcion.fecha_vencimiento
-    ).count()
-
-    if (
-        not plan.asistencia_ilimitada
-        and not ya_confirmo
-        and clases_consumidas >= plan.clases_mes
-    ):
-        messages.error(
-            request,
-            f'Ya consumiste tus {plan.clases_mes} clases disponibles de este plan.',
-            extra_tags='clase-feedback',
-        )
-        return redirect('gestion:home_publica')
-
-    total_asistentes = AsistenciaClase.objects.filter(
-        clase=clase,
-        fecha_clase=hoy,
-        estado=AsistenciaClase.Estados.CONFIRMADA,
-    ).count()
-
-    if not ya_confirmo and total_asistentes >= clase.cupo_maximo:
-        messages.error(request, 'No hay cupos disponibles para esta clase.', extra_tags='clase-feedback')
-        return redirect('gestion:home_publica')
-
-    asistencia, creada = AsistenciaClase.objects.get_or_create(
-        alumno=alumno,
-        clase=clase,
-        fecha_clase=hoy,
-        defaults={
-            'estado': AsistenciaClase.Estados.CONFIRMADA,
-            'fecha_confirmacion': ahora,
-        }
-    )
-
-    if creada:
-        if plan.asistencia_ilimitada:
-            messages.success(
-                request,
-                'Clase confirmada correctamente.',
-                extra_tags='clase-feedback',
-            )
-        else:
-            restantes = plan.clases_mes - (clases_consumidas + 1)
-            messages.success(
-                request,
-                f'Clase confirmada correctamente. Te quedan {restantes} clases disponibles.',
-                extra_tags='clase-feedback',
-            )
-    else:
-        messages.info(
-            request,
-            'Ya habías confirmado esta clase.',
-            extra_tags='clase-feedback',
-        )
+    resultado = _confirmar_asistencia_con_plan(alumno, clase, ahora)
+    _mostrar_resultado_confirmacion(request, resultado)
 
     return redirect('gestion:home_publica')
 

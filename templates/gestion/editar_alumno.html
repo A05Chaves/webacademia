@@ -111,6 +111,22 @@
                 </div>
             </div>
 
+            <div class="col-md-4">
+                <div class="p-3 border {% if alumno.permitir_asistencia_vencida %}border-success{% else %}border-warning{% endif %} rounded h-100">
+                    <small class="text-secondary">Ingreso con mensualidad vencida</small>
+                    <div class="my-1">
+                        {% if alumno.permitir_asistencia_vencida %}
+                            <span class="badge bg-success">Permitido</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Bloqueado</span>
+                        {% endif %}
+                    </div>
+                    <a href="#permisoAsistenciaVencida" class="small">
+                        <i class="fa-solid fa-sliders"></i> Configurar permiso
+                    </a>
+                </div>
+            </div>
+
         </div>
 
         <hr class="border-secondary">
@@ -177,6 +193,23 @@
                     {{ form.non_field_errors }}
                 </div>
             {% endif %}
+
+            <div id="permisoAsistenciaVencida" class="border border-warning rounded p-3 mb-4">
+                <h6 class="text-warning mb-3">
+                    <i class="fa-solid fa-person-circle-check"></i>
+                    Permiso de asistencia con mensualidad vencida
+                </h6>
+                <div class="form-check form-switch">
+                    {{ alumno_form.permitir_asistencia_vencida }}
+                    <label class="form-check-label fw-semibold" for="{{ alumno_form.permitir_asistencia_vencida.id_for_label }}">
+                        Permitir que este alumno confirme clases aunque su mensualidad esté vencida
+                    </label>
+                </div>
+                <div class="form-text mt-2">
+                    Está desactivado por defecto. Si lo habilitas, el alumno podrá confirmar y seguirá viendo el recordatorio con los días de mora.
+                </div>
+                {{ alumno_form.permitir_asistencia_vencida.errors }}
+            </div>
 
             <div class="row">
 

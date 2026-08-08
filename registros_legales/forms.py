@@ -2,6 +2,7 @@ from django import forms
 from django.contrib.auth import password_validation
 from django.contrib.auth.forms import UsernameField
 from django.contrib.auth.hashers import make_password
+from django.utils import timezone
 from .models import RegistroLegalEstudiante
 from alumnos.models import Alumno
 from django.contrib.auth import get_user_model
@@ -126,7 +127,8 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
 
             'fecha_ingreso': forms.DateInput(attrs={
                 'type': 'date',
-                'class': 'form-control'
+                'class': 'form-control',
+                'readonly': True,
             }),
 
             'plan_interes': forms.Select(attrs={
@@ -189,6 +191,18 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
             precio__gt=0,
         ).exclude(nombre__icontains='beca')
 
+        self.fields['fecha_ingreso'].label = 'Fecha de diligenciamiento del registro'
+        self.fields['fecha_ingreso'].help_text = (
+            'Se asigna automáticamente con la fecha en que diligencias este formulario; '
+            'no corresponde al inicio del plan.'
+        )
+        self.fields['fecha_ingreso'].disabled = True
+        self.fields['fecha_ingreso'].initial = (
+            self.instance.fecha_ingreso
+            if self.instance and self.instance.pk
+            else timezone.localdate()
+        )
+
         campos_obligatorios = [
             'tipo_estudiante',
             'foto',
@@ -219,6 +233,12 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
+
+        cleaned_data['fecha_ingreso'] = (
+            self.instance.fecha_ingreso
+            if self.instance and self.instance.pk
+            else timezone.localdate()
+        )
 
         for campo in (
             'nombres', 'apellidos', 'contacto_emergencia_nombre',

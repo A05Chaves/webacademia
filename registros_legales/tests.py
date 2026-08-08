@@ -1,4 +1,5 @@
 import base64
+from datetime import date
 from io import BytesIO
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -135,6 +136,32 @@ class RegistroLegalObligatorioTests(TestCase):
             data=self.datos_validos(), files={'foto': self.foto_valida()}
         )
         self.assertTrue(form.is_valid(), form.errors.as_json())
+
+    def test_fecha_diligenciamiento_es_automatica_y_no_usa_valor_enviado(self):
+        data = self.datos_validos()
+        data['fecha_ingreso'] = '1999-01-01'
+        fecha_actual = date(2026, 8, 8)
+
+        with patch('registros_legales.forms.timezone.localdate', return_value=fecha_actual):
+            form = RegistroLegalEstudianteForm(
+                data=data, files={'foto': self.foto_valida()}
+            )
+            self.assertTrue(form.is_valid(), form.errors.as_json())
+            registro = form.save()
+
+        self.assertEqual(registro.fecha_ingreso, fecha_actual)
+
+    def test_formulario_presenta_fecha_de_diligenciamiento_bloqueada(self):
+        form = RegistroLegalEstudianteForm()
+
+        self.assertTrue(form.fields['fecha_ingreso'].disabled)
+        self.assertEqual(
+            form.fields['fecha_ingreso'].label,
+            'Fecha de diligenciamiento del registro',
+        )
+        response = self.client.get(reverse('registro_publico'))
+        self.assertContains(response, 'Fecha de diligenciamiento del registro')
+        self.assertContains(response, 'no corresponde a la fecha de inicio del plan')
 
     def test_registro_guarda_hash_y_no_contrasena_visible(self):
         form = RegistroLegalEstudianteForm(

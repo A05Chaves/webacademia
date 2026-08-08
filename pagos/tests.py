@@ -109,6 +109,30 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
             referencia_pago='REF-VISIBLE-1',
         ).exists())
 
+    def test_estudiante_con_sesion_registra_pago_sin_repetir_credenciales(self):
+        self.client.force_login(self.usuario)
+        response = self.client.post(reverse('gestion:registrar_pago_alumno'), {
+            'plan': self.plan.id,
+            'metodo_qr': self.metodo.id,
+            'valor': '120000',
+            'referencia_pago': 'REF-SESION-1',
+            'comprobante': SimpleUploadedFile(
+                'pago-sesion.pdf', b'%PDF-1.4\n%%EOF'
+            ),
+        }, follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(Pago.objects.filter(
+            alumno=self.alumno,
+            referencia_pago='REF-SESION-1',
+        ).exists())
+        self.assertIn('_auth_user_id', self.client.session)
+        self.assertContains(response, 'Valor pagado:')
+        self.assertContains(response, '120.000')
+        self.assertContains(response, f'Plan seleccionado: {self.plan.nombre}')
+        self.assertContains(response, 'Registrarás el pago como')
+        self.assertContains(response, 'password-visibility-toggle')
+
     def test_registro_publico_fallido_muestra_error_grande(self):
         response = self.client.post(reverse('gestion:registrar_pago_alumno'), {
             'username': 'alumno-nuevos-pagos',
@@ -133,7 +157,11 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
         self.client.force_login(self.admin)
         response = self.client.post(
             reverse('gestion:validar_pago', args=[pago.id]),
-            {'estado': Pago.Estados.APROBADO, 'fecha_inicio': '2026-07-01'},
+            {
+                'estado': Pago.Estados.APROBADO,
+                'fecha_inicio': '2026-07-01',
+                'fecha_inicio_manual': 'on',
+            },
         )
 
         self.assertRedirects(response, reverse('gestion:lista_pagos'))
@@ -167,6 +195,66 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
             vigente.fecha_vencimiento + timedelta(days=1),
         )
         self.assertEqual(vigente.estado, Suscripcion.Estados.ACTIVA)
+
+    def test_fecha_enviada_sin_edicion_manual_no_reemplaza_la_suscripcion(self):
+        hoy = timezone.localdate()
+        vigente = Suscripcion.objects.create(
+            alumno=self.alumno,
+            plan=self.plan,
+            fecha_inicio=hoy - timedelta(days=5),
+            fecha_vencimiento=hoy + timedelta(days=15),
+            estado=Suscripcion.Estados.ACTIVA,
+        )
+        pago = self.nuevo_pago(nombre='fecha-formulario-obsoleta.pdf')
+        self.client.force_login(self.admin)
+
+        response = self.client.post(
+            reverse('gestion:validar_pago', args=[pago.id]),
+            {
+                'estado': Pago.Estados.APROBADO,
+                'fecha_inicio': '2026-06-01',
+            },
+        )
+
+        self.assertRedirects(response, reverse('gestion:lista_pagos'))
+        pago.refresh_from_db()
+        self.assertEqual(
+            pago.suscripcion.fecha_inicio,
+            vigente.fecha_vencimiento + timedelta(days=1),
+        )
+
+    def test_renovacion_vencida_continua_desde_el_vencimiento_anterior(self):
+        hoy = timezone.localdate()
+        vencida = Suscripcion.objects.create(
+            alumno=self.alumno,
+            plan=self.plan,
+            fecha_inicio=hoy - timedelta(days=40),
+            fecha_vencimiento=hoy - timedelta(days=10),
+            estado=Suscripcion.Estados.VENCIDA,
+        )
+        self.alumno.estado = Alumno.Estados.VENCIDO
+        self.alumno.save(update_fields=['estado'])
+        pago = self.nuevo_pago(nombre='renovacion-vencida.pdf')
+        self.client.force_login(self.admin)
+
+        response = self.client.post(
+            reverse('gestion:validar_pago', args=[pago.id]),
+            {'estado': Pago.Estados.APROBADO},
+        )
+
+        self.assertRedirects(response, reverse('gestion:lista_pagos'))
+        pago.refresh_from_db()
+        self.alumno.refresh_from_db()
+        self.assertEqual(
+            pago.suscripcion.fecha_inicio,
+            vencida.fecha_vencimiento + timedelta(days=1),
+        )
+        self.assertEqual(
+            pago.suscripcion.fecha_vencimiento,
+            vencida.fecha_vencimiento + timedelta(days=self.plan.duracion_dias),
+        )
+        self.assertEqual(pago.suscripcion.estado, Suscripcion.Estados.ACTIVA)
+        self.assertEqual(self.alumno.estado, Alumno.Estados.ACTIVO)
 
     def test_cuenta_inactiva_no_aparece_en_formularios_de_pago(self):
         self.cuenta.activa = False

@@ -34,7 +34,10 @@ class RegistroLegalEstudiante(models.Model):
     correo = models.EmailField(blank=True, null=True)
     usuario_solicitado = models.CharField(max_length=150)
     password_hash = models.CharField(max_length=128, editable=False)
-    fecha_ingreso = models.DateField(default=timezone.now)
+    fecha_ingreso = models.DateField(
+        default=timezone.localdate,
+        verbose_name='Fecha de diligenciamiento del registro',
+    )
 
     plan_interes = models.ForeignKey(
         'planes.Plan',

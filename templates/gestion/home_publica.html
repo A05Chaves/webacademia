@@ -141,7 +141,7 @@
 
                     <h4 class="mb-0">
                         <i class="#"></i>
-                        Galeras Bjj - Entrenando ahora
+                        Confirmaciones de clase
                     </h4>
 
                     <div class="text-end">
@@ -161,6 +161,14 @@
                     
                   
 
+                <div id="resumenClaseConfirmaciones" class="small text-info mb-2">
+                    {% if clase_confirmable %}
+                        {{ clase_confirmable.titulo|default:clase_confirmable.get_disciplina_display }}
+                        · {{ clase_confirmable.hora_inicio|time:"g:i a" }}
+                    {% endif %}
+                </div>
+
+                <div id="listaAsistenciasHome">
                 {% for asistencia in asistencias_hoy %}
 
                     <div class="border-bottom border-secondary py-2">
@@ -186,6 +194,7 @@
                     </p>
 
                 {% endfor %}
+                </div>
 
             </div>
 
@@ -463,21 +472,22 @@
 
                 <div class="modal-body">
 
-                    <div class="mb-3">
-                        <label class="form-label">Usuario</label>
-                        <input type="text"
-                               name="username"
-                               class="form-control"
-                               required>
-                    </div>
+                    {% if user.is_authenticated and user.perfil_alumno %}
+                        <div class="alert alert-info">
+                            <i class="fa-solid fa-user-check"></i>
+                            Registrarás el pago como <strong>{{ user.get_full_name|default:user.username }}</strong>
+                        </div>
+                    {% else %}
+                        <div class="mb-3">
+                            <label class="form-label">Usuario</label>
+                            <input type="text" name="username" class="form-control" required autocomplete="username">
+                        </div>
 
-                    <div class="mb-3">
-                        <label class="form-label">Contraseña</label>
-                        <input type="password"
-                               name="password"
-                               class="form-control"
-                               required>
-                    </div>
+                        <div class="mb-3">
+                            <label class="form-label">Contraseña</label>
+                            <input type="password" name="password" class="form-control" required autocomplete="current-password">
+                        </div>
+                    {% endif %}
 
                     <div class="mb-3">
                         <label class="form-label">Plan</label>
@@ -549,6 +559,48 @@
     actualizarReloj();
 
     setInterval(actualizarReloj, 1000);
+
+    {% if user.is_authenticated %}
+    async function actualizarAsistenciasHome() {
+        try {
+            const respuesta = await fetch('{% url "gestion:asistencias_home_actuales" %}', {
+                headers: {'X-Requested-With': 'XMLHttpRequest'},
+                cache: 'no-store'
+            });
+            if (!respuesta.ok) return;
+            const datos = await respuesta.json();
+            const resumen = document.getElementById('resumenClaseConfirmaciones');
+            const lista = document.getElementById('listaAsistenciasHome');
+            if (!resumen || !lista) return;
+            resumen.textContent = datos.clase
+                ? `${datos.clase.nombre} · ${datos.clase.hora}`
+                : 'No hay una clase disponible para confirmar en este momento.';
+            lista.replaceChildren();
+            if (!datos.asistencias.length) {
+                const vacio = document.createElement('p');
+                vacio.className = 'text-secondary';
+                vacio.textContent = 'Aún no hay alumnos confirmados para esta clase.';
+                lista.appendChild(vacio);
+                return;
+            }
+            datos.asistencias.forEach((asistencia) => {
+                const fila = document.createElement('div');
+                fila.className = 'border-bottom border-secondary py-2';
+                const nombre = document.createElement('strong');
+                nombre.textContent = asistencia.nombre;
+                const detalle = document.createElement('small');
+                detalle.className = 'd-block';
+                detalle.textContent = `Confirmó a las ${asistencia.hora_confirmacion}`;
+                fila.append(nombre, detalle);
+                lista.appendChild(fila);
+            });
+        } catch (error) {
+            // Conserva la última lista visible si hay una interrupción de red.
+        }
+    }
+    setInterval(actualizarAsistenciasHome, 3000);
+    actualizarAsistenciasHome();
+    {% endif %}
 
 
 </script>

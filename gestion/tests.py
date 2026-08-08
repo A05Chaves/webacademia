@@ -1,8 +1,9 @@
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core import mail
 from django.core.exceptions import ValidationError
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from tempfile import TemporaryDirectory
@@ -982,6 +983,44 @@ class SeguridadVistasGestionTests(TestCase):
         self.assertContains(response, 'Usuario de acceso')
         self.assertContains(response, 'usuario_visible_ficha')
 
+    def test_administrador_habilita_asistencia_vencida_desde_ficha(self):
+        usuario_alumno = get_user_model().objects.create_user(
+            username='alumno_permiso_vencido',
+            password='clave-alumno-pruebas',
+            first_name='Alumno',
+            last_name='Autorizado',
+        )
+        alumno = Alumno.objects.create(
+            user=usuario_alumno,
+            documento='DOC-PERMISO-VENCIDO',
+            estado=Alumno.Estados.VENCIDO,
+        )
+
+        response = self.client.post(
+            reverse('gestion:editar_alumno', args=[alumno.id]),
+            {
+                'first_name': 'Alumno',
+                'last_name': 'Autorizado',
+                'email': '',
+                'telefono': '',
+                'documento': alumno.documento,
+                'fecha_nacimiento': '',
+                'direccion': '',
+                'disciplina': Alumno.Disciplinas.JIU_JITSU_BRASILERO,
+                'grado': '',
+                'nombre_acudiente': '',
+                'documento_acudiente': '',
+                'parentesco_acudiente': '',
+                'telefono_acudiente': '',
+                'estado': Alumno.Estados.VENCIDO,
+                'permitir_asistencia_vencida': 'on',
+            },
+        )
+
+        self.assertRedirects(response, reverse('gestion:lista_alumnos'))
+        alumno.refresh_from_db()
+        self.assertTrue(alumno.permitir_asistencia_vencida)
+
 
 class ConfiguracionArchivosTests(TestCase):
     def test_media_esta_configurado(self):
@@ -1406,7 +1445,135 @@ class CalendarioAsistenciaTests(TestCase):
 
         self.assertContains(response, 'No se confirmó la clase')
         self.assertContains(response, 'fa-circle-xmark')
-        self.assertContains(response, 'No tienes una suscripción activa')
+        self.assertContains(response, 'No tienes un plan iniciado')
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    def test_mensualidad_vencida_confirma_muestra_dias_y_avisa_administradores(self):
+        plan = Plan.objects.create(
+            nombre='Plan vencido con acceso',
+            precio='100000',
+            duracion_dias=30,
+            clases_mes=8,
+        )
+        Suscripcion.objects.create(
+            alumno=self.alumno,
+            plan=plan,
+            fecha_inicio=date(2026, 6, 11),
+            fecha_vencimiento=date(2026, 7, 10),
+            estado=Suscripcion.Estados.VENCIDA,
+        )
+        self.alumno.estado = Alumno.Estados.VENCIDO
+        self.alumno.permitir_asistencia_vencida = True
+        self.alumno.save(update_fields=['estado', 'permitir_asistencia_vencida'])
+        get_user_model().objects.create_user(
+            username='admin_alerta_vencido',
+            password='clave-admin',
+            email='admin-alertas@galeras.test',
+            is_staff=True,
+        )
+        self.client.force_login(self.usuario)
+        momento = timezone.make_aware(datetime(2026, 7, 15, 18, 5))
+
+        with patch('gestion.views.timezone.localtime', return_value=momento):
+            response = self.client.post(
+                reverse('gestion:confirmar_clase_home'),
+                {'clase_id': self.clase.id},
+                follow=True,
+            )
+
+        self.assertTrue(AsistenciaClase.objects.filter(
+            alumno=self.alumno,
+            clase=self.clase,
+            fecha_clase=date(2026, 7, 15),
+        ).exists())
+        self.assertContains(response, 'mensualidad está vencida hace 5 día(s)')
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['admin-alertas@galeras.test'])
+        self.assertIn('5 día(s) de vencimiento', mail.outbox[0].body)
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    def test_mensualidad_vencida_bloquea_por_defecto(self):
+        plan = Plan.objects.create(
+            nombre='Plan vencido sin permiso',
+            precio='100000',
+            duracion_dias=30,
+            clases_mes=8,
+        )
+        Suscripcion.objects.create(
+            alumno=self.alumno,
+            plan=plan,
+            fecha_inicio=date(2026, 6, 11),
+            fecha_vencimiento=date(2026, 7, 10),
+            estado=Suscripcion.Estados.VENCIDA,
+        )
+        self.alumno.estado = Alumno.Estados.VENCIDO
+        self.alumno.save(update_fields=['estado'])
+        self.client.force_login(self.usuario)
+        momento = timezone.make_aware(datetime(2026, 7, 15, 18, 5))
+
+        with patch('gestion.views.timezone.localtime', return_value=momento):
+            response = self.client.post(
+                reverse('gestion:confirmar_clase_home'),
+                {'clase_id': self.clase.id},
+                follow=True,
+            )
+
+        self.assertFalse(AsistenciaClase.objects.filter(
+            alumno=self.alumno,
+            clase=self.clase,
+            fecha_clase=date(2026, 7, 15),
+        ).exists())
+        self.assertContains(response, 'mensualidad está vencida hace 5 día(s)')
+        self.assertContains(response, 'No tienes autorización')
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_estudiante_suspendido_no_puede_confirmar_aunque_tenga_plan(self):
+        plan = Plan.objects.create(
+            nombre='Plan suspendido', precio='100000', duracion_dias=30,
+        )
+        Suscripcion.objects.create(
+            alumno=self.alumno,
+            plan=plan,
+            fecha_inicio=date(2026, 7, 1),
+            fecha_vencimiento=date(2026, 7, 30),
+            estado=Suscripcion.Estados.ACTIVA,
+        )
+        self.alumno.estado = Alumno.Estados.SUSPENDIDO
+        self.alumno.save(update_fields=['estado'])
+        self.client.force_login(self.usuario)
+        momento = timezone.make_aware(datetime(2026, 7, 15, 18, 5))
+
+        with patch('gestion.views.timezone.localtime', return_value=momento):
+            response = self.client.post(
+                reverse('gestion:confirmar_clase_home'),
+                {'clase_id': self.clase.id},
+                follow=True,
+            )
+
+        self.assertFalse(AsistenciaClase.objects.filter(alumno=self.alumno).exists())
+        self.assertContains(response, 'acceso está suspendido')
+
+    def test_lista_home_se_actualiza_y_muestra_confirmados_antes_de_iniciar(self):
+        confirmacion = timezone.make_aware(datetime(2026, 7, 15, 17, 38))
+        AsistenciaClase.objects.create(
+            alumno=self.alumno,
+            clase=self.clase,
+            fecha_clase=date(2026, 7, 15),
+            estado=AsistenciaClase.Estados.CONFIRMADA,
+            fecha_confirmacion=confirmacion,
+        )
+        self.client.force_login(self.usuario)
+        antes_de_iniciar = timezone.make_aware(datetime(2026, 7, 15, 17, 40))
+
+        with patch('gestion.views.timezone.localtime', return_value=antes_de_iniciar):
+            response = self.client.get(reverse('gestion:asistencias_home_actuales'))
+            pagina = self.client.get(reverse('gestion:home_publica'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['asistencias'][0]['nombre'], str(self.alumno))
+        self.assertContains(pagina, str(self.alumno))
+        self.assertContains(pagina, 'actualizarAsistenciasHome')
+        self.assertContains(pagina, '3000')
 
     def test_horario_reconoce_sesion_del_estudiante_para_confirmacion_rapida(self):
         self.usuario.debe_cambiar_password = False
@@ -1417,7 +1584,7 @@ class CalendarioAsistenciaTests(TestCase):
         self.assertContains(response, 'Confirmarás clase como')
         self.assertContains(response, 'próximas confirmaciones', count=0)
 
-    def test_panel_solo_muestra_asistentes_de_clase_realmente_activa(self):
+    def test_panel_muestra_confirmados_de_la_proxima_clase_antes_de_iniciar(self):
         siguiente = ClaseProgramada.objects.create(
             dia=ClaseProgramada.DiasSemana.MIERCOLES,
             hora_inicio=time(19, 0),
@@ -1437,7 +1604,7 @@ class CalendarioAsistenciaTests(TestCase):
             username='alumno_siguiente', password='clave'
         )
         otro_alumno = Alumno.objects.create(user=otro_usuario, documento='CAL-002')
-        AsistenciaClase.objects.create(
+        asistencia_siguiente = AsistenciaClase.objects.create(
             alumno=otro_alumno,
             clase=siguiente,
             fecha_clase=hoy,
@@ -1449,7 +1616,7 @@ class CalendarioAsistenciaTests(TestCase):
             response = self.client.get(reverse('gestion:home_publica'))
 
         ids = list(response.context['asistencias_hoy'].values_list('id', flat=True))
-        self.assertEqual(ids, [asistencia_actual.id])
+        self.assertEqual(ids, [asistencia_siguiente.id])
 
     def test_formulario_vencido_no_confirma_otra_clase(self):
         momento = timezone.make_aware(datetime(2026, 7, 15, 20, 0))

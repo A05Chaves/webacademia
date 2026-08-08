@@ -467,21 +467,22 @@
 
             {% csrf_token %}
 
-            <div class="mb-3">
-                <label class="form-label">Usuario</label>
-                <input type="text"
-                       name="username"
-                       required
-                       class="form-control">
-            </div>
+            {% if user.is_authenticated and user.perfil_alumno %}
+                <div class="alert alert-info">
+                    <i class="fa-solid fa-user-check"></i>
+                    Registrarás el pago como <strong>{{ user.get_full_name|default:user.username }}</strong>
+                </div>
+            {% else %}
+                <div class="mb-3">
+                    <label class="form-label">Usuario</label>
+                    <input type="text" name="username" required class="form-control" autocomplete="username">
+                </div>
 
-            <div class="mb-3">
-                <label class="form-label">Contraseña</label>
-                <input type="password"
-                       name="password"
-                       required
-                       class="form-control">
-            </div>
+                <div class="mb-3">
+                    <label class="form-label">Contraseña</label>
+                    <input type="password" name="password" required class="form-control" autocomplete="current-password">
+                </div>
+            {% endif %}
 
             <hr class="border-secondary">
 

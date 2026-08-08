@@ -11,6 +11,11 @@ app_name = 'gestion'
 
 urlpatterns = [
     path('', views.home_publica, name='home_publica'),
+    path(
+        'asistencias-home/actuales/',
+        views.asistencias_home_actuales,
+        name='asistencias_home_actuales',
+    ),
 
     path('dashboard/', views.dashboard, name='dashboard'),
 

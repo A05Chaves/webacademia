@@ -418,6 +418,34 @@
             width: 100%;
         }
 
+        .password-visibility-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        .password-visibility-wrapper > input {
+            padding-right: 3rem !important;
+        }
+
+        .password-visibility-toggle {
+            align-items: center;
+            background: transparent;
+            border: 0;
+            color: #495057;
+            display: flex;
+            height: 100%;
+            justify-content: center;
+            padding: 0 .9rem;
+            position: absolute;
+            right: 0;
+            top: 0;
+            z-index: 4;
+        }
+
+        body[data-theme="dark"] .password-visibility-toggle {
+            color: #d7d7d7;
+        }
+
         .fecha-input-presentacion {
             align-items: center;
             display: flex;
@@ -816,10 +844,44 @@
         );
     }
 
+    function prepararVisibilidadPassword(input) {
+        if (!input || input.dataset.passwordVisibilityReady === 'true') return;
+        input.dataset.passwordVisibilityReady = 'true';
+        const wrapper = document.createElement('div');
+        wrapper.className = 'password-visibility-wrapper';
+        input.parentNode.insertBefore(wrapper, input);
+        wrapper.appendChild(input);
+
+        const boton = document.createElement('button');
+        boton.type = 'button';
+        boton.className = 'password-visibility-toggle';
+        boton.setAttribute('aria-label', 'Mostrar contraseña');
+        boton.setAttribute('title', 'Mostrar contraseña');
+        boton.innerHTML = '<i class="fa-solid fa-eye" aria-hidden="true"></i>';
+        boton.addEventListener('click', function () {
+            const mostrar = input.type === 'password';
+            input.type = mostrar ? 'text' : 'password';
+            boton.setAttribute('aria-label', mostrar ? 'Ocultar contraseña' : 'Mostrar contraseña');
+            boton.setAttribute('title', mostrar ? 'Ocultar contraseña' : 'Mostrar contraseña');
+            boton.innerHTML = mostrar
+                ? '<i class="fa-solid fa-eye-slash" aria-hidden="true"></i>'
+                : '<i class="fa-solid fa-eye" aria-hidden="true"></i>';
+        });
+        wrapper.appendChild(boton);
+    }
+
+    function prepararPasswords(contenedor = document) {
+        if (contenedor.matches?.('input[type="password"]')) {
+            prepararVisibilidadPassword(contenedor);
+        }
+        contenedor.querySelectorAll?.('input[type="password"]').forEach(prepararVisibilidadPassword);
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         normalizarTextosMayuscula();
         normalizarCamposNumericos();
         prepararFechasDelFormulario();
+        prepararPasswords();
         const alertaClase = document.querySelector('[data-clase-feedback][data-voz]');
         const textoVoz = alertaClase?.dataset.voz?.trim();
         if (textoVoz && 'speechSynthesis' in window) {
@@ -839,6 +901,7 @@
                         normalizarTextosMayuscula(nodo);
                         normalizarCamposNumericos(nodo);
                         prepararFechasDelFormulario(nodo);
+                        prepararPasswords(nodo);
                     }
                 });
             });

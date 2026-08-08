@@ -72,6 +72,7 @@ class AlumnoForm(forms.ModelForm):
             'parentesco_acudiente',
             'telefono_acudiente',
             'estado',
+            'permitir_asistencia_vencida',
         ]
         widgets = {
             'documento': forms.TextInput(attrs={'class': 'form-control'}),
@@ -87,6 +88,9 @@ class AlumnoForm(forms.ModelForm):
             'parentesco_acudiente': forms.TextInput(attrs={'class': 'form-control'}),
             'telefono_acudiente': forms.TextInput(attrs={'class': 'form-control'}),
             'estado': forms.Select(attrs={'class': 'form-select'}),
+            'permitir_asistencia_vencida': forms.CheckboxInput(attrs={
+                'class': 'form-check-input',
+            }),
         }
 
 
@@ -240,16 +244,23 @@ class ValidarPagoForm(forms.ModelForm):
     fecha_inicio = forms.DateField(
         required=False,
         label='Fecha real de inicio',
-        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+        widget=forms.DateInput(
+            format='%Y-%m-%d',
+            attrs={'type': 'date', 'class': 'form-control'},
+        ),
+    )
+    fecha_inicio_manual = forms.BooleanField(
+        required=False,
+        widget=forms.HiddenInput(),
     )
     confirmar_duplicado = forms.BooleanField(
         required=False,
-        label='Confirmo que revisé la coincidencia y el pago es legítimo',
+        label='Confirmo que el pago es correcto',
         widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
     )
     justificacion_duplicado = forms.CharField(
         required=False,
-        label='Justificación',
+        label='Observación',
         widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
     )
 
@@ -269,6 +280,7 @@ class ValidarPagoForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         self.pago = kwargs.get('instance')
+        self.fecha_inicio_automatica = None
         super().__init__(*args, **kwargs)
         if self.pago and self.pago.tipo in (
             Pago.Tipos.MENSUALIDAD, Pago.Tipos.PROMOCION,
@@ -277,11 +289,11 @@ class ValidarPagoForm(forms.ModelForm):
             ultima = Suscripcion.objects.filter(
                 alumno=self.pago.alumno
             ).order_by('-fecha_vencimiento').first()
-            inicio = (
+            self.fecha_inicio_automatica = (
                 ultima.fecha_vencimiento + timedelta(days=1)
-                if ultima and ultima.fecha_vencimiento >= hoy else hoy
+                if ultima else hoy
             )
-            self.fields['fecha_inicio'].initial = inicio
+            self.fields['fecha_inicio'].initial = self.fecha_inicio_automatica
         else:
             self.fields['fecha_inicio'].widget = forms.HiddenInput()
 
@@ -299,8 +311,16 @@ class ValidarPagoForm(forms.ModelForm):
         cleaned = super().clean()
         if cleaned.get('estado') == Pago.Estados.APROBADO:
             if self.pago.tipo in (Pago.Tipos.MENSUALIDAD, Pago.Tipos.PROMOCION):
-                if not cleaned.get('fecha_inicio'):
-                    cleaned['fecha_inicio'] = self.fields['fecha_inicio'].initial
+                # La fecha enviada por el navegador solo se considera cuando el
+                # administrador realmente modificó el control. En caso contrario,
+                # se conserva la continuidad de la última suscripción.
+                if not cleaned.get('fecha_inicio_manual'):
+                    cleaned['fecha_inicio'] = self.fecha_inicio_automatica
+                elif not cleaned.get('fecha_inicio'):
+                    self.add_error(
+                        'fecha_inicio',
+                        'Selecciona la fecha de inicio que deseas aplicar.',
+                    )
             if self.pago.posible_duplicado:
                 if not cleaned.get('confirmar_duplicado'):
                     self.add_error(
@@ -310,7 +330,7 @@ class ValidarPagoForm(forms.ModelForm):
                 if not cleaned.get('justificacion_duplicado', '').strip():
                     self.add_error(
                         'justificacion_duplicado',
-                        'Explica por qué este pago no es un duplicado.',
+                        'Agrega una observación sobre la validación del pago.',
                     )
         return cleaned
 

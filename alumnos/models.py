@@ -46,6 +46,14 @@ class Alumno(models.Model):
         choices=Estados.choices,
         default=Estados.ACTIVO
     )
+    permitir_asistencia_vencida = models.BooleanField(
+        default=False,
+        verbose_name='Permitir confirmar clases con mensualidad vencida',
+        help_text=(
+            'Excepción individual autorizada por la administración. '
+            'El estudiante seguirá viendo el recordatorio de mora.'
+        ),
+    )
     fecha_registro = models.DateTimeField(auto_now_add=True)
     actualizado = models.DateTimeField(auto_now=True)
 
@@ -110,6 +118,11 @@ class Alumno(models.Model):
         return math.ceil(dias / duracion)
 
     def actualizar_estado(self):
+        # La suspensión es una decisión administrativa y ninguna tarea
+        # automática debe levantarla por vencimientos o renovaciones.
+        if self.estado == self.Estados.SUSPENDIDO:
+            return
+
         suscripcion = self.suscripcion_actual
 
         if not suscripcion:
