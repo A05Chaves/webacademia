@@ -256,6 +256,37 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
         self.assertEqual(pago.suscripcion.estado, Suscripcion.Estados.ACTIVA)
         self.assertEqual(self.alumno.estado, Alumno.Estados.ACTIVO)
 
+    def test_aprobacion_corrige_suscripcion_vencida_que_seguia_activa(self):
+        hoy = timezone.localdate()
+        vencida_sin_actualizar = Suscripcion.objects.create(
+            alumno=self.alumno,
+            plan=self.plan,
+            fecha_inicio=hoy - timedelta(days=40),
+            fecha_vencimiento=hoy - timedelta(days=10),
+            estado=Suscripcion.Estados.ACTIVA,
+        )
+        pago = self.nuevo_pago(nombre='renovacion-estado-obsoleto.pdf')
+        self.client.force_login(self.admin)
+
+        response = self.client.post(
+            reverse('gestion:validar_pago', args=[pago.id]),
+            {'estado': Pago.Estados.APROBADO},
+        )
+
+        self.assertRedirects(response, reverse('gestion:lista_pagos'))
+        pago.refresh_from_db()
+        vencida_sin_actualizar.refresh_from_db()
+        self.assertEqual(
+            vencida_sin_actualizar.estado,
+            Suscripcion.Estados.VENCIDA,
+        )
+        self.assertEqual(pago.estado, Pago.Estados.APROBADO)
+        self.assertEqual(pago.suscripcion.estado, Suscripcion.Estados.ACTIVA)
+        self.assertEqual(
+            pago.suscripcion.fecha_inicio,
+            vencida_sin_actualizar.fecha_vencimiento + timedelta(days=1),
+        )
+
     def test_cuenta_inactiva_no_aparece_en_formularios_de_pago(self):
         self.cuenta.activa = False
         self.cuenta.save(update_fields=['activa'])

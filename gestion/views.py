@@ -976,11 +976,16 @@ def validar_pago(request, pago_id):
                     else:
                         estado_suscripcion = Suscripcion.Estados.PROGRAMADA
                     if estado_suscripcion == Suscripcion.Estados.ACTIVA:
-                        Suscripcion.objects.filter(
+                        suscripciones_activas = Suscripcion.objects.filter(
                             alumno=pago.alumno,
                             estado=Suscripcion.Estados.ACTIVA,
-                            fecha_vencimiento__gte=fecha_inicio,
-                        ).update(estado=Suscripcion.Estados.FINALIZADA)
+                        )
+                        suscripciones_activas.filter(
+                            fecha_vencimiento__lt=hoy,
+                        ).update(estado=Suscripcion.Estados.VENCIDA)
+                        suscripciones_activas.update(
+                            estado=Suscripcion.Estados.FINALIZADA
+                        )
                     beneficio = ''
                     if pago.promocion_id:
                         beneficio = (
