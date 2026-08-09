@@ -8,7 +8,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from PIL import Image, ImageDraw
@@ -21,7 +21,7 @@ from gestion.models import ConfiguracionHome
 
 from .models import (
     AcademiaCompetidora, CategoriaEvento, Evento, InscripcionEvento,
-    LlaveCategoriaEvento, MetodoPagoQR, Pago, Promocion,
+    JornadaEvento, LlaveCategoriaEvento, MetodoPagoQR, Pago, Promocion,
 )
 from .services import marcar_posible_duplicado
 
@@ -325,6 +325,143 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
         response = self.client.get(reverse('gestion:home_publica'))
         self.assertContains(response, evento.nombre)
         self.assertContains(response, 'Registrarme')
+
+    def test_administrador_crea_seminario_con_jornadas_y_tarifas_distintas(self):
+        self.client.force_login(self.admin)
+        inicio = timezone.localtime(timezone.now()) + timedelta(days=10)
+        formato = '%Y-%m-%dT%H:%M'
+        response = self.client.post(reverse('gestion:crear_evento'), {
+            'tipo': Evento.Tipos.SEMINARIO,
+            'nombre': 'Seminario por jornadas',
+            'descripcion': 'Adultos e infantil en horarios distintos',
+            'fecha_inicio': inicio.strftime(formato),
+            'lugar': 'Galeras BJJ',
+            'precio_estudiante': '0',
+            'precio_externo': '0',
+            'publico': Evento.Publicos.TODOS,
+            'alcance_torneo': Evento.AlcancesTorneo.INTERNO,
+            'consentimiento_evento': 'Consentimiento del seminario.',
+            'reglamento_adultos': 'Reglamento del seminario para adultos.',
+            'reglamento_menores': 'Reglamento infantil del seminario.',
+            'orden': '10',
+            'activo': 'on',
+            'jornadas-TOTAL_FORMS': '2',
+            'jornadas-INITIAL_FORMS': '0',
+            'jornadas-MIN_NUM_FORMS': '0',
+            'jornadas-MAX_NUM_FORMS': '1000',
+            'jornadas-0-nombre': 'Jornada adultos',
+            'jornadas-0-publico': JornadaEvento.Publicos.ADULTOS,
+            'jornadas-0-fecha_inicio': inicio.strftime(formato),
+            'jornadas-0-fecha_fin': (inicio + timedelta(hours=2)).strftime(formato),
+            'jornadas-0-precio_estudiante': '60000',
+            'jornadas-0-precio_externo': '80000',
+            'jornadas-0-cupo_maximo': '30',
+            'jornadas-0-orden': '1',
+            'jornadas-0-activa': 'on',
+            'jornadas-1-nombre': 'Jornada infantil',
+            'jornadas-1-publico': JornadaEvento.Publicos.MENORES,
+            'jornadas-1-fecha_inicio': (inicio + timedelta(hours=3)).strftime(formato),
+            'jornadas-1-fecha_fin': (inicio + timedelta(hours=5)).strftime(formato),
+            'jornadas-1-precio_estudiante': '40000',
+            'jornadas-1-precio_externo': '55000',
+            'jornadas-1-cupo_maximo': '25',
+            'jornadas-1-orden': '2',
+            'jornadas-1-activa': 'on',
+        })
+
+        self.assertRedirects(response, reverse('gestion:promociones_eventos'))
+        evento = Evento.objects.get(nombre='Seminario por jornadas')
+        self.assertEqual(evento.jornadas.count(), 2)
+        self.assertEqual(
+            evento.jornadas.get(publico=JornadaEvento.Publicos.ADULTOS).precio_externo,
+            80000,
+        )
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    def test_seminario_reporta_valor_con_descuento_y_pago_se_aprueba(self):
+        evento = Evento.objects.create(
+            tipo=Evento.Tipos.SEMINARIO,
+            nombre='Seminario pagado',
+            descripcion='Seminario para validar pagos',
+            fecha_inicio=timezone.now() + timedelta(days=10),
+            lugar='Galeras BJJ',
+            precio_estudiante=0,
+            precio_externo=0,
+            consentimiento_evento='Acepto participar en este seminario.',
+            reglamento_adultos='Reglamento visible para participantes adultos.',
+            reglamento_menores='Reglamento visible para menores y acudientes.',
+        )
+        jornada = JornadaEvento.objects.create(
+            evento=evento,
+            nombre='Jornada adultos',
+            publico=JornadaEvento.Publicos.ADULTOS,
+            fecha_inicio=evento.fecha_inicio,
+            precio_estudiante=60000,
+            precio_externo=80000,
+        )
+
+        pagina = self.client.get(
+            reverse('gestion:inscribirse_evento', args=[evento.id])
+        )
+        self.assertNotContains(pagina, 'name="peso"')
+        self.assertContains(pagina, 'Valor pagado')
+        self.assertContains(pagina, evento.consentimiento_evento)
+        self.assertContains(pagina, evento.reglamento_adultos)
+        response = self.client.post(
+            reverse('gestion:inscribirse_evento', args=[evento.id]),
+            {
+                'participante_nombre': 'Visitante Seminario',
+                'participante_documento': 'SEM-EXT-1',
+                'fecha_nacimiento': '1990-05-10',
+                'correo': 'seminario@example.com',
+                'telefono': '3009876543',
+                'jornada': jornada.id,
+                'acepta_reglamento': 'on',
+                'acepta_consentimiento': 'on',
+                'metodo_qr': self.metodo.id,
+                'valor_pagado': '65000',
+                'referencia_pago': 'SEM-DESCUENTO-1',
+                'comprobante': SimpleUploadedFile(
+                    'seminario.pdf', b'%PDF-1.4\n%%EOF'
+                ),
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'payment-feedback-overlay')
+        self.assertContains(response, 'Valor pagado: $ 65.000')
+        inscripcion = InscripcionEvento.objects.get(evento=evento)
+        self.assertIsNone(inscripcion.peso)
+        self.assertEqual(inscripcion.jornada, jornada)
+        self.assertEqual(inscripcion.tarifa_publicada, 80000)
+        self.assertEqual(inscripcion.pago.valor, 65000)
+
+        self.client.force_login(self.admin)
+        historial = self.client.get(
+            reverse('gestion:inscripciones_evento', args=[evento.id])
+        )
+        self.assertContains(historial, 'Total: 1')
+        self.assertContains(historial, 'Jornada adultos: 1')
+        edicion = self.client.get(
+            reverse('gestion:editar_inscripcion_evento', args=[inscripcion.id])
+        )
+        self.assertEqual(edicion.status_code, 200)
+        self.assertContains(edicion, jornada.nombre)
+        self.assertNotContains(edicion, 'name="peso"')
+
+        aprobacion = self.client.post(
+            reverse('gestion:validar_pago', args=[inscripcion.pago_id]),
+            {'estado': Pago.Estados.APROBADO},
+            follow=True,
+        )
+
+        self.assertEqual(aprobacion.status_code, 200)
+        inscripcion.refresh_from_db()
+        inscripcion.pago.refresh_from_db()
+        self.assertEqual(inscripcion.estado, InscripcionEvento.Estados.CONFIRMADA)
+        self.assertEqual(inscripcion.pago.estado, Pago.Estados.APROBADO)
+        self.assertContains(aprobacion, 'Valor validado: $ 65.000')
 
     def crear_torneo_gratuito(self):
         evento = Evento.objects.create(
@@ -940,6 +1077,9 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
             'precio_externo': '0',
             'publico': Evento.Publicos.TODOS,
             'alcance_torneo': Evento.AlcancesTorneo.INTERNO,
+            'consentimiento_evento': 'Consentimiento del seminario.',
+            'reglamento_adultos': 'Reglamento para adultos.',
+            'reglamento_menores': 'Reglamento para menores.',
             'orden': '10',
             'activo': 'on',
         })

@@ -227,6 +227,49 @@ class Evento(models.Model):
         return self.nombre
 
 
+class JornadaEvento(models.Model):
+    class Publicos(models.TextChoices):
+        TODOS = 'TODOS', 'Todo público'
+        ADULTOS = 'ADULTOS', 'Adultos'
+        MENORES = 'MENORES', 'Infantil / menores de edad'
+
+    evento = models.ForeignKey(
+        Evento, on_delete=models.CASCADE, related_name='jornadas'
+    )
+    nombre = models.CharField(
+        max_length=120,
+        help_text='Ejemplo: Jornada adultos o Jornada infantil.',
+    )
+    publico = models.CharField(
+        max_length=20, choices=Publicos.choices, default=Publicos.TODOS
+    )
+    fecha_inicio = models.DateTimeField()
+    fecha_fin = models.DateTimeField(blank=True, null=True)
+    precio_estudiante = models.DecimalField(max_digits=12, decimal_places=2)
+    precio_externo = models.DecimalField(max_digits=12, decimal_places=2)
+    cupo_maximo = models.PositiveIntegerField(blank=True, null=True)
+    orden = models.PositiveIntegerField(default=1)
+    activa = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['orden', 'fecha_inicio', 'id']
+
+    @property
+    def inscripciones_confirmadas(self):
+        return self.inscripciones.filter(
+            estado=InscripcionEvento.Estados.CONFIRMADA
+        ).count()
+
+    @property
+    def cupos_disponibles(self):
+        if self.cupo_maximo is None:
+            return None
+        return max(self.cupo_maximo - self.inscripciones_confirmadas, 0)
+
+    def __str__(self):
+        return f'{self.nombre} · {self.get_publico_display()}'
+
+
 class CategoriaEvento(models.Model):
     class Generos(models.TextChoices):
         MIXTA = 'MIXTA', 'Mixta'
@@ -507,6 +550,13 @@ class InscripcionEvento(models.Model):
     evento = models.ForeignKey(
         Evento, on_delete=models.PROTECT, related_name='inscripciones'
     )
+    jornada = models.ForeignKey(
+        JornadaEvento,
+        on_delete=models.PROTECT,
+        blank=True,
+        null=True,
+        related_name='inscripciones',
+    )
     alumno = models.ForeignKey(
         'alumnos.Alumno',
         on_delete=models.SET_NULL,
@@ -549,6 +599,9 @@ class InscripcionEvento(models.Model):
         related_name='inscripciones',
     )
     peso = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True)
+    tarifa_publicada = models.DecimalField(
+        max_digits=12, decimal_places=2, blank=True, null=True
+    )
     acepta_consentimiento = models.BooleanField(default=False)
     texto_consentimiento = models.TextField(blank=True)
     acepta_reglamento = models.BooleanField(default=False)
@@ -575,9 +628,20 @@ class InscripcionEvento(models.Model):
             models.UniqueConstraint(
                 fields=['evento', 'participante_documento'],
                 condition=(
-                    ~Q(estado='CANCELADA') & Q(categoria_evento__isnull=True)
+                    ~Q(estado='CANCELADA')
+                    & Q(categoria_evento__isnull=True)
+                    & Q(jornada__isnull=True)
                 ),
                 name='inscripcion_sin_categoria_documento_activa_unica',
+            ),
+            models.UniqueConstraint(
+                fields=['evento', 'participante_documento', 'jornada'],
+                condition=(
+                    ~Q(estado='CANCELADA')
+                    & Q(categoria_evento__isnull=True)
+                    & Q(jornada__isnull=False)
+                ),
+                name='inscripcion_jornada_documento_activa_unica',
             ),
         ]
 

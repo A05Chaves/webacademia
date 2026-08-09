@@ -5,9 +5,10 @@ from django.utils import timezone
 
 from pagos.models import (
     AcademiaCompetidora, CategoriaEvento, Evento, InscripcionEvento,
-    MetodoPagoQR, Pago, Promocion,
+    JornadaEvento, MetodoPagoQR, Pago, Promocion,
 )
 from django import forms
+from django.forms import inlineformset_factory
 from django.db.models import Q
 from django.contrib.auth import get_user_model
 from .models import DiaHorario, HoraHorario
@@ -419,6 +420,18 @@ class EventoForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['publico'].label = 'Público general del evento'
+        self.fields['publico'].help_text = (
+            'Se usa cuando el evento no tiene jornadas separadas.'
+        )
+        self.fields['precio_estudiante'].label = 'Precio base para estudiantes'
+        self.fields['precio_externo'].label = 'Precio base para externos'
+        self.fields['precio_estudiante'].help_text = (
+            'Tarifa usada cuando no se configuran jornadas con precios propios.'
+        )
+        self.fields['precio_externo'].help_text = (
+            'Tarifa usada cuando no se configuran jornadas con precios propios.'
+        )
         for nombre in (
             'fecha_inicio', 'fecha_fin', 'fecha_inicio_inscripcion',
             'fecha_limite_inscripcion',
@@ -443,15 +456,18 @@ class EventoForm(forms.ModelForm):
                 'fecha_limite_inscripcion',
                 'El cierre de inscripciones debe ser posterior a su apertura.',
             )
+        requiere_documentos_legales = cleaned.get('tipo') in (
+            Evento.Tipos.TORNEO, Evento.Tipos.SEMINARIO,
+        )
         if (
-            cleaned.get('tipo') == Evento.Tipos.TORNEO
+            requiere_documentos_legales
             and not (cleaned.get('consentimiento_evento') or '').strip()
         ):
             self.add_error(
                 'consentimiento_evento',
                 'Debes configurar el consentimiento que firmarán los participantes.',
             )
-        if cleaned.get('tipo') == Evento.Tipos.TORNEO:
+        if requiere_documentos_legales:
             publico = cleaned.get('publico')
             if publico != Evento.Publicos.MENORES and not (
                 cleaned.get('reglamento_adultos') or ''
@@ -480,6 +496,56 @@ class EventoForm(forms.ModelForm):
                 'Guarda primero el torneo, crea sus categorías y después publícalo.',
             )
         return cleaned
+
+
+class JornadaEventoForm(forms.ModelForm):
+    class Meta:
+        model = JornadaEvento
+        fields = [
+            'nombre', 'publico', 'fecha_inicio', 'fecha_fin',
+            'precio_estudiante', 'precio_externo', 'cupo_maximo',
+            'orden', 'activa',
+        ]
+        widgets = {
+            'fecha_inicio': forms.DateTimeInput(
+                format='%Y-%m-%dT%H:%M', attrs={'type': 'datetime-local'}
+            ),
+            'fecha_fin': forms.DateTimeInput(
+                format='%Y-%m-%dT%H:%M', attrs={'type': 'datetime-local'}
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['fecha_inicio'].input_formats = ['%Y-%m-%dT%H:%M']
+        self.fields['fecha_fin'].input_formats = ['%Y-%m-%dT%H:%M']
+        for campo in self.fields.values():
+            if isinstance(campo.widget, forms.CheckboxInput):
+                campo.widget.attrs['class'] = 'form-check-input'
+            elif isinstance(campo.widget, forms.Select):
+                campo.widget.attrs['class'] = 'form-select'
+            else:
+                campo.widget.attrs['class'] = 'form-control'
+
+    def clean(self):
+        cleaned = super().clean()
+        inicio = cleaned.get('fecha_inicio')
+        fin = cleaned.get('fecha_fin')
+        if inicio and fin and fin < inicio:
+            self.add_error('fecha_fin', 'La jornada no puede terminar antes de iniciar.')
+        for campo in ('precio_estudiante', 'precio_externo'):
+            if cleaned.get(campo) is not None and cleaned[campo] < 0:
+                self.add_error(campo, 'El precio no puede ser negativo.')
+        return cleaned
+
+
+JornadaEventoFormSet = inlineformset_factory(
+    Evento,
+    JornadaEvento,
+    form=JornadaEventoForm,
+    extra=2,
+    can_delete=True,
+)
 
 
 class CategoriaEventoForm(forms.ModelForm):
@@ -519,6 +585,13 @@ class CategoriaEventoForm(forms.ModelForm):
 
 
 class InscripcionEventoForm(forms.ModelForm):
+    jornada = forms.ModelChoiceField(
+        queryset=JornadaEvento.objects.none(),
+        required=False,
+        label='Jornada del seminario',
+        empty_label='Selecciona la jornada',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
     academia_registrada = forms.ModelChoiceField(
         queryset=AcademiaCompetidora.objects.none(),
         required=False,
@@ -541,8 +614,20 @@ class InscripcionEventoForm(forms.ModelForm):
     )
     metodo_qr = forms.ModelChoiceField(
         queryset=MetodoPagoQR.objects.none(),
+        required=False,
         label='Método de pago',
         widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    valor_pagado = forms.DecimalField(
+        required=False,
+        min_value=0.01,
+        max_digits=10,
+        decimal_places=2,
+        label='Valor realmente pagado',
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control', 'min': '0.01', 'step': '0.01',
+        }),
+        help_text='Ingresa el valor transferido, incluso si recibiste un descuento.',
     )
     referencia_pago = forms.CharField(
         required=False, widget=forms.TextInput(attrs={'class': 'form-control'})
@@ -560,7 +645,7 @@ class InscripcionEventoForm(forms.ModelForm):
             'participante_nombre', 'participante_documento', 'fecha_nacimiento',
             'correo', 'telefono', 'academia_origen', 'foto_participante',
             'acudiente_nombre', 'acudiente_documento',
-            'acudiente_telefono', 'categoria_evento', 'peso',
+            'acudiente_telefono', 'jornada', 'categoria_evento', 'peso',
             'acepta_reglamento', 'acepta_consentimiento', 'firma_base64',
         ]
         widgets = {
@@ -583,7 +668,13 @@ class InscripcionEventoForm(forms.ModelForm):
             ).exclude(logo='').order_by('nombre')
         )
         self.fields['categoria_evento'].queryset = CategoriaEvento.objects.none()
+        jornadas = JornadaEvento.objects.none()
+        if evento and evento.tipo == Evento.Tipos.SEMINARIO:
+            jornadas = evento.jornadas.filter(activa=True)
+        self.fields['jornada'].queryset = jornadas
+        tiene_jornadas = jornadas.exists()
         if evento and evento.tipo == Evento.Tipos.TORNEO:
+            self.fields.pop('jornada')
             self.fields['categoria_evento'].queryset = evento.categorias.filter(
                 activa=True
             )
@@ -611,40 +702,32 @@ class InscripcionEventoForm(forms.ModelForm):
             self.fields.pop('academia_origen')
             self.fields.pop('foto_participante')
             self.fields.pop('firma_base64')
-        if evento and evento.precio_estudiante == 0 and evento.precio_externo == 0:
+            self.fields.pop('peso')
+            if tiene_jornadas:
+                self.fields['jornada'].required = True
+            else:
+                self.fields.pop('jornada')
+        evento_sin_costo = False
+        if evento:
+            if tiene_jornadas:
+                evento_sin_costo = not jornadas.filter(
+                    Q(precio_estudiante__gt=0) | Q(precio_externo__gt=0)
+                ).exists()
+            else:
+                evento_sin_costo = (
+                    evento.precio_estudiante == 0 and evento.precio_externo == 0
+                )
+        if evento and evento_sin_costo:
             self.fields.pop('metodo_qr')
+            self.fields.pop('valor_pagado')
             self.fields.pop('referencia_pago')
             self.fields.pop('comprobante')
-        elif evento:
-            precio_aplicable = (
-                evento.precio_externo
-                if (
-                    evento.tipo == Evento.Tipos.TORNEO
-                    and evento.alcance_torneo == Evento.AlcancesTorneo.ABIERTO
-                )
-                else evento.precio_estudiante
-            )
-            if precio_aplicable > 0:
-                self.fields['referencia_pago'].required = True
-                self.fields['comprobante'].required = True
         for campo in self.fields.values():
             if not isinstance(campo.widget, forms.CheckboxInput):
                 campo.widget.attrs.setdefault('class', 'form-control')
 
     def clean_comprobante(self):
         archivo = self.cleaned_data.get('comprobante')
-        precio_aplicable = 0
-        if self.evento:
-            precio_aplicable = (
-                self.evento.precio_externo
-                if (
-                    self.evento.tipo == Evento.Tipos.TORNEO
-                    and self.evento.alcance_torneo == Evento.AlcancesTorneo.ABIERTO
-                )
-                else self.evento.precio_estudiante
-            )
-        if precio_aplicable > 0 and not archivo:
-            raise forms.ValidationError('Adjunta el comprobante de pago.')
         if archivo:
             validate_payment_receipt(archivo)
         return archivo
@@ -701,15 +784,25 @@ class InscripcionEventoForm(forms.ModelForm):
             edad = hoy.year - nacimiento.year - (
                 (hoy.month, hoy.day) < (nacimiento.month, nacimiento.day)
             )
-            if self.evento and self.evento.publico == Evento.Publicos.ADULTOS and edad < 18:
+            jornada = cleaned.get('jornada')
+            publico_aplicable = (
+                jornada.publico if jornada else self.evento.publico if self.evento else None
+            )
+            if publico_aplicable == Evento.Publicos.ADULTOS and edad < 18:
                 self.add_error('fecha_nacimiento', 'Este evento es únicamente para adultos.')
-            if self.evento and self.evento.publico == Evento.Publicos.MENORES and edad >= 18:
+            if publico_aplicable == Evento.Publicos.MENORES and edad >= 18:
                 self.add_error('fecha_nacimiento', 'Este evento es únicamente para menores.')
             if edad < 18:
                 for campo in ('acudiente_nombre', 'acudiente_documento', 'acudiente_telefono'):
                     if not cleaned.get(campo):
                         self.add_error(campo, 'Obligatorio para menores de edad.')
         categoria = cleaned.get('categoria_evento')
+        jornada = cleaned.get('jornada')
+        if jornada:
+            if not self.evento or jornada.evento_id != self.evento.id or not jornada.activa:
+                self.add_error('jornada', 'La jornada seleccionada no está disponible.')
+            elif jornada.cupos_disponibles == 0:
+                self.add_error('jornada', 'Esta jornada ya no tiene cupos disponibles.')
         if (
             self.evento
             and self.evento.tipo == Evento.Tipos.TORNEO
@@ -765,10 +858,40 @@ class InscripcionEventoForm(forms.ModelForm):
             self.add_error('acepta_consentimiento', 'Debes aceptar el consentimiento.')
         if (
             self.evento
-            and self.evento.tipo == Evento.Tipos.TORNEO
+            and self.evento.tipo in (Evento.Tipos.TORNEO, Evento.Tipos.SEMINARIO)
             and not cleaned.get('acepta_reglamento')
         ):
-            self.add_error('acepta_reglamento', 'Debes aceptar el reglamento del torneo.')
+            self.add_error('acepta_reglamento', 'Debes aceptar el reglamento del evento.')
+
+        alumno = None
+        documento = (cleaned.get('participante_documento') or '').strip()
+        if documento:
+            alumno = Alumno.objects.filter(documento__iexact=documento).first()
+        if self.evento:
+            es_externo = (
+                self.evento.tipo == Evento.Tipos.TORNEO
+                and self.evento.alcance_torneo == Evento.AlcancesTorneo.ABIERTO
+            ) or not alumno
+            if jornada:
+                tarifa = (
+                    jornada.precio_externo if es_externo
+                    else jornada.precio_estudiante
+                )
+            else:
+                tarifa = (
+                    self.evento.precio_externo if es_externo
+                    else self.evento.precio_estudiante
+                )
+            cleaned['tarifa_aplicable'] = tarifa
+            if tarifa > 0:
+                for campo, mensaje in (
+                    ('metodo_qr', 'Selecciona el método utilizado.'),
+                    ('valor_pagado', 'Indica el valor que realmente pagaste.'),
+                    ('referencia_pago', 'Ingresa la referencia del pago.'),
+                    ('comprobante', 'Adjunta el comprobante de pago.'),
+                ):
+                    if campo in self.fields and not cleaned.get(campo):
+                        self.add_error(campo, mensaje)
         return cleaned
 
 
@@ -790,7 +913,7 @@ class EditarInscripcionEventoForm(forms.ModelForm):
             'participante_nombre', 'participante_documento', 'fecha_nacimiento',
             'correo', 'telefono', 'academia_origen', 'foto_participante',
             'acudiente_nombre', 'acudiente_documento', 'acudiente_telefono',
-            'categoria_evento', 'peso', 'estado',
+            'jornada', 'categoria_evento', 'peso', 'estado',
         ]
         widgets = {
             'fecha_nacimiento': forms.DateInput(attrs={'type': 'date'}),
@@ -810,15 +933,27 @@ class EditarInscripcionEventoForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         for nombre in (
             'participante_nombre', 'participante_documento', 'fecha_nacimiento',
-            'correo', 'telefono', 'categoria_evento', 'peso', 'estado',
+            'correo', 'telefono', 'estado',
         ):
             self.fields[nombre].required = True
-        categorias = CategoriaEvento.objects.none()
-        if self.evento:
-            categorias = self.evento.categorias.filter(
+        if self.evento and self.evento.tipo == Evento.Tipos.TORNEO:
+            self.fields['categoria_evento'].required = True
+            self.fields['peso'].required = True
+            self.fields.pop('jornada')
+            self.fields['categoria_evento'].queryset = self.evento.categorias.filter(
                 Q(activa=True) | Q(pk=self.instance.categoria_evento_id)
             )
-        self.fields['categoria_evento'].queryset = categorias
+        else:
+            self.fields.pop('categoria_evento')
+            self.fields.pop('peso')
+            jornadas = self.evento.jornadas.filter(
+                Q(activa=True) | Q(pk=self.instance.jornada_id)
+            ) if self.evento else JornadaEvento.objects.none()
+            if jornadas.exists():
+                self.fields['jornada'].queryset = jornadas
+                self.fields['jornada'].required = True
+            else:
+                self.fields.pop('jornada')
         if (
             self.evento
             and self.evento.alcance_torneo == Evento.AlcancesTorneo.ABIERTO
@@ -859,6 +994,7 @@ class EditarInscripcionEventoForm(forms.ModelForm):
                         self.add_error(campo, 'Obligatorio para menores de 18 años.')
 
         categoria = cleaned.get('categoria_evento')
+        jornada = cleaned.get('jornada')
         documento = (cleaned.get('participante_documento') or '').strip()
         if categoria and self.evento and categoria.evento_id != self.evento.id:
             self.add_error('categoria_evento', 'La categoría no pertenece a este evento.')
@@ -890,6 +1026,20 @@ class EditarInscripcionEventoForm(forms.ModelForm):
                 self.add_error(
                     'categoria_evento',
                     'No puede conservar dos inscripciones en categorías regulares.',
+                )
+        if jornada and self.evento:
+            if jornada.evento_id != self.evento.id:
+                self.add_error('jornada', 'La jornada no pertenece a este evento.')
+            elif InscripcionEvento.objects.filter(
+                evento=self.evento,
+                participante_documento__iexact=documento,
+                jornada=jornada,
+            ).exclude(pk=self.instance.pk).exclude(
+                estado=InscripcionEvento.Estados.CANCELADA
+            ).exists():
+                self.add_error(
+                    'jornada',
+                    'El participante ya está inscrito en esta jornada.',
                 )
         return cleaned
 

@@ -1,7 +1,8 @@
 from django.contrib import admin
 from .models import (
     AcademiaCompetidora, AplicacionPromocion, CategoriaEvento, Evento,
-    InscripcionEvento, LlaveCategoriaEvento, MetodoPagoQR, Pago, Promocion,
+    InscripcionEvento, JornadaEvento, LlaveCategoriaEvento, MetodoPagoQR,
+    Pago, Promocion,
 )
 
 
@@ -69,6 +70,15 @@ class CategoriaEventoAdmin(admin.ModelAdmin):
     list_filter = ('evento', 'tipo_categoria', 'genero', 'activa')
 
 
+@admin.register(JornadaEvento)
+class JornadaEventoAdmin(admin.ModelAdmin):
+    list_display = (
+        'nombre', 'evento', 'publico', 'fecha_inicio', 'precio_estudiante',
+        'precio_externo', 'cupo_maximo', 'activa',
+    )
+    list_filter = ('evento', 'publico', 'activa')
+
+
 @admin.register(AcademiaCompetidora)
 class AcademiaCompetidoraAdmin(admin.ModelAdmin):
     list_display = ('nombre', 'logo', 'activa', 'actualizada')
@@ -85,7 +95,8 @@ class LlaveCategoriaEventoAdmin(admin.ModelAdmin):
 class InscripcionEventoAdmin(admin.ModelAdmin):
     list_display = (
         'evento', 'participante_nombre', 'participante_documento',
-        'academia_origen', 'categoria_evento', 'fecha_firma', 'estado', 'pago',
+        'jornada', 'academia_origen', 'categoria_evento', 'fecha_firma',
+        'estado', 'pago',
     )
     list_filter = ('estado', 'evento')
     search_fields = ('participante_nombre', 'participante_documento', 'acudiente_documento', 'correo')

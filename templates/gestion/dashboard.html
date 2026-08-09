@@ -220,7 +220,7 @@
         <div class="card bg-dark text-light border-success">
             <div class="card-body">
                 <h6>Saldo total</h6>
-                <h2>${{ saldo_total|floatformat:0 }}</h2>
+                <h2>$ {{ saldo_total|floatformat:"2g" }}</h2>
                 <small>Disponible en cuentas</small>
             </div>
         </div>
@@ -230,7 +230,7 @@
         <div class="card bg-dark text-light border-info">
             <div class="card-body">
                 <h6>Ingresos del mes</h6>
-                <h2>${{ ingresos_mes|floatformat:0 }}</h2>
+                <h2>$ {{ ingresos_mes|floatformat:"2g" }}</h2>
                 <small>Ingresos operativos, sin transferencias internas</small>
             </div>
         </div>
@@ -240,7 +240,7 @@
         <div class="card bg-dark text-light border-danger">
             <div class="card-body">
                 <h6>Gastos del mes</h6>
-                <h2>${{ gastos_mes|floatformat:0 }}</h2>
+                <h2>$ {{ gastos_mes|floatformat:"2g" }}</h2>
                 <small>Egresos operativos, sin transferencias internas</small>
             </div>
         </div>
@@ -250,7 +250,7 @@
         <div class="card bg-dark text-light border-warning">
             <div class="card-body">
                 <h6>Utilidad del mes</h6>
-                <h2>${{ utilidad_mes|floatformat:0 }}</h2>
+                <h2>$ {{ utilidad_mes|floatformat:"2g" }}</h2>
                 <small>Ingresos - gastos</small>
             </div>
         </div>
@@ -272,9 +272,9 @@
                         <td><strong>{{ evento.nombre }}</strong></td>
                         <td>{{ evento.get_tipo_display }}</td>
                         <td>{{ evento.fecha_inicio|date:"d/m/Y" }}</td>
-                        <td class="text-end text-success">${{ evento.ingresos_evento|floatformat:0 }}</td>
-                        <td class="text-end text-danger">${{ evento.gastos_evento|floatformat:0 }}</td>
-                        <td class="text-end {% if evento.resultado_evento >= 0 %}text-success{% else %}text-danger{% endif %}"><strong>${{ evento.resultado_evento|floatformat:0 }}</strong></td>
+                        <td class="text-end text-success">$ {{ evento.ingresos_evento|floatformat:"2g" }}</td>
+                        <td class="text-end text-danger">$ {{ evento.gastos_evento|floatformat:"2g" }}</td>
+                        <td class="text-end {% if evento.resultado_evento >= 0 %}text-success{% else %}text-danger{% endif %}"><strong>$ {{ evento.resultado_evento|floatformat:"2g" }}</strong></td>
                     </tr>
                     {% empty %}
                     <tr><td colspan="6" class="text-center py-4">Todavía no hay movimientos vinculados a eventos.</td></tr>
@@ -308,7 +308,7 @@
                     <tr>
                         <td>{{ cuenta.nombre }}</td>
                         <td>{{ cuenta.get_tipo_display }}</td>
-                        <td>${{ cuenta.saldo_calculado|floatformat:0 }}</td>
+                        <td>$ {{ cuenta.saldo_calculado|floatformat:"2g" }}</td>
                     </tr>
                     {% empty %}
                     <tr>
@@ -354,7 +354,7 @@
 
                         <td>{{ pago.concepto }}</td>
 
-                        <td>${{ pago.valor|floatformat:0 }}</td>
+                        <td>$ {{ pago.valor|floatformat:"2g" }}</td>
 
                         <td>
                             {{ pago.fecha_vencimiento }}
