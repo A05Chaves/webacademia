@@ -550,20 +550,24 @@
 
                 {% if user.is_authenticated and user.is_staff %}
 
+                    {% if user.is_superuser or not user.perfil_instructor.activo %}
                     <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'gestion:dashboard' %}"
                        aria-label="Dashboard" data-nav-tooltip title="Dashboard">
                         <i class="fa-solid fa-chart-line"></i><span class="menu-label">Dashboard</span>
                     </a>
+                    {% endif %}
 
                     <a class="btn btn-outline-info btn-sm menu-btn" href="{% url 'gestion:control_tv' %}"
                        aria-label="Modo TV" data-nav-tooltip title="Modo TV">
                         <i class="fa-solid fa-tv"></i><span class="menu-label">Modo TV</span>
                     </a>
 
+                    {% if user.is_superuser or not user.perfil_instructor.activo %}
                     <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'tienda:panel' %}"
                        aria-label="Tienda" data-nav-tooltip title="Dashboard de tienda">
                         <i class="fa-solid fa-store"></i><span class="menu-label">Tienda</span>
                     </a>
+                    {% endif %}
 
                     
 
@@ -592,6 +596,7 @@
                         <i class="fa-solid fa-file-signature"></i><span class="menu-label">Registros</span>
                     </a>
 
+                    {% if user.is_superuser or not user.perfil_instructor.activo %}
                     <a class="btn btn-outline-light btn-sm menu-btn"
                         href="{% url 'gestion:configuraciones' %}"
                         aria-label="Configuraciones" data-nav-tooltip title="Configuraciones">
@@ -621,6 +626,7 @@
                        aria-label="Mi perfil" data-nav-tooltip title="Mi perfil">
                         <i class="fa-solid fa-address-card"></i><span class="menu-label">Mi perfil</span>
                     </a>
+                    {% endif %}
 
                     {% if not user.username_modificado %}
                         <a class="btn btn-outline-light btn-sm menu-btn"

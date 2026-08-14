@@ -6,7 +6,7 @@ from io import BytesIO
 from urllib.parse import quote
 
 from django.contrib import messages
-from django.contrib.admin.views.decorators import staff_member_required
+from gestion.decorators import administrador_required as staff_member_required
 from django.conf import settings
 from django.core.mail import EmailMessage
 from django.db import transaction

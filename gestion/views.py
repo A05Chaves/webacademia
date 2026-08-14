@@ -25,6 +25,7 @@ import json
 import secrets
 from django.contrib.auth.hashers import make_password
 from django.contrib.admin.views.decorators import staff_member_required
+from .decorators import administrador_required
 from django.db.models.manager import BaseManager
 from django.shortcuts import render, redirect
 from django.urls import reverse
@@ -128,6 +129,19 @@ def limites_confirmacion_clase(clase, ahora=None, configuracion=None):
             minutes=configuracion.minutos_despues_confirmacion
         ),
     )
+
+
+def _clase_corresponde_al_dia(clase, ahora):
+    dias_semana = (
+        ClaseProgramada.DiasSemana.LUNES,
+        ClaseProgramada.DiasSemana.MARTES,
+        ClaseProgramada.DiasSemana.MIERCOLES,
+        ClaseProgramada.DiasSemana.JUEVES,
+        ClaseProgramada.DiasSemana.VIERNES,
+        ClaseProgramada.DiasSemana.SABADO,
+        ClaseProgramada.DiasSemana.DOMINGO,
+    )
+    return clase.dia == dias_semana[ahora.weekday()]
 
 
 def _clases_confirmables_del_dia(clases, ahora, configuracion=None):
@@ -425,12 +439,8 @@ def home_publica(request):
         _instructor_activo_de_usuario(request.user)
         if request.user.is_authenticated else None
     )
-    clases_confirmables = (
-        list(clases_hoy)
-        if instructor_sesion
-        else _clases_confirmables_del_dia(
-            clases_hoy, ahora, configuracion_clases
-        )
+    clases_confirmables = _clases_confirmables_del_dia(
+        clases_hoy, ahora, configuracion_clases
     )
     clase_confirmable = clases_confirmables[0] if clases_confirmables else None
     clase_visible = _clase_visible_en_home(clases_hoy, ahora)
@@ -564,7 +574,7 @@ def asistencias_home_actuales(request):
     })
 
 
-@staff_member_required
+@administrador_required
 def dashboard(request):
     alumnos = Alumno.objects.all()
 
@@ -748,12 +758,15 @@ def dashboard(request):
 @staff_member_required
 def lista_alumnos(request):
     consulta = request.GET.get('q', '').strip()
-    alumnos = Alumno.objects.select_related('user').all()
+    alumnos = Alumno.objects.select_related('user', 'user__perfil_instructor').all()
 
     for alumno in alumnos:
         alumno.actualizar_estado()
 
-    alumnos = Alumno.objects.select_related('user').all()
+    alumnos = Alumno.objects.select_related('user', 'user__perfil_instructor').all()
+    profesores = Instructor.objects.select_related(
+        'user', 'user__perfil_alumno'
+    ).filter(activo=True)
     if consulta:
         for termino in consulta.split():
             alumnos = alumnos.filter(
@@ -762,9 +775,41 @@ def lista_alumnos(request):
                 | Q(user__last_name__icontains=termino)
                 | Q(user__username__icontains=termino)
             )
+            profesores = profesores.filter(
+                Q(documento__icontains=termino)
+                | Q(especialidad__icontains=termino)
+                | Q(user__first_name__icontains=termino)
+                | Q(user__last_name__icontains=termino)
+                | Q(user__username__icontains=termino)
+            )
+
+    alumnos = list(alumnos)
+    profesores = list(profesores)
+    profesores_por_usuario = {
+        profesor.user_id: profesor for profesor in profesores
+    }
+    for alumno in alumnos:
+        profesor = profesores_por_usuario.get(alumno.user_id)
+        alumno.es_profesor = profesor is not None
+        alumno.especialidad_profesor = (
+            profesor.especialidad if profesor else ''
+        )
+    estudiantes = [
+        alumno for alumno in alumnos
+        if not alumno.es_profesor
+    ]
+    usuarios_con_ficha_alumno = {alumno.user_id for alumno in alumnos}
+    profesores_exclusivos = [
+        profesor for profesor in profesores
+        if profesor.user_id not in usuarios_con_ficha_alumno
+    ]
 
     return render(request, 'gestion/lista_alumnos.html', {
         'alumnos': alumnos,
+        'estudiantes': estudiantes,
+        'profesores': profesores,
+        'profesores_exclusivos': profesores_exclusivos,
+        'total_resultados': len(alumnos) + len(profesores_exclusivos),
         'consulta': consulta,
     })
 
@@ -1691,7 +1736,10 @@ def confirmar_asistencia(request, clase_id):
         clase, ahora, configuracion_clases
     )
 
-    if not instructor and not (ventana_inicio <= ahora <= ventana_fin):
+    if (
+        not _clase_corresponde_al_dia(clase, ahora)
+        or not (ventana_inicio <= ahora <= ventana_fin)
+    ):
         messages.warning(
             request,
             'La asistencia solo puede confirmarse desde '
@@ -1807,7 +1855,10 @@ def confirmar_asistencia_kiosko(request):
         clase, ahora, configuracion_clases
     )
 
-    if not instructor and not (ventana_inicio <= ahora <= ventana_fin):
+    if (
+        not _clase_corresponde_al_dia(clase, ahora)
+        or not (ventana_inicio <= ahora <= ventana_fin)
+    ):
         messages.warning(
             request,
             'La asistencia solo puede confirmarse desde '
@@ -3328,7 +3379,7 @@ def reenviar_comprobante_pago(request, pago_id):
 
 # VISTA PARA AGREGAR MUSICA
 
-@staff_member_required
+@administrador_required
 def configurar_home(request):
 
     config_home = ConfiguracionHome.objects.filter(
@@ -3413,22 +3464,13 @@ def confirmar_clase_home(request):
 
     ahora = timezone.localtime()
 
-    dias_semana = {
-        0: ClaseProgramada.DiasSemana.LUNES,
-        1: ClaseProgramada.DiasSemana.MARTES,
-        2: ClaseProgramada.DiasSemana.MIERCOLES,
-        3: ClaseProgramada.DiasSemana.JUEVES,
-        4: ClaseProgramada.DiasSemana.VIERNES,
-        5: ClaseProgramada.DiasSemana.SABADO,
-        6: ClaseProgramada.DiasSemana.DOMINGO,
-    }
     configuracion_clases = ConfiguracionClases.cargar()
     ventana_inicio, ventana_fin = limites_confirmacion_clase(
         clase, ahora, configuracion_clases
     )
 
-    if not instructor and (
-        clase.dia != dias_semana[ahora.weekday()]
+    if (
+        not _clase_corresponde_al_dia(clase, ahora)
         or not (ventana_inicio <= ahora <= ventana_fin)
     ):
         messages.error(
@@ -3450,12 +3492,12 @@ def confirmar_clase_home(request):
 # VISTA PARA CONFIGURAR HOME
 
 
-@staff_member_required
+@administrador_required
 def configuraciones(request):
     return render(request, 'gestion/configuraciones.html')
 
 
-@staff_member_required
+@administrador_required
 def configurar_cuentas(request, cuenta_id=None):
     cuenta = None
     if cuenta_id is not None:
@@ -3487,7 +3529,7 @@ def configurar_cuentas(request, cuenta_id=None):
 
 # VISTAS DE CONFIGURACION DE DIAS Y HORAS
 
-@staff_member_required
+@administrador_required
 def configurar_horario(request):
     configuracion_clases = ConfiguracionClases.cargar()
     form_configuracion = ConfiguracionClasesForm(

@@ -34,12 +34,62 @@
         </div>
         {% if consulta %}
             <div class="form-text text-secondary mt-2">
-                Resultados encontrados: {{ alumnos|length }}
+                Resultados encontrados: {{ total_resultados }}
             </div>
         {% endif %}
     </div>
 </form>
 
+{% if profesores_exclusivos %}
+<section class="card bg-dark text-light border-info mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center border-info">
+        <h3 class="h5 mb-0">
+            <i class="fa-solid fa-chalkboard-user me-2"></i>Profesores sin ficha de estudiante
+        </h3>
+        <span class="badge bg-info text-dark">{{ profesores_exclusivos|length }}</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-dark table-hover table-dark-custom mb-0">
+            <thead>
+                <tr>
+                    <th>Profesor</th>
+                    <th>Documento</th>
+                    <th>Especialidad</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for profesor in profesores_exclusivos %}
+                <tr class="table-info text-dark align-middle">
+                    <td>
+                        {{ profesor.user.get_full_name|title|default:profesor.user.username }}
+                        <span class="badge bg-primary ms-2">PROFESOR</span>
+                    </td>
+                    <td>{{ profesor.documento }}</td>
+                    <td>{{ profesor.especialidad|default:"Sin especialidad" }}</td>
+                    <td>
+                        {% if profesor.activo %}
+                            <span class="badge bg-success">ACTIVO</span>
+                        {% else %}
+                            <span class="badge bg-secondary">INACTIVO</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="text-secondary">Perfil exclusivo de profesor</span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <h3 class="h5 mb-0"><i class="fa-solid fa-users me-2"></i>Estudiantes y profesores</h3>
+    <span class="badge bg-secondary">{{ alumnos|length }}</span>
+</div>
 <div class="table-responsive">
 
     <table class="table table-dark table-hover table-dark-custom">
@@ -47,6 +97,7 @@
         <tr>
             <th>ID</th>
             <th>Usuario</th>
+            <th>Perfil</th>
             <th>Documento</th>
             <th>Disciplina</th>
             <th>Grado</th>
@@ -60,9 +111,19 @@
 
         </tr>
         {% for alumno in alumnos %}
-        <tr>
+        <tr {% if alumno.es_profesor %}class="table-info text-dark align-middle"{% endif %}>
             <td>{{ alumno.id }}</td>
             <td>{{ alumno.user.get_full_name|title|default:alumno.user.username }}</td>
+            <td>
+                {% if alumno.es_profesor %}
+                    <span class="badge bg-primary">PROFESOR</span>
+                    {% if alumno.especialidad_profesor %}
+                        <small class="d-block mt-1">{{ alumno.especialidad_profesor }}</small>
+                    {% endif %}
+                {% else %}
+                    <span class="badge bg-secondary">ESTUDIANTE</span>
+                {% endif %}
+            </td>
             <td>{{ alumno.documento }}</td>
             <td>{{ alumno.disciplina }}</td>
             <td>{{ alumno.grado }}</td>
@@ -120,7 +181,7 @@
         </tr>
         {% empty %}
         <tr>
-            <td colspan="11" class="text-center py-4">
+            <td colspan="12" class="text-center py-4">
                 {% if consulta %}
                     No se encontraron alumnos para “{{ consulta }}”.
                 {% else %}

@@ -223,6 +223,11 @@ class ListaAlumnosFiltroTests(TestCase):
         )
         Alumno.objects.create(user=angel, documento='1085000001')
         Alumno.objects.create(user=lucia, documento='1085000002')
+        Instructor.objects.create(
+            user=lucia,
+            documento='PROF-1085000002',
+            especialidad='Jiu Jitsu',
+        )
         self.client.force_login(administrador)
 
     def test_busca_por_nombre_completo_y_muestra_nombre_propio(self):
@@ -242,6 +247,30 @@ class ListaAlumnosFiltroTests(TestCase):
 
         self.assertContains(response, 'Lucia Egas')
         self.assertNotContains(response, 'Angel Herrera')
+
+    def test_separa_profesores_de_estudiantes(self):
+        profesor_exclusivo = get_user_model().objects.create_user(
+            username='profesor.exclusivo', password='clave',
+            first_name='Carlos', last_name='Profesor',
+        )
+        Instructor.objects.create(
+            user=profesor_exclusivo,
+            documento='PROF-EXCLUSIVO',
+            especialidad='MMA',
+        )
+        response = self.client.get(reverse('gestion:lista_alumnos'))
+
+        self.assertContains(response, 'Profesores')
+        self.assertContains(response, 'PROFESOR')
+        self.assertCountEqual(
+            [profesor.user.username for profesor in response.context['profesores']],
+            ['lucia.egas', 'profesor.exclusivo'],
+        )
+        self.assertContains(response, 'Perfil exclusivo de profesor')
+        self.assertEqual(
+            [alumno.user.username for alumno in response.context['estudiantes']],
+            ['angel.herrera'],
+        )
 
 
 class ConfiguracionYAsistenciaClasesTests(TestCase):
@@ -1629,7 +1658,7 @@ class CalendarioAsistenciaTests(TestCase):
             instructor=self.instructor,
         )
         configuracion = ConfiguracionClases.cargar()
-        configuracion.minutos_antes_confirmacion = 30
+        configuracion.minutos_antes_confirmacion = 60
         configuracion.minutos_despues_confirmacion = 60
         configuracion.save()
         hoy = date(2026, 7, 15)
@@ -1685,7 +1714,7 @@ class CalendarioAsistenciaTests(TestCase):
             str(self.alumno),
         )
 
-    def test_profesor_confirma_sin_plan_ni_restriccion_horaria(self):
+    def test_profesor_confirma_sin_plan_dentro_de_la_ventana_horaria(self):
         usuario_profesor = self.instructor.user
         self.client.force_login(usuario_profesor)
         fuera_de_ventana = timezone.make_aware(
@@ -1695,6 +1724,27 @@ class CalendarioAsistenciaTests(TestCase):
         with patch(
             'gestion.views.timezone.localtime',
             return_value=fuera_de_ventana,
+        ):
+            pagina = self.client.get(reverse('gestion:home_publica'))
+            respuesta = self.client.post(
+                reverse('gestion:confirmar_clase_home'),
+                {'clase_id': self.clase.id},
+            )
+
+        self.assertEqual(pagina.context['clases_confirmables'], [])
+        self.assertRedirects(respuesta, reverse('gestion:home_publica'))
+        self.assertFalse(AsistenciaClase.objects.filter(
+            instructor=self.instructor,
+            clase=self.clase,
+            fecha_clase=date(2026, 7, 15),
+        ).exists())
+
+        dentro_de_ventana = timezone.make_aware(
+            datetime(2026, 7, 15, 17, 15)
+        )
+        with patch(
+            'gestion.views.timezone.localtime',
+            return_value=dentro_de_ventana,
         ):
             pagina = self.client.get(reverse('gestion:home_publica'))
             respuesta = self.client.post(
@@ -1720,6 +1770,50 @@ class CalendarioAsistenciaTests(TestCase):
             panel = self.client.get(reverse('gestion:asistencias_home_actuales'))
         self.assertEqual(panel.json()['asistencias'][0]['nombre'], str(self.instructor))
         self.assertEqual(panel.json()['asistencias'][0]['tipo'], 'Profesor')
+
+    def test_profesor_staff_no_ve_ni_abre_areas_financieras_o_configuracion(self):
+        usuario_profesor = self.instructor.user
+        usuario_profesor.is_staff = True
+        usuario_profesor.save(update_fields=['is_staff'])
+        self.client.force_login(usuario_profesor)
+
+        home = self.client.get(reverse('gestion:home_publica'))
+
+        self.assertNotContains(home, 'href="/dashboard/"')
+        self.assertNotContains(home, 'href="/tienda/"')
+        self.assertNotContains(home, 'href="/configuraciones/"')
+        self.assertContains(home, reverse('gestion:control_tv'))
+        for url in (
+            reverse('gestion:dashboard'),
+            reverse('tienda:panel'),
+            reverse('tienda:configuracion'),
+            reverse('gestion:configuraciones'),
+            reverse('gestion:configurar_home'),
+            reverse('gestion:configurar_horario'),
+            reverse('gestion:configurar_cuentas'),
+        ):
+            self.assertEqual(self.client.get(url).status_code, 403)
+
+    def test_administrador_conserva_acceso_a_areas_restringidas(self):
+        administrador = get_user_model().objects.create_user(
+            username='admin-areas-restringidas',
+            password='clave-admin',
+            is_staff=True,
+        )
+        self.client.force_login(administrador)
+
+        self.assertEqual(
+            self.client.get(reverse('gestion:dashboard')).status_code,
+            200,
+        )
+        self.assertEqual(
+            self.client.get(reverse('gestion:configuraciones')).status_code,
+            200,
+        )
+        self.assertEqual(
+            self.client.get(reverse('tienda:panel')).status_code,
+            200,
+        )
 
     def test_administrador_convierte_estudiante_en_profesor_sin_borrar_historial(self):
         administrador = get_user_model().objects.create_user(

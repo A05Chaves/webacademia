@@ -124,7 +124,7 @@ class HoraHorario(models.Model):
 
 class ConfiguracionClases(models.Model):
     minutos_antes_confirmacion = models.PositiveSmallIntegerField(
-        default=30,
+        default=60,
         validators=[MaxValueValidator(180)],
         verbose_name='Minutos antes de la clase',
     )
