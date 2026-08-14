@@ -373,7 +373,7 @@
 
             <input type="hidden" name="clase_id" id="claseId">
 
-            {% if user.is_authenticated and user.perfil_alumno %}
+            {% if user.is_authenticated and user.perfil_alumno or user.perfil_instructor.activo %}
                 <div class="alert alert-success">
                     <i class="fa-solid fa-user-check"></i>
                     Confirmarás clase como <strong>{{ user.get_full_name|default:user.username }}</strong>

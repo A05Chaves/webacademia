@@ -28,6 +28,7 @@ class AsistenciaClaseAdmin(admin.ModelAdmin):
     list_display = (
         'id',
         'alumno',
+        'instructor',
         'clase',
         'fecha_clase',
         'fecha_confirmacion',
@@ -38,4 +39,7 @@ class AsistenciaClaseAdmin(admin.ModelAdmin):
         'alumno__user__first_name',
         'alumno__user__last_name',
         'alumno__documento',
+        'instructor__user__first_name',
+        'instructor__user__last_name',
+        'instructor__documento',
     )

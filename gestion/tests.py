@@ -1584,7 +1584,7 @@ class CalendarioAsistenciaTests(TestCase):
         self.assertContains(response, 'Confirmarás clase como')
         self.assertContains(response, 'próximas confirmaciones', count=0)
 
-    def test_panel_muestra_confirmados_de_la_proxima_clase_antes_de_iniciar(self):
+    def test_panel_mantiene_clase_actual_aunque_la_siguiente_ya_se_pueda_confirmar(self):
         siguiente = ClaseProgramada.objects.create(
             dia=ClaseProgramada.DiasSemana.MIERCOLES,
             hora_inicio=time(19, 0),
@@ -1616,7 +1616,156 @@ class CalendarioAsistenciaTests(TestCase):
             response = self.client.get(reverse('gestion:home_publica'))
 
         ids = list(response.context['asistencias_hoy'].values_list('id', flat=True))
-        self.assertEqual(ids, [asistencia_siguiente.id])
+        self.assertEqual(ids, [asistencia_actual.id])
+        self.assertNotIn(asistencia_siguiente.id, ids)
+
+    def test_usuario_elige_clase_cuando_se_cruzan_ventanas_de_confirmacion(self):
+        siguiente = ClaseProgramada.objects.create(
+            dia=ClaseProgramada.DiasSemana.MIERCOLES,
+            hora_inicio=time(19, 0),
+            hora_fin=time(20, 0),
+            disciplina=ClaseProgramada.Disciplinas.JIU_JITSU,
+            titulo='Clase siguiente',
+            instructor=self.instructor,
+        )
+        configuracion = ConfiguracionClases.cargar()
+        configuracion.minutos_antes_confirmacion = 30
+        configuracion.minutos_despues_confirmacion = 60
+        configuracion.save()
+        hoy = date(2026, 7, 15)
+        plan = Plan.objects.create(
+            nombre='Plan seleccion de clase',
+            precio='100000',
+            duracion_dias=30,
+            clases_mes=8,
+        )
+        Suscripcion.objects.create(
+            alumno=self.alumno,
+            plan=plan,
+            fecha_inicio=hoy - timedelta(days=1),
+            fecha_vencimiento=hoy + timedelta(days=28),
+            estado=Suscripcion.Estados.ACTIVA,
+        )
+        self.client.force_login(self.usuario)
+        cruce = timezone.make_aware(datetime(2026, 7, 15, 18, 45))
+
+        with patch('gestion.views.timezone.localtime', return_value=cruce):
+            pagina = self.client.get(reverse('gestion:home_publica'))
+            respuesta = self.client.post(
+                reverse('gestion:confirmar_clase_home'),
+                {'clase_id': siguiente.id},
+            )
+            panel_actual = self.client.get(
+                reverse('gestion:asistencias_home_actuales')
+            )
+
+        self.assertEqual(
+            [clase.id for clase in pagina.context['clases_confirmables']],
+            [self.clase.id, siguiente.id],
+        )
+        self.assertContains(pagina, 'Selecciona la clase a la que vas a ingresar')
+        self.assertContains(pagina, 'name="clase_id"', count=2)
+        self.assertRedirects(respuesta, reverse('gestion:home_publica'))
+        self.assertTrue(AsistenciaClase.objects.filter(
+            alumno=self.alumno,
+            clase=siguiente,
+            fecha_clase=hoy,
+        ).exists())
+        self.assertEqual(panel_actual.json()['clase']['nombre'], 'Clase técnica')
+        self.assertEqual(panel_actual.json()['asistencias'], [])
+
+        inicio_siguiente = timezone.make_aware(datetime(2026, 7, 15, 19, 0))
+        with patch('gestion.views.timezone.localtime', return_value=inicio_siguiente):
+            panel_siguiente = self.client.get(
+                reverse('gestion:asistencias_home_actuales')
+            )
+        self.assertEqual(panel_siguiente.json()['clase']['nombre'], 'Clase siguiente')
+        self.assertEqual(
+            panel_siguiente.json()['asistencias'][0]['nombre'],
+            str(self.alumno),
+        )
+
+    def test_profesor_confirma_sin_plan_ni_restriccion_horaria(self):
+        usuario_profesor = self.instructor.user
+        self.client.force_login(usuario_profesor)
+        fuera_de_ventana = timezone.make_aware(
+            datetime(2026, 7, 15, 10, 0)
+        )
+
+        with patch(
+            'gestion.views.timezone.localtime',
+            return_value=fuera_de_ventana,
+        ):
+            pagina = self.client.get(reverse('gestion:home_publica'))
+            respuesta = self.client.post(
+                reverse('gestion:confirmar_clase_home'),
+                {'clase_id': self.clase.id},
+            )
+
+        self.assertEqual(
+            [clase.id for clase in pagina.context['clases_confirmables']],
+            [self.clase.id],
+        )
+        self.assertRedirects(respuesta, reverse('gestion:home_publica'))
+        asistencia = AsistenciaClase.objects.get(
+            instructor=self.instructor,
+            clase=self.clase,
+            fecha_clase=date(2026, 7, 15),
+        )
+        self.assertIsNone(asistencia.alumno)
+        self.assertEqual(asistencia.tipo_participante, 'Profesor')
+
+        durante_clase = timezone.make_aware(datetime(2026, 7, 15, 18, 5))
+        with patch('gestion.views.timezone.localtime', return_value=durante_clase):
+            panel = self.client.get(reverse('gestion:asistencias_home_actuales'))
+        self.assertEqual(panel.json()['asistencias'][0]['nombre'], str(self.instructor))
+        self.assertEqual(panel.json()['asistencias'][0]['tipo'], 'Profesor')
+
+    def test_administrador_convierte_estudiante_en_profesor_sin_borrar_historial(self):
+        administrador = get_user_model().objects.create_user(
+            username='admin-cambio-perfil',
+            password='clave-admin',
+            is_staff=True,
+        )
+        asistencia = AsistenciaClase.objects.create(
+            alumno=self.alumno,
+            clase=self.clase,
+            fecha_clase=date(2026, 7, 8),
+        )
+        self.client.force_login(administrador)
+
+        respuesta = self.client.post(
+            reverse('gestion:editar_alumno', args=[self.alumno.id]),
+            {
+                'first_name': 'Profesor',
+                'last_name': 'Promovido',
+                'email': 'profesor@example.com',
+                'telefono': '3001234567',
+                'documento': self.alumno.documento,
+                'fecha_nacimiento': '',
+                'direccion': '',
+                'disciplina': self.alumno.disciplina,
+                'grado': '',
+                'nombre_acudiente': '',
+                'documento_acudiente': '',
+                'parentesco_acudiente': '',
+                'telefono_acudiente': '',
+                'estado': self.alumno.estado,
+                'rol': 'INSTRUCTOR',
+                'especialidad': 'Jiu Jitsu',
+                'instructor_activo': 'on',
+            },
+        )
+
+        self.assertRedirects(respuesta, reverse('gestion:lista_alumnos'))
+        self.usuario.refresh_from_db()
+        self.alumno.refresh_from_db()
+        profesor = Instructor.objects.get(user=self.usuario)
+        self.assertEqual(self.usuario.rol, 'INSTRUCTOR')
+        self.assertTrue(profesor.activo)
+        self.assertEqual(profesor.documento, self.alumno.documento)
+        self.assertTrue(Alumno.objects.filter(pk=self.alumno.pk).exists())
+        self.assertTrue(AsistenciaClase.objects.filter(pk=asistencia.pk).exists())
 
     def test_formulario_vencido_no_confirma_otra_clase(self):
         momento = timezone.make_aware(datetime(2026, 7, 15, 20, 0))

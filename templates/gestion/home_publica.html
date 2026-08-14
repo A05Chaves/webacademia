@@ -162,9 +162,11 @@
                   
 
                 <div id="resumenClaseConfirmaciones" class="small text-info mb-2">
-                    {% if clase_confirmable %}
-                        {{ clase_confirmable.titulo|default:clase_confirmable.get_disciplina_display }}
-                        · {{ clase_confirmable.hora_inicio|time:"g:i a" }}
+                    {% if clase_visible %}
+                        {{ clase_visible.titulo|default:clase_visible.get_disciplina_display }}
+                        · {{ clase_visible.hora_inicio|time:"g:i a" }}
+                    {% else %}
+                        No hay más clases programadas para hoy.
                     {% endif %}
                 </div>
 
@@ -174,7 +176,8 @@
                     <div class="border-bottom border-secondary py-2">
 
                         <strong>
-                            {{ asistencia.alumno.user.get_full_name|title|default:asistencia.alumno.user.username }}
+                            {{ asistencia.nombre_participante|title }}
+                            {% if asistencia.instructor_id %}<span class="badge bg-info text-dark ms-1">Profesor</span>{% endif %}
                         </strong>
 
                         <br>
@@ -208,7 +211,7 @@
 <div class="row g-4 mt-4">
 
     <div class="{% if user.is_authenticated %}col-md-3{% else %}col-md-4{% endif %}">
-        {% if clase_confirmable %}
+        {% if clases_confirmables %}
             <button type="button"
                     class="btn home-action-card action-confirm w-100"
                     data-bs-toggle="modal"
@@ -222,16 +225,20 @@
             <span class="home-action-icon"><i class="fa-solid fa-user-check"></i></span>
             <span class="home-action-copy">
                 <strong>Confirmar clase</strong>
-                {% if clase_confirmable %}
+                {% if clases_confirmables %}
                     <small>
-                        {{ clase_confirmable.titulo|default:clase_confirmable.get_disciplina_display }}
-                        · {{ clase_confirmable.hora_inicio|time:"g:i a" }}
+                        {% if clases_confirmables|length > 1 %}
+                            Elige entre {{ clases_confirmables|length }} clases
+                        {% else %}
+                            {{ clase_confirmable.titulo|default:clase_confirmable.get_disciplina_display }}
+                            · {{ clase_confirmable.hora_inicio|time:"g:i a" }}
+                        {% endif %}
                     </small>
                 {% else %}
                     <small>No hay clases disponibles ahora</small>
                 {% endif %}
             </span>
-            {% if clase_confirmable %}<i class="fa-solid fa-chevron-right home-action-arrow"></i>{% endif %}
+            {% if clases_confirmables %}<i class="fa-solid fa-chevron-right home-action-arrow"></i>{% endif %}
 
         </button>
     </div>
@@ -344,25 +351,31 @@
 
                 <div class="modal-body">
 
-                    {% if clase_confirmable %}
+                    {% if clases_confirmables %}
 
                         <div class="alert alert-success">
-
-                            <strong>Clase disponible para confirmar:</strong>
-
-                            <br>
-
-                            {{ clase_confirmable.disciplina }}
-                            -
-                            {{ clase_confirmable.hora_inicio }}
-
+                            <strong>Selecciona la clase a la que vas a ingresar:</strong>
+                            <div class="mt-3 d-grid gap-2">
+                                {% for clase in clases_confirmables %}
+                                <label class="border border-success rounded p-3 d-flex align-items-center gap-3 bg-dark text-light">
+                                    <input type="radio"
+                                           name="clase_id"
+                                           value="{{ clase.id }}"
+                                           class="form-check-input m-0"
+                                           {% if forloop.first %}checked{% endif %}
+                                           required>
+                                    <span>
+                                        <strong>{{ clase.titulo|default:clase.get_disciplina_display }}</strong>
+                                        <small class="d-block text-secondary">
+                                            {{ clase.hora_inicio|time:"g:i a" }} a {{ clase.hora_fin|time:"g:i a" }}
+                                        </small>
+                                    </span>
+                                </label>
+                                {% endfor %}
+                            </div>
                         </div>
 
-                        <input type="hidden"
-                               name="clase_id"
-                               value="{{ clase_confirmable.id }}">
-
-                        {% if user.is_authenticated and user.perfil_alumno %}
+                        {% if user.is_authenticated and user.perfil_alumno or instructor_sesion %}
                             <div class="alert alert-info mb-0">
                                 <i class="fa-solid fa-bolt"></i>
                                 Confirmarás clase como <strong>{{ user.get_full_name|default:user.username }}</strong>
@@ -422,7 +435,7 @@
 
                     </button>
 
-                    {% if clase_confirmable %}
+                    {% if clases_confirmables %}
 
                         <button type="submit"
                                 class="btn btn-success">
@@ -590,7 +603,7 @@
                 nombre.textContent = asistencia.nombre;
                 const detalle = document.createElement('small');
                 detalle.className = 'd-block';
-                detalle.textContent = `Confirmó a las ${asistencia.hora_confirmacion}`;
+                detalle.textContent = `${asistencia.tipo} · confirmó a las ${asistencia.hora_confirmacion}`;
                 fila.append(nombre, detalle);
                 lista.appendChild(fila);
             });

@@ -194,6 +194,35 @@
                 </div>
             {% endif %}
 
+            <div class="border border-info rounded p-3 mb-4">
+                <h6 class="text-info mb-3">
+                    <i class="fa-solid fa-user-shield"></i>
+                    Perfil dentro de la academia
+                </h6>
+                <p class="text-secondary small">
+                    Al cambiar a Profesor se conserva toda la información e historial del estudiante. El profesor podrá confirmar cualquier clase del día sin plan, cupos ni restricción horaria.
+                </p>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label" for="{{ perfil_form.rol.id_for_label }}">Perfil de acceso</label>
+                        {{ perfil_form.rol }}
+                        {{ perfil_form.rol.errors }}
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label" for="{{ perfil_form.especialidad.id_for_label }}">Especialidad del profesor</label>
+                        {{ perfil_form.especialidad }}
+                        <div class="form-text">Ejemplo: Jiu Jitsu, MMA o Muay Thai.</div>
+                        {{ perfil_form.especialidad.errors }}
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <div class="form-check form-switch mb-2">
+                            {{ perfil_form.instructor_activo }}
+                            <label class="form-check-label" for="{{ perfil_form.instructor_activo.id_for_label }}">Profesor activo</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div id="permisoAsistenciaVencida" class="border border-warning rounded p-3 mb-4">
                 <h6 class="text-warning mb-3">
                     <i class="fa-solid fa-person-circle-check"></i>

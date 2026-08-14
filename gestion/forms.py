@@ -13,6 +13,7 @@ from django.db.models import Q
 from django.contrib.auth import get_user_model
 from .models import DiaHorario, HoraHorario
 from alumnos.models import Alumno
+from instructores.models import Instructor
 from planes.models import Plan, Suscripcion
 from pagos.models import Pago
 from pagos.models import MetodoPagoQR
@@ -93,6 +94,62 @@ class AlumnoForm(forms.ModelForm):
                 'class': 'form-check-input',
             }),
         }
+
+
+class CambioPerfilAlumnoForm(forms.Form):
+    rol = forms.ChoiceField(
+        choices=(
+            (Usuario.Roles.ALUMNO, 'Estudiante'),
+            (Usuario.Roles.INSTRUCTOR, 'Profesor'),
+        ),
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        label='Perfil de acceso',
+        required=False,
+    )
+    especialidad = forms.CharField(
+        required=False,
+        max_length=100,
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+        help_text='Obligatoria cuando el perfil sea Profesor.',
+    )
+    instructor_activo = forms.BooleanField(
+        required=False,
+        initial=True,
+        label='Profesor activo',
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+    )
+
+    def __init__(self, *args, usuario, alumno, **kwargs):
+        self.usuario = usuario
+        self.alumno = alumno
+        super().__init__(*args, **kwargs)
+
+    def clean(self):
+        cleaned = super().clean()
+        instructor_actual = getattr(self.usuario, 'perfil_instructor', None)
+        rol = cleaned.get('rol') or (
+            Usuario.Roles.INSTRUCTOR
+            if instructor_actual and instructor_actual.activo
+            else Usuario.Roles.ALUMNO
+        )
+        cleaned['rol'] = rol
+        if not cleaned.get('especialidad') and instructor_actual:
+            cleaned['especialidad'] = instructor_actual.especialidad
+        if (
+            rol == Usuario.Roles.INSTRUCTOR
+            and not (cleaned.get('especialidad') or '').strip()
+        ):
+            self.add_error('especialidad', 'Indica la especialidad del profesor.')
+        if rol == Usuario.Roles.INSTRUCTOR:
+            existente = Instructor.objects.filter(
+                documento=self.alumno.documento
+            ).exclude(user=self.usuario).first()
+            if existente:
+                self.add_error(
+                    'rol',
+                    'Ya existe otro profesor registrado con este documento.',
+                )
+        return cleaned
 
 
 class PlanForm(forms.ModelForm):

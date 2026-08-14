@@ -67,7 +67,7 @@
             <thead>
                 <tr>
                     <th>#</th>
-                    <th>Estudiante</th>
+                    <th>Asistente</th>
                     <th>Documento</th>
                     <th>Hora de confirmación</th>
                     <th>Estado</th>
@@ -77,15 +77,15 @@
                 {% for asistencia in asistencias %}
                     <tr>
                         <td>{{ forloop.counter }}</td>
-                        <td>{{ asistencia.alumno.user.get_full_name|title|default:asistencia.alumno.user.username }}</td>
-                        <td>{{ asistencia.alumno.documento }}</td>
+                        <td>{{ asistencia.nombre_participante|title }} <span class="badge {% if asistencia.instructor_id %}bg-info text-dark{% else %}bg-secondary{% endif %}">{{ asistencia.tipo_participante }}</span></td>
+                        <td>{{ asistencia.documento_participante }}</td>
                         <td>{{ asistencia.fecha_confirmacion|date:'g:i:s a' }}</td>
                         <td><span class="badge bg-success">Confirmada</span></td>
                     </tr>
                 {% empty %}
                     <tr>
                         <td colspan="5" class="text-center text-secondary py-4">
-                            No hubo estudiantes confirmados en esta fecha.
+                            No hubo asistentes confirmados en esta fecha.
                         </td>
                     </tr>
                 {% endfor %}

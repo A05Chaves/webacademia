@@ -75,7 +75,16 @@ class AsistenciaClase(models.Model):
     alumno = models.ForeignKey(
         'alumnos.Alumno',
         on_delete=models.CASCADE,
+        blank=True,
+        null=True,
         related_name='asistencias'
+    )
+    instructor = models.ForeignKey(
+        'instructores.Instructor',
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name='asistencias',
     )
     clase = models.ForeignKey(
         ClaseProgramada,
@@ -93,8 +102,42 @@ class AsistenciaClase(models.Model):
     class Meta:
         verbose_name = 'Asistencia a clase'
         verbose_name_plural = 'Asistencias a clases'
-        unique_together = ('alumno', 'clase', 'fecha_clase')
         ordering = ['-fecha_clase', '-fecha_confirmacion']
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(alumno__isnull=False, instructor__isnull=True)
+                    | models.Q(alumno__isnull=True, instructor__isnull=False)
+                ),
+                name='asistencia_tiene_un_solo_perfil',
+            ),
+            models.UniqueConstraint(
+                fields=['alumno', 'clase', 'fecha_clase'],
+                condition=models.Q(alumno__isnull=False),
+                name='asistencia_alumno_clase_fecha_unica',
+            ),
+            models.UniqueConstraint(
+                fields=['instructor', 'clase', 'fecha_clase'],
+                condition=models.Q(instructor__isnull=False),
+                name='asistencia_instructor_clase_fecha_unica',
+            ),
+        ]
+
+    @property
+    def participante(self):
+        return self.alumno or self.instructor
+
+    @property
+    def nombre_participante(self):
+        return str(self.participante)
+
+    @property
+    def documento_participante(self):
+        return self.participante.documento
+
+    @property
+    def tipo_participante(self):
+        return 'Profesor' if self.instructor_id else 'Estudiante'
 
     def __str__(self):
-        return f"{self.alumno} - {self.clase} - {self.fecha_clase}"
+        return f"{self.participante} - {self.clase} - {self.fecha_clase}"

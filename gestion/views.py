@@ -57,6 +57,7 @@ from .forms import (
     UsuarioAlumnoForm,
     UsuarioAlumnoEditForm,
     AlumnoForm,
+    CambioPerfilAlumnoForm,
     PlanForm,
     SuscripcionForm,
     PagoForm,
@@ -127,6 +128,40 @@ def limites_confirmacion_clase(clase, ahora=None, configuracion=None):
             minutes=configuracion.minutos_despues_confirmacion
         ),
     )
+
+
+def _clases_confirmables_del_dia(clases, ahora, configuracion=None):
+    configuracion = configuracion or ConfiguracionClases.cargar()
+    disponibles = []
+    for clase in clases:
+        ventana_inicio, ventana_fin = limites_confirmacion_clase(
+            clase, ahora, configuracion
+        )
+        if ventana_inicio <= ahora <= ventana_fin:
+            disponibles.append(clase)
+    return disponibles
+
+
+def _clase_visible_en_home(clases, ahora):
+    """Muestra la clase en curso; antes de iniciar, muestra la próxima."""
+    zona = timezone.get_current_timezone()
+    for clase in clases:
+        inicio = timezone.make_aware(
+            datetime.combine(ahora.date(), clase.hora_inicio), zona
+        )
+        fin = timezone.make_aware(
+            datetime.combine(ahora.date(), clase.hora_fin), zona
+        )
+        if inicio <= ahora < fin:
+            return clase
+
+    for clase in clases:
+        inicio = timezone.make_aware(
+            datetime.combine(ahora.date(), clase.hora_inicio), zona
+        )
+        if ahora < inicio:
+            return clase
+    return None
 
 
 def plan_permite_disciplina(plan, disciplina):
@@ -272,6 +307,34 @@ def _confirmar_asistencia_con_plan(alumno, clase, ahora):
     }
 
 
+def _instructor_activo_de_usuario(user):
+    instructor = getattr(user, 'perfil_instructor', None)
+    return instructor if instructor and instructor.activo else None
+
+
+def _confirmar_asistencia_instructor(instructor, clase, ahora):
+    asistencia, creada = AsistenciaClase.objects.get_or_create(
+        instructor=instructor,
+        clase=clase,
+        fecha_clase=ahora.date(),
+        defaults={
+            'estado': AsistenciaClase.Estados.CONFIRMADA,
+            'fecha_confirmacion': ahora,
+        },
+    )
+    if not creada and asistencia.estado != AsistenciaClase.Estados.CONFIRMADA:
+        asistencia.estado = AsistenciaClase.Estados.CONFIRMADA
+        asistencia.fecha_confirmacion = ahora
+        asistencia.save(update_fields=['estado', 'fecha_confirmacion'])
+        creada = True
+    return {
+        'asistencia': asistencia,
+        'creada': creada,
+        'dias_vencida': 0,
+        'restantes': None,
+    }
+
+
 def _mostrar_resultado_confirmacion(request, resultado):
     if resultado.get('error'):
         messages.error(
@@ -357,22 +420,27 @@ def home_publica(request):
         dia=dia_actual
     ).order_by('hora_inicio')
 
-    clase_confirmable = None
     configuracion_clases = ConfiguracionClases.cargar()
-    for clase in clases_hoy:
-        ventana_inicio, ventana_fin = limites_confirmacion_clase(
-            clase, ahora, configuracion_clases
+    instructor_sesion = (
+        _instructor_activo_de_usuario(request.user)
+        if request.user.is_authenticated else None
+    )
+    clases_confirmables = (
+        list(clases_hoy)
+        if instructor_sesion
+        else _clases_confirmables_del_dia(
+            clases_hoy, ahora, configuracion_clases
         )
-        if ventana_inicio <= ahora <= ventana_fin:
-            clase_confirmable = clase
-            break
+    )
+    clase_confirmable = clases_confirmables[0] if clases_confirmables else None
+    clase_visible = _clase_visible_en_home(clases_hoy, ahora)
 
     asistencias_hoy = AsistenciaClase.objects.filter(
         fecha_clase=hoy,
         estado=AsistenciaClase.Estados.CONFIRMADA,
-        clase=clase_confirmable,
+        clase=clase_visible,
     ).select_related(
-        'alumno__user',
+        'alumno__user', 'instructor__user',
         'clase'
     ).order_by('-fecha_confirmacion')[:10]
 
@@ -439,7 +507,10 @@ def home_publica(request):
         'promo_embed': promo_embed,
         'playlist_embed': playlist_embed,
         'clases_hoy': clases_hoy,
+        'clases_confirmables': clases_confirmables,
         'clase_confirmable': clase_confirmable,
+        'clase_visible': clase_visible,
+        'instructor_sesion': instructor_sesion,
         'pago_form': pago_form,
         'config_home': config_home,
         'publicaciones_home': publicaciones_home,
@@ -463,15 +534,7 @@ def asistencias_home_actuales(request):
         activa=True,
         dia=dias_semana[ahora.weekday()],
     ).order_by('hora_inicio')
-    configuracion = ConfiguracionClases.cargar()
-    clase = None
-    for item in clases:
-        ventana_inicio, ventana_fin = limites_confirmacion_clase(
-            item, ahora, configuracion
-        )
-        if ventana_inicio <= ahora <= ventana_fin:
-            clase = item
-            break
+    clase = _clase_visible_en_home(clases, ahora)
     if not clase:
         return JsonResponse({'clase': None, 'asistencias': []})
 
@@ -479,7 +542,9 @@ def asistencias_home_actuales(request):
         clase=clase,
         fecha_clase=ahora.date(),
         estado=AsistenciaClase.Estados.CONFIRMADA,
-    ).select_related('alumno__user').order_by('-fecha_confirmacion')
+    ).select_related(
+        'alumno__user', 'instructor__user'
+    ).order_by('-fecha_confirmacion')
     return JsonResponse({
         'clase': {
             'nombre': clase.titulo or clase.get_disciplina_display(),
@@ -488,7 +553,8 @@ def asistencias_home_actuales(request):
         },
         'asistencias': [
             {
-                'nombre': str(asistencia.alumno),
+                'nombre': asistencia.nombre_participante,
+                'tipo': asistencia.tipo_participante,
                 'hora_confirmacion': timezone.localtime(
                     asistencia.fecha_confirmacion
                 ).strftime('%H:%M:%S'),
@@ -1167,6 +1233,7 @@ def validar_pago(request, pago_id):
 
 
 @staff_member_required
+@transaction.atomic
 def editar_alumno(request, alumno_id):
 
     alumno = get_object_or_404(
@@ -1175,6 +1242,16 @@ def editar_alumno(request, alumno_id):
     )
 
     usuario = alumno.user
+    instructor = getattr(usuario, 'perfil_instructor', None)
+    perfil_inicial = {
+        'rol': (
+            User.Roles.INSTRUCTOR
+            if instructor and instructor.activo
+            else User.Roles.ALUMNO
+        ),
+        'especialidad': instructor.especialidad if instructor else '',
+        'instructor_activo': instructor.activo if instructor else True,
+    }
 
     if request.method == 'POST':
 
@@ -1187,15 +1264,44 @@ def editar_alumno(request, alumno_id):
             request.POST,
             instance=alumno
         )
+        perfil_form = CambioPerfilAlumnoForm(
+            request.POST,
+            usuario=usuario,
+            alumno=alumno,
+        )
 
-        if usuario_form.is_valid() and alumno_form.is_valid():
+        if (
+            usuario_form.is_valid()
+            and alumno_form.is_valid()
+            and perfil_form.is_valid()
+        ):
 
             usuario_form.save()
-            alumno_form.save()
+            alumno_actualizado = alumno_form.save()
+            rol = perfil_form.cleaned_data['rol']
+            if rol == User.Roles.INSTRUCTOR:
+                instructor, _ = Instructor.objects.update_or_create(
+                    user=usuario,
+                    defaults={
+                        'documento': alumno_actualizado.documento,
+                        'especialidad': perfil_form.cleaned_data['especialidad'],
+                        'telefono': usuario.telefono,
+                        'activo': perfil_form.cleaned_data['instructor_activo'],
+                    },
+                )
+                usuario.rol = User.Roles.INSTRUCTOR
+                mensaje = 'El estudiante ahora tiene perfil de profesor.'
+            else:
+                if instructor:
+                    instructor.activo = False
+                    instructor.save(update_fields=['activo'])
+                usuario.rol = User.Roles.ALUMNO
+                mensaje = 'El usuario quedó con perfil de estudiante.'
+            usuario.save(update_fields=['rol'])
 
             messages.success(
                 request,
-                'Alumno actualizado correctamente.'
+                f'Alumno actualizado correctamente. {mensaje}'
             )
 
             return redirect('gestion:lista_alumnos')
@@ -1209,6 +1315,11 @@ def editar_alumno(request, alumno_id):
         alumno_form = AlumnoForm(
             instance=alumno
         )
+        perfil_form = CambioPerfilAlumnoForm(
+            usuario=usuario,
+            alumno=alumno,
+            initial=perfil_inicial,
+        )
 
     return render(
         request,
@@ -1216,6 +1327,7 @@ def editar_alumno(request, alumno_id):
         {
             'usuario_form': usuario_form,
             'alumno_form': alumno_form,
+            'perfil_form': perfil_form,
             'alumno': alumno,
         }
     )
@@ -1563,14 +1675,15 @@ def horario_clases(request):
 def confirmar_asistencia(request, clase_id):
     clase = get_object_or_404(ClaseProgramada, id=clase_id, activa=True)
 
-    if not hasattr(request.user, 'perfil_alumno'):
+    instructor = _instructor_activo_de_usuario(request.user)
+    alumno = getattr(request.user, 'perfil_alumno', None)
+    if not instructor and not alumno:
         messages.error(
-            request, 'Solo los alumnos pueden confirmar asistencia.',
+            request, 'Solo estudiantes y profesores pueden confirmar asistencia.',
             extra_tags='clase-feedback',
         )
         return redirect('gestion:horario_clases')
 
-    alumno = request.user.perfil_alumno
     ahora = timezone.localtime()
 
     configuracion_clases = ConfiguracionClases.cargar()
@@ -1578,7 +1691,7 @@ def confirmar_asistencia(request, clase_id):
         clase, ahora, configuracion_clases
     )
 
-    if not (ventana_inicio <= ahora <= ventana_fin):
+    if not instructor and not (ventana_inicio <= ahora <= ventana_fin):
         messages.warning(
             request,
             'La asistencia solo puede confirmarse desde '
@@ -1589,7 +1702,11 @@ def confirmar_asistencia(request, clase_id):
         )
         return redirect('gestion:horario_clases')
 
-    resultado = _confirmar_asistencia_con_plan(alumno, clase, ahora)
+    resultado = (
+        _confirmar_asistencia_instructor(instructor, clase, ahora)
+        if instructor
+        else _confirmar_asistencia_con_plan(alumno, clase, ahora)
+    )
     _mostrar_resultado_confirmacion(request, resultado)
 
     return redirect('gestion:horario_clases')
@@ -1665,18 +1782,23 @@ def confirmar_asistencia_kiosko(request):
     clase = get_object_or_404(ClaseProgramada, id=clase_id, activa=True)
 
     user = request.user if (
-        request.user.is_authenticated and hasattr(request.user, 'perfil_alumno')
+        request.user.is_authenticated
+        and (
+            hasattr(request.user, 'perfil_alumno')
+            or _instructor_activo_de_usuario(request.user)
+        )
     ) else authenticate(request, username=username, password=password)
 
     if user is None:
         messages.error(request, 'Usuario o contraseña incorrectos.', extra_tags='clase-feedback')
         return redirect('gestion:horario_clases')
 
-    if not hasattr(user, 'perfil_alumno'):
+    instructor = _instructor_activo_de_usuario(user)
+    alumno = getattr(user, 'perfil_alumno', None)
+    if not instructor and not alumno:
         messages.error(request, 'Este usuario no está registrado como alumno.', extra_tags='clase-feedback')
         return redirect('gestion:horario_clases')
 
-    alumno = user.perfil_alumno
     ahora = timezone.localtime()
     hoy = ahora.date()
 
@@ -1685,7 +1807,7 @@ def confirmar_asistencia_kiosko(request):
         clase, ahora, configuracion_clases
     )
 
-    if not (ventana_inicio <= ahora <= ventana_fin):
+    if not instructor and not (ventana_inicio <= ahora <= ventana_fin):
         messages.warning(
             request,
             'La asistencia solo puede confirmarse desde '
@@ -1696,7 +1818,11 @@ def confirmar_asistencia_kiosko(request):
         )
         return redirect('gestion:horario_clases')
 
-    resultado = _confirmar_asistencia_con_plan(alumno, clase, ahora)
+    resultado = (
+        _confirmar_asistencia_instructor(instructor, clase, ahora)
+        if instructor
+        else _confirmar_asistencia_con_plan(alumno, clase, ahora)
+    )
     _mostrar_resultado_confirmacion(request, resultado)
 
     return redirect('gestion:horario_clases')
@@ -1715,9 +1841,9 @@ def asistentes_clase(request, clase_id):
         clase=clase,
         fecha_clase=fecha_clase,
         estado=AsistenciaClase.Estados.CONFIRMADA,
-    ).select_related('alumno__user').order_by(
-        'alumno__user__first_name', 'alumno__user__last_name'
-    )
+    ).select_related(
+        'alumno__user', 'instructor__user'
+    ).order_by('fecha_confirmacion')
     sesiones = AsistenciaClase.objects.filter(
         clase=clase,
         estado=AsistenciaClase.Estados.CONFIRMADA,
@@ -3264,7 +3390,11 @@ def confirmar_clase_home(request):
     )
 
     user = request.user if (
-        request.user.is_authenticated and hasattr(request.user, 'perfil_alumno')
+        request.user.is_authenticated
+        and (
+            hasattr(request.user, 'perfil_alumno')
+            or _instructor_activo_de_usuario(request.user)
+        )
     ) else authenticate(
         request,
         username=username,
@@ -3275,11 +3405,12 @@ def confirmar_clase_home(request):
         messages.error(request, 'Usuario o contraseña incorrectos.', extra_tags='clase-feedback')
         return redirect('gestion:home_publica')
 
-    if not hasattr(user, 'perfil_alumno'):
+    instructor = _instructor_activo_de_usuario(user)
+    alumno = getattr(user, 'perfil_alumno', None)
+    if not instructor and not alumno:
         messages.error(request, 'Este usuario no está registrado como alumno.', extra_tags='clase-feedback')
         return redirect('gestion:home_publica')
 
-    alumno = user.perfil_alumno
     ahora = timezone.localtime()
 
     dias_semana = {
@@ -3296,8 +3427,9 @@ def confirmar_clase_home(request):
         clase, ahora, configuracion_clases
     )
 
-    if clase.dia != dias_semana[ahora.weekday()] or not (
-        ventana_inicio <= ahora <= ventana_fin
+    if not instructor and (
+        clase.dia != dias_semana[ahora.weekday()]
+        or not (ventana_inicio <= ahora <= ventana_fin)
     ):
         messages.error(
             request,
@@ -3306,7 +3438,11 @@ def confirmar_clase_home(request):
         )
         return redirect('gestion:home_publica')
 
-    resultado = _confirmar_asistencia_con_plan(alumno, clase, ahora)
+    resultado = (
+        _confirmar_asistencia_instructor(instructor, clase, ahora)
+        if instructor
+        else _confirmar_asistencia_con_plan(alumno, clase, ahora)
+    )
     _mostrar_resultado_confirmacion(request, resultado)
 
     return redirect('gestion:home_publica')
@@ -3565,8 +3701,14 @@ def _clase_tv_payload():
         clase=clase,
         fecha_clase=ahora.date(),
         estado=AsistenciaClase.Estados.CONFIRMADA,
-    ).select_related('alumno__user').order_by('alumno__user__first_name')
-    nombres = [str(asistencia.alumno).upper() for asistencia in asistencias]
+    ).select_related(
+        'alumno__user', 'instructor__user'
+    ).order_by('fecha_confirmacion')
+    nombres = [
+        asistencia.nombre_participante.upper()
+        + (' · PROFESOR' if asistencia.instructor_id else '')
+        for asistencia in asistencias
+    ]
     return {
         'active': clase.hora_inicio <= ahora.time() <= clase.hora_fin,
         'title': (clase.titulo or clase.get_disciplina_display()).upper(),
