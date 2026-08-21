@@ -11,7 +11,7 @@ from django.conf import settings
 from django.core.mail import EmailMessage
 from django.db import transaction
 from django.db.models import Q, Sum
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.formats import number_format
@@ -23,11 +23,16 @@ from .forms import (
     AbonoVentaForm,
     AjusteInventarioForm,
     CarteraInicialTiendaForm,
+    CategoriaMovimientoTiendaForm,
     CategoriaProductoForm,
     ClienteTiendaForm,
     CompraTiendaForm,
     CuentaTiendaForm,
     GastoTiendaForm,
+    IngresoTiendaForm,
+    DisciplinaProductoForm,
+    LineaModeloProductoForm,
+    MarcaProductoForm,
     ProductoTiendaForm,
     SubcategoriaProductoForm,
     TransferenciaTiendaForm,
@@ -36,13 +41,17 @@ from .forms import (
 from .models import (
     AjusteInventario,
     AplicacionAbonoCuota,
+    CategoriaMovimientoTienda,
     CategoriaProducto,
     ClienteTienda,
     CuentaTienda,
     CuotaVentaTienda,
     DetalleVentaTienda,
+    DisciplinaProducto,
     Monedas,
     MovimientoTienda,
+    LineaModeloProducto,
+    MarcaProducto,
     ProductoTienda,
     SubcategoriaProducto,
     VentaTienda,
@@ -154,6 +163,15 @@ def _resumen_moneda(moneda, desde, hasta):
     salidas = movimientos_operativos.filter(tipo=MovimientoTienda.Tipos.EGRESO).aggregate(
         total=Sum('valor')
     )['total'] or Decimal('0')
+    no_operacionales = movimientos_operativos.filter(
+        categoria__naturaleza=CategoriaMovimientoTienda.Naturalezas.NO_OPERACIONAL
+    )
+    ingresos_no_operacionales = no_operacionales.filter(
+        tipo=MovimientoTienda.Tipos.INGRESO
+    ).aggregate(total=Sum('valor'))['total'] or Decimal('0')
+    gastos_no_operacionales = no_operacionales.filter(
+        tipo=MovimientoTienda.Tipos.EGRESO
+    ).aggregate(total=Sum('valor'))['total'] or Decimal('0')
     ventas = VentaTienda.objects.filter(
         moneda=moneda,
         tipo_registro=VentaTienda.TiposRegistro.VENTA,
@@ -177,6 +195,10 @@ def _resumen_moneda(moneda, desde, hasta):
         'saldo': saldo,
         'entradas': entradas,
         'salidas': salidas,
+        'ingresos_operacionales': entradas - ingresos_no_operacionales,
+        'gastos_operacionales': salidas - gastos_no_operacionales,
+        'ingresos_no_operacionales': ingresos_no_operacionales,
+        'gastos_no_operacionales': gastos_no_operacionales,
         'flujo_neto': entradas - salidas,
         'ventas': ventas,
         'cartera': cartera,
@@ -200,7 +222,7 @@ def panel(request):
     ).select_related('cliente').prefetch_related('detalles').first()
     movimientos = MovimientoTienda.objects.filter(
         fecha__date__range=(desde, hasta)
-    ).select_related('cuenta', 'producto', 'venta')[:15]
+    ).select_related('cuenta', 'categoria', 'producto', 'venta')[:15]
     creditos = VentaTienda.objects.exclude(
         estado__in=[VentaTienda.Estados.PAGADA, VentaTienda.Estados.ANULADA]
     ).select_related('cliente')[:8]
@@ -274,8 +296,14 @@ def configuracion(request):
         item.saldo_calculado = item.saldo_actual
     return render(request, 'tienda/configuracion.html', {
         'cuentas': cuentas,
-        'productos': ProductoTienda.objects.select_related('categoria', 'subcategoria'),
+        'productos': ProductoTienda.objects.select_related(
+            'categoria', 'subcategoria', 'marca', 'linea_modelo', 'disciplina'
+        ),
         'categorias': CategoriaProducto.objects.prefetch_related('subcategorias'),
+        'marcas': MarcaProducto.objects.prefetch_related('lineas_modelos'),
+        'lineas_modelos': LineaModeloProducto.objects.select_related('marca'),
+        'disciplinas_producto': DisciplinaProducto.objects.all(),
+        'categorias_contables': CategoriaMovimientoTienda.objects.all(),
         'clientes': ClienteTienda.objects.all()[:30],
     })
 
@@ -316,6 +344,30 @@ def categoria(request, categoria_id=None):
 
 
 @staff_member_required
+def categoria_contable(request, categoria_id=None):
+    instancia = (
+        get_object_or_404(CategoriaMovimientoTienda, id=categoria_id)
+        if categoria_id else None
+    )
+    form = CategoriaMovimientoTiendaForm(
+        request.POST or None,
+        instance=instancia,
+    )
+    if request.method == 'POST' and form.is_valid():
+        guardada = form.save()
+        messages.success(
+            request,
+            f'Categoría contable "{guardada.nombre}" guardada correctamente.',
+        )
+        return redirect('tienda:configuracion')
+    return _render_formulario(
+        request, form,
+        'Categoría contable de tienda', 'fa-receipt', 'Guardar categoría',
+        volver_url='tienda:configuracion',
+    )
+
+
+@staff_member_required
 def subcategoria(request, subcategoria_id=None):
     instancia = get_object_or_404(SubcategoriaProducto, id=subcategoria_id) if subcategoria_id else None
     form = SubcategoriaProductoForm(request.POST or None, instance=instancia)
@@ -324,6 +376,80 @@ def subcategoria(request, subcategoria_id=None):
         messages.success(request, 'Subcategoría guardada correctamente.')
         return redirect('tienda:configuracion')
     return _render_formulario(request, form, 'Subcategoría de productos', 'fa-tag', 'Guardar', volver_url='tienda:configuracion')
+
+
+@staff_member_required
+def marca_producto(request, marca_id=None):
+    instancia = get_object_or_404(MarcaProducto, id=marca_id) if marca_id else None
+    form = MarcaProductoForm(request.POST or None, instance=instancia)
+    if request.method == 'POST' and form.is_valid():
+        guardada = form.save()
+        messages.success(request, f'Marca "{guardada.nombre}" guardada correctamente.')
+        return redirect('tienda:configuracion')
+    return _render_formulario(
+        request, form, 'Marca de producto', 'fa-copyright', 'Guardar marca',
+        volver_url='tienda:configuracion',
+    )
+
+
+@staff_member_required
+def linea_modelo_producto(request, linea_id=None):
+    instancia = (
+        get_object_or_404(LineaModeloProducto, id=linea_id)
+        if linea_id else None
+    )
+    form = LineaModeloProductoForm(request.POST or None, instance=instancia)
+    if request.method == 'POST' and form.is_valid():
+        guardada = form.save()
+        messages.success(
+            request,
+            f'Línea o modelo "{guardada.nombre}" guardado correctamente.',
+        )
+        return redirect('tienda:configuracion')
+    return _render_formulario(
+        request, form, 'Línea o modelo de producto', 'fa-layer-group',
+        'Guardar línea o modelo', volver_url='tienda:configuracion',
+    )
+
+
+@staff_member_required
+def disciplina_producto(request, disciplina_id=None):
+    instancia = (
+        get_object_or_404(DisciplinaProducto, id=disciplina_id)
+        if disciplina_id else None
+    )
+    form = DisciplinaProductoForm(request.POST or None, instance=instancia)
+    if request.method == 'POST' and form.is_valid():
+        guardada = form.save()
+        messages.success(
+            request,
+            f'Disciplina "{guardada.nombre}" guardada correctamente.',
+        )
+        return redirect('tienda:configuracion')
+    return _render_formulario(
+        request, form, 'Disciplina de producto', 'fa-medal',
+        'Guardar disciplina', volver_url='tienda:configuracion',
+    )
+
+
+@staff_member_required
+def lineas_modelos_por_marca(request):
+    marca_id = request.GET.get('marca', '')
+    actual_id = request.GET.get('actual', '')
+    lineas = LineaModeloProducto.objects.none()
+    if marca_id.isdigit():
+        filtro_estado = Q(activa=True)
+        if actual_id.isdigit():
+            filtro_estado |= Q(pk=actual_id)
+        lineas = LineaModeloProducto.objects.filter(
+            marca_id=marca_id
+        ).filter(filtro_estado).order_by('nombre')
+    return JsonResponse({
+        'resultados': [
+            {'id': linea.id, 'nombre': linea.nombre}
+            for linea in lineas
+        ]
+    })
 
 
 @staff_member_required
@@ -492,19 +618,47 @@ def registrar_compra(request):
 
 @staff_member_required
 def registrar_gasto(request):
-    form = GastoTiendaForm(request.POST or None)
+    form = GastoTiendaForm(request.POST or None, request.FILES or None)
     if request.method == 'POST' and form.is_valid():
         cuenta_tienda = form.cleaned_data['cuenta']
         MovimientoTienda.objects.create(
             cuenta=cuenta_tienda, tipo=MovimientoTienda.Tipos.EGRESO,
+            categoria=form.cleaned_data['categoria'],
             origen=MovimientoTienda.Origenes.GASTO, concepto=form.cleaned_data['concepto'],
             valor=form.cleaned_data['valor'], moneda=cuenta_tienda.moneda,
             fecha=form.cleaned_data['fecha'], observaciones=form.cleaned_data['observaciones'],
+            soporte=form.cleaned_data.get('soporte'),
             registrado_por=request.user,
         )
         messages.success(request, 'Gasto de tienda registrado.')
         return redirect('tienda:panel')
     return _render_formulario(request, form, 'Registrar gasto', 'fa-arrow-trend-down', 'Registrar gasto', 'btn-danger')
+
+
+@staff_member_required
+def registrar_ingreso(request):
+    form = IngresoTiendaForm(request.POST or None, request.FILES or None)
+    if request.method == 'POST' and form.is_valid():
+        cuenta_tienda = form.cleaned_data['cuenta']
+        MovimientoTienda.objects.create(
+            cuenta=cuenta_tienda,
+            categoria=form.cleaned_data['categoria'],
+            tipo=MovimientoTienda.Tipos.INGRESO,
+            origen=MovimientoTienda.Origenes.OTRO_INGRESO,
+            concepto=form.cleaned_data['concepto'],
+            valor=form.cleaned_data['valor'],
+            moneda=cuenta_tienda.moneda,
+            fecha=form.cleaned_data['fecha'],
+            observaciones=form.cleaned_data['observaciones'],
+            soporte=form.cleaned_data.get('soporte'),
+            registrado_por=request.user,
+        )
+        messages.success(request, 'Ingreso de tienda registrado correctamente.')
+        return redirect('tienda:panel')
+    return _render_formulario(
+        request, form, 'Registrar otro ingreso', 'fa-arrow-trend-up',
+        'Registrar ingreso', 'btn-success',
+    )
 
 
 @staff_member_required

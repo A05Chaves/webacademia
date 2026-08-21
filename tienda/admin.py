@@ -1,8 +1,10 @@
 from django.contrib import admin
 
 from .models import (
-    AjusteInventario, AplicacionAbonoCuota, CategoriaProducto, ClienteTienda,
-    CuentaTienda, CuotaVentaTienda, DetalleVentaTienda, MovimientoTienda, ProductoTienda,
+    AjusteInventario, AplicacionAbonoCuota, CategoriaMovimientoTienda,
+    CategoriaProducto, ClienteTienda,
+    CuentaTienda, CuotaVentaTienda, DetalleVentaTienda, DisciplinaProducto,
+    LineaModeloProducto, MarcaProducto, MovimientoTienda, ProductoTienda,
     SubcategoriaProducto, VentaTienda,
 )
 
@@ -31,6 +33,13 @@ class MovimientoTiendaAdmin(admin.ModelAdmin):
     search_fields = ('concepto', 'observaciones')
 
 
+@admin.register(CategoriaMovimientoTienda)
+class CategoriaMovimientoTiendaAdmin(admin.ModelAdmin):
+    list_display = ('nombre', 'tipo', 'naturaleza', 'activa')
+    list_filter = ('tipo', 'naturaleza', 'activa')
+    search_fields = ('nombre', 'descripcion')
+
+
 @admin.register(AjusteInventario)
 class AjusteInventarioAdmin(admin.ModelAdmin):
     list_display = (
@@ -43,6 +52,9 @@ class AjusteInventarioAdmin(admin.ModelAdmin):
 
 admin.site.register(CategoriaProducto)
 admin.site.register(SubcategoriaProducto)
+admin.site.register(MarcaProducto)
+admin.site.register(LineaModeloProducto)
+admin.site.register(DisciplinaProducto)
 admin.site.register(ClienteTienda)
 admin.site.register(VentaTienda)
 admin.site.register(DetalleVentaTienda)

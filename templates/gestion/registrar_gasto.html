@@ -10,7 +10,7 @@
 <div class="card bg-dark text-light border-secondary">
     <div class="card-body">
 
-        <form method="post">
+        <form method="post" enctype="multipart/form-data">
             {% csrf_token %}
 
             {% if form.errors %}
@@ -81,6 +81,13 @@
                 <div class="col-md-12 mb-3">
                     <label class="form-label">Observaciones</label>
                     {{ form.observaciones }}
+                </div>
+
+                <div class="col-md-12 mb-3">
+                    <label class="form-label">Soporte</label>
+                    {{ form.soporte }}
+                    <small class="text-secondary">Obligatorio cuando la categoría sea no operacional.</small>
+                    {% for error in form.soporte.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
                 </div>
 
             </div>

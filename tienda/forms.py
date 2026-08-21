@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django import forms
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.formats import number_format
 
@@ -8,11 +9,15 @@ from alumnos.models import Alumno
 
 from .models import (
     AjusteInventario,
+    CategoriaMovimientoTienda,
     CategoriaProducto,
     ClienteTienda,
     CuentaTienda,
     CuotaVentaTienda,
     Monedas,
+    DisciplinaProducto,
+    LineaModeloProducto,
+    MarcaProducto,
     ProductoTienda,
     SubcategoriaProducto,
     VentaTienda,
@@ -98,6 +103,24 @@ class CuentaTiendaForm(BootstrapModelForm):
         widgets = {'fecha_saldo_inicial': forms.DateInput(attrs={'type': 'date'})}
 
 
+class CategoriaMovimientoTiendaForm(BootstrapModelForm):
+    class Meta:
+        model = CategoriaMovimientoTienda
+        fields = ['nombre', 'tipo', 'naturaleza', 'descripcion', 'activa']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk and self.instance.movimientos.exists():
+            for campo in ('tipo', 'naturaleza'):
+                self.fields[campo].disabled = True
+            self.fields['naturaleza'].help_text = (
+                'La naturaleza no puede cambiar porque esta categoría ya tiene historial.'
+            )
+
+    def clean_nombre(self):
+        return self.cleaned_data['nombre'].strip().upper()
+
+
 class CategoriaProductoForm(BootstrapModelForm):
     class Meta:
         model = CategoriaProducto
@@ -108,6 +131,33 @@ class SubcategoriaProductoForm(BootstrapModelForm):
     class Meta:
         model = SubcategoriaProducto
         fields = ['categoria', 'codigo', 'nombre', 'activa']
+
+
+class MarcaProductoForm(BootstrapModelForm):
+    class Meta:
+        model = MarcaProducto
+        fields = ['nombre', 'activa']
+
+
+class LineaModeloProductoForm(BootstrapModelForm):
+    class Meta:
+        model = LineaModeloProducto
+        fields = ['marca', 'nombre', 'activa']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        marcas = MarcaProducto.objects.filter(activa=True)
+        if self.instance.pk:
+            marcas = MarcaProducto.objects.filter(
+                Q(activa=True) | Q(pk=self.instance.marca_id)
+            )
+        self.fields['marca'].queryset = marcas
+
+
+class DisciplinaProductoForm(BootstrapModelForm):
+    class Meta:
+        model = DisciplinaProducto
+        fields = ['nombre', 'activa']
 
 
 class ClienteTiendaForm(BootstrapModelForm):
@@ -144,6 +194,22 @@ class ProductoTiendaForm(BootstrapModelForm):
         self.fields['moneda'].initial = 'COP'
         self.fields['unidad'].required = False
         self.fields['unidad'].initial = 'Unidad'
+        filtros_actuales = {
+            'marca': self.instance.marca_id if self.instance.pk else None,
+            'linea_modelo': self.instance.linea_modelo_id if self.instance.pk else None,
+            'disciplina': self.instance.disciplina_id if self.instance.pk else None,
+        }
+        modelos_catalogo = {
+            'marca': MarcaProducto,
+            'linea_modelo': LineaModeloProducto,
+            'disciplina': DisciplinaProducto,
+        }
+        for campo, modelo in modelos_catalogo.items():
+            actual = filtros_actuales[campo]
+            consulta = modelo.objects.filter(activa=True)
+            if actual:
+                consulta = modelo.objects.filter(Q(activa=True) | Q(pk=actual))
+            self.fields[campo].queryset = consulta
         if self.instance and self.instance.pk:
             self.fields.pop('stock_inicial')
 
@@ -415,6 +481,11 @@ class GastoTiendaForm(forms.Form):
         queryset=CuentaTienda.objects.none(), widget=forms.Select(attrs={'class': 'form-select'})
     )
     concepto = forms.CharField(max_length=200, widget=forms.TextInput(attrs={'class': 'form-control'}))
+    categoria = forms.ModelChoiceField(
+        queryset=CategoriaMovimientoTienda.objects.none(),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
     valor = forms.DecimalField(
         min_value=Decimal('0.01'), max_digits=14, decimal_places=2,
         widget=forms.NumberInput(attrs={'class': 'form-control', 'min': '0.01', 'step': '0.01'}),
@@ -427,10 +498,57 @@ class GastoTiendaForm(forms.Form):
     observaciones = forms.CharField(
         required=False, widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3})
     )
+    soporte = forms.FileField(
+        required=False,
+        widget=forms.ClearableFileInput(attrs={
+            'class': 'form-control', 'accept': '.pdf,.jpg,.jpeg,.png,.webp',
+        }),
+        help_text='Obligatorio para gastos no operacionales.',
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['cuenta'].queryset = CuentaTienda.objects.filter(activa=True)
+        self.fields['categoria'].queryset = CategoriaMovimientoTienda.objects.filter(
+            activa=True,
+            tipo=CategoriaMovimientoTienda.Tipos.EGRESO,
+        )
+
+    def clean(self):
+        cleaned = super().clean()
+        categoria = cleaned.get('categoria')
+        if (
+            categoria
+            and categoria.naturaleza
+            == CategoriaMovimientoTienda.Naturalezas.NO_OPERACIONAL
+            and not cleaned.get('soporte')
+        ):
+            self.add_error('soporte', 'Adjunta el soporte del gasto no operacional.')
+        return cleaned
+
+
+class IngresoTiendaForm(GastoTiendaForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['categoria'].queryset = CategoriaMovimientoTienda.objects.filter(
+            activa=True,
+            tipo=CategoriaMovimientoTienda.Tipos.INGRESO,
+        )
+        self.fields['soporte'].help_text = (
+            'Obligatorio para ingresos no operacionales.'
+        )
+
+    def clean(self):
+        cleaned = forms.Form.clean(self)
+        categoria = cleaned.get('categoria')
+        if (
+            categoria
+            and categoria.naturaleza
+            == CategoriaMovimientoTienda.Naturalezas.NO_OPERACIONAL
+            and not cleaned.get('soporte')
+        ):
+            self.add_error('soporte', 'Adjunta el soporte del ingreso no operacional.')
+        return cleaned
 
 
 class TransferenciaTiendaForm(forms.Form):

@@ -39,13 +39,25 @@ class CategoriaFinanciera(models.Model):
         EGRESO = 'EGRESO', 'Egreso'
         AMBOS = 'AMBOS', 'Ambos'
 
+    class Naturalezas(models.TextChoices):
+        OPERACIONAL = 'OPERACIONAL', 'Operacional'
+        NO_OPERACIONAL = 'NO_OPERACIONAL', 'No operacional'
+
     nombre = models.CharField(max_length=100, unique=True)
     tipo = models.CharField(
         max_length=20,
         choices=Tipos.choices,
         default=Tipos.EGRESO
     )
+    naturaleza = models.CharField(
+        max_length=20,
+        choices=Naturalezas.choices,
+        default=Naturalezas.OPERACIONAL,
+    )
+    descripcion = models.CharField(max_length=250, blank=True)
     activa = models.BooleanField(default=True)
+    creado = models.DateTimeField(default=timezone.now, editable=False)
+    actualizado = models.DateTimeField(auto_now=True)
 
     class Meta:
         verbose_name = 'Categoría financiera'
@@ -94,6 +106,12 @@ class MovimientoFinanciero(models.Model):
         help_text='Evento específico que originó este ingreso o gasto.',
     )
     observaciones = models.TextField(blank=True, null=True)
+    soporte = models.FileField(
+        upload_to='finanzas/academia/soportes/%Y/%m/',
+        blank=True,
+        null=True,
+        help_text='Factura, recibo, comprobante, imagen o PDF relacionado.',
+    )
 
     class Meta:
         ordering = ['-fecha']

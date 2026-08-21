@@ -93,7 +93,9 @@ from django.core.mail import send_mail
 from django.conf import settings
 
 from finanzas.models import CategoriaFinanciera, CuentaFinanciera, MovimientoFinanciero, PagoProgramado
-from .forms import GastoForm
+from .forms import (
+    CategoriaFinancieraForm, GastoForm, IngresoManualAcademiaForm,
+)
 from .forms import CuentaFinancieraForm, PagoProgramadoForm, TransferenciaForm
 from django.db.models import Sum
 from registros_legales.models import RegistroLegalEstudiante
@@ -178,29 +180,6 @@ def _clase_visible_en_home(clases, ahora):
     return None
 
 
-def plan_permite_disciplina(plan, disciplina):
-    """Valida la disciplina usando la configuración vigente del plan."""
-    permisos = {
-        ClaseProgramada.Disciplinas.JIU_JITSU: plan.permite_jiu_jitsu,
-        ClaseProgramada.Disciplinas.MUAY_THAI: plan.permite_muay_thai,
-        ClaseProgramada.Disciplinas.MMA: plan.permite_mma,
-        ClaseProgramada.Disciplinas.MMA_MUAYTHAI: (
-            plan.permite_mma or plan.permite_muay_thai
-        ),
-        ClaseProgramada.Disciplinas.OTRA: True,
-    }
-
-    # Los planes creados antes de estos indicadores quedaron con los tres
-    # valores en False durante la migración. Se conserva su acceso hasta que
-    # un administrador configure explícitamente sus disciplinas.
-    sin_configuracion = not any((
-        plan.permite_jiu_jitsu,
-        plan.permite_muay_thai,
-        plan.permite_mma,
-    ))
-    return sin_configuracion or permisos.get(disciplina, False)
-
-
 def _periodo_asistencia_plan(suscripcion, hoy):
     if hoy <= suscripcion.fecha_vencimiento:
         return suscripcion.fecha_inicio, suscripcion.fecha_vencimiento
@@ -263,9 +242,6 @@ def _confirmar_asistencia_con_plan(alumno, clase, ahora):
                 'No tienes autorización para confirmar clases mientras esté vencida.'
             )
         }
-
-    if not plan_permite_disciplina(plan, clase.disciplina):
-        return {'error': 'La disciplina de esta clase no está incluida en tu plan.'}
 
     ya_confirmo = AsistenciaClase.objects.filter(
         alumno=alumno,
@@ -645,6 +621,25 @@ def dashboard(request):
     ).aggregate(total=Sum('valor'))['total'] or 0
 
     utilidad_mes = ingresos_mes - gastos_mes
+    no_operacionales_mes = movimientos_operativos.filter(
+        categoria__naturaleza=CategoriaFinanciera.Naturalezas.NO_OPERACIONAL,
+        fecha__month=hoy.month,
+        fecha__year=hoy.year,
+    )
+    ingresos_no_operacionales_mes = no_operacionales_mes.filter(
+        tipo=MovimientoFinanciero.Tipos.INGRESO,
+    ).aggregate(total=Sum('valor'))['total'] or 0
+    gastos_no_operacionales_mes = no_operacionales_mes.filter(
+        tipo=MovimientoFinanciero.Tipos.EGRESO,
+    ).aggregate(total=Sum('valor'))['total'] or 0
+    ingresos_operacionales_mes = ingresos_mes - ingresos_no_operacionales_mes
+    gastos_operacionales_mes = gastos_mes - gastos_no_operacionales_mes
+    resultado_operacional_mes = (
+        ingresos_operacionales_mes - gastos_operacionales_mes
+    )
+    resultado_no_operacional_mes = (
+        ingresos_no_operacionales_mes - gastos_no_operacionales_mes
+    )
 
     eventos_financieros = list(
         Evento.objects.filter(
@@ -740,6 +735,12 @@ def dashboard(request):
         'ingresos_mes': ingresos_mes,
         'gastos_mes': gastos_mes,
         'utilidad_mes': utilidad_mes,
+        'ingresos_operacionales_mes': ingresos_operacionales_mes,
+        'gastos_operacionales_mes': gastos_operacionales_mes,
+        'ingresos_no_operacionales_mes': ingresos_no_operacionales_mes,
+        'gastos_no_operacionales_mes': gastos_no_operacionales_mes,
+        'resultado_operacional_mes': resultado_operacional_mes,
+        'resultado_no_operacional_mes': resultado_no_operacional_mes,
         'eventos_financieros': eventos_financieros,
         'saldo_total': saldo_total,
         'cuentas_financieras': cuentas_financieras,
@@ -2016,7 +2017,7 @@ def reset_password_alumno(request, alumno_id):
 @transaction.atomic
 def registrar_gasto(request):
     if request.method == 'POST':
-        form = GastoForm(request.POST)
+        form = GastoForm(request.POST, request.FILES)
 
         if form.is_valid():
             gasto = form.save(commit=False)
@@ -2122,14 +2123,21 @@ def detalle_financiero(request):
         anio = hoy.year
 
     tipo = request.GET.get('tipo', '')
+    naturaleza = request.GET.get('naturaleza', '')
 
     movimientos = MovimientoFinanciero.objects.filter(
         fecha__month=mes,
         fecha__year=anio
-    ).select_related('cuenta', 'pago', 'evento')
+    ).select_related('cuenta', 'categoria', 'pago', 'evento')
 
     if tipo in ['INGRESO', 'EGRESO']:
         movimientos = movimientos.filter(tipo=tipo)
+    if naturaleza == CategoriaFinanciera.Naturalezas.NO_OPERACIONAL:
+        movimientos = movimientos.filter(categoria__naturaleza=naturaleza)
+    elif naturaleza == CategoriaFinanciera.Naturalezas.OPERACIONAL:
+        movimientos = movimientos.exclude(
+            categoria__naturaleza=CategoriaFinanciera.Naturalezas.NO_OPERACIONAL
+        )
 
     movimientos_operativos = movimientos.exclude(
         concepto__startswith='Transferencia '
@@ -2205,6 +2213,7 @@ def detalle_financiero(request):
         'mes': mes,
         'anio': anio,
         'tipo': tipo,
+        'naturaleza': naturaleza,
 
         'total_ingresos': total_ingresos,
         'total_egresos': total_egresos,
@@ -2279,6 +2288,44 @@ def lista_registros_legales(request):
     return render(request, 'gestion/lista_registros_legales.html', {
         'registros': registros,
         'consulta': consulta,
+    })
+
+
+@administrador_required
+@transaction.atomic
+def registrar_ingreso_manual(request):
+    form = IngresoManualAcademiaForm(
+        request.POST or None,
+        request.FILES or None,
+    )
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        messages.success(request, 'Ingreso de la academia registrado correctamente.')
+        return redirect('gestion:dashboard')
+    return render(request, 'gestion/registrar_ingreso_academia.html', {
+        'form': form,
+        'titulo': 'Registrar otro ingreso de la academia',
+    })
+
+
+@administrador_required
+def configurar_categorias_financieras(request, categoria_id=None):
+    categoria = (
+        get_object_or_404(CategoriaFinanciera, id=categoria_id)
+        if categoria_id else None
+    )
+    form = CategoriaFinancieraForm(request.POST or None, instance=categoria)
+    if request.method == 'POST' and form.is_valid():
+        guardada = form.save()
+        messages.success(
+            request,
+            f'Categoría "{guardada.nombre}" guardada correctamente.',
+        )
+        return redirect('gestion:configurar_categorias_financieras')
+    return render(request, 'gestion/configurar_categorias_financieras.html', {
+        'form': form,
+        'categoria_edicion': categoria,
+        'categorias': CategoriaFinanciera.objects.all(),
     })
 
 # DETALLE DE REGISTRO LEGAL

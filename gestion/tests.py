@@ -1425,6 +1425,80 @@ class CalendarioAsistenciaTests(TestCase):
             estado=AsistenciaClase.Estados.CONFIRMADA,
         ).exists())
 
+    def test_plan_permite_otra_disciplina_pero_conserva_limite_de_clases(self):
+        hoy = date(2026, 7, 15)
+        plan = Plan.objects.create(
+            nombre='Plan de una clase Jiu Jitsu',
+            precio='100000',
+            duracion_dias=30,
+            clases_mes=1,
+            permite_jiu_jitsu=True,
+            permite_muay_thai=False,
+            permite_mma=False,
+        )
+        Suscripcion.objects.create(
+            alumno=self.alumno,
+            plan=plan,
+            fecha_inicio=hoy - timedelta(days=1),
+            fecha_vencimiento=hoy + timedelta(days=29),
+            estado=Suscripcion.Estados.ACTIVA,
+        )
+        clase_muay_thai = ClaseProgramada.objects.create(
+            dia=ClaseProgramada.DiasSemana.MIERCOLES,
+            hora_inicio=time(18, 0),
+            hora_fin=time(19, 0),
+            disciplina=ClaseProgramada.Disciplinas.MUAY_THAI,
+            titulo='Clase Muay Thai',
+            instructor=self.instructor,
+        )
+        self.client.force_login(self.usuario)
+
+        momento_primera = timezone.make_aware(datetime(2026, 7, 15, 18, 5))
+        with patch('gestion.views.timezone.localtime', return_value=momento_primera):
+            primera = self.client.post(
+                reverse('gestion:confirmar_clase_home'),
+                {'clase_id': clase_muay_thai.id},
+            )
+
+        self.assertRedirects(primera, reverse('gestion:home_publica'))
+        self.assertTrue(AsistenciaClase.objects.filter(
+            alumno=self.alumno,
+            clase=clase_muay_thai,
+            fecha_clase=hoy,
+            estado=AsistenciaClase.Estados.CONFIRMADA,
+        ).exists())
+
+        clase_mma = ClaseProgramada.objects.create(
+            dia=ClaseProgramada.DiasSemana.MIERCOLES,
+            hora_inicio=time(18, 0),
+            hora_fin=time(19, 0),
+            disciplina=ClaseProgramada.Disciplinas.MMA,
+            titulo='Clase MMA',
+            instructor=self.instructor,
+        )
+        siguiente_miercoles = timezone.make_aware(
+            datetime(2026, 7, 22, 18, 5)
+        )
+        with patch(
+            'gestion.views.timezone.localtime',
+            return_value=siguiente_miercoles,
+        ):
+            segunda = self.client.post(
+                reverse('gestion:confirmar_clase_home'),
+                {'clase_id': clase_mma.id},
+                follow=True,
+            )
+
+        self.assertContains(
+            segunda,
+            'Ya consumiste tus 1 clases disponibles de este plan.',
+        )
+        self.assertFalse(AsistenciaClase.objects.filter(
+            alumno=self.alumno,
+            clase=clase_mma,
+            fecha_clase=date(2026, 7, 22),
+        ).exists())
+
     def test_estudiante_con_sesion_confirma_sin_credenciales_y_conserva_sesion(self):
         hoy = date(2026, 7, 15)
         plan = Plan.objects.create(

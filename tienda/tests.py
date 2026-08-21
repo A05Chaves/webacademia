@@ -4,6 +4,7 @@ from io import BytesIO
 
 from django.contrib.auth import get_user_model
 from django.core import mail
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -12,11 +13,12 @@ from pypdf import PdfReader
 from alumnos.models import Alumno
 from finanzas.models import MovimientoFinanciero
 
-from .forms import VentaTiendaForm
+from .forms import ProductoTiendaForm, VentaTiendaForm
 from .models import (
-    AjusteInventario, AplicacionAbonoCuota, CategoriaProducto, ClienteTienda,
+    AjusteInventario, AplicacionAbonoCuota, CategoriaMovimientoTienda,
+    CategoriaProducto, ClienteTienda, DisciplinaProducto,
     CuentaTienda, CuotaVentaTienda, DetalleVentaTienda, MovimientoTienda,
-    ProductoTienda, VentaTienda,
+    LineaModeloProducto, MarcaProducto, ProductoTienda, VentaTienda,
 )
 
 
@@ -42,6 +44,103 @@ class TiendaTests(TestCase):
             stock=10,
             stock_minimo=2,
         )
+
+    def test_configura_catalogos_y_los_asigna_al_producto(self):
+        response = self.client.post(reverse('tienda:crear_marca'), {
+            'nombre': 'Tatami', 'activa': 'on',
+        })
+        self.assertRedirects(response, reverse('tienda:configuracion'))
+        marca = MarcaProducto.objects.get(nombre='Tatami')
+
+        response = self.client.post(reverse('tienda:crear_linea_modelo'), {
+            'marca': marca.id, 'nombre': 'Nova Absolute', 'activa': 'on',
+        })
+        self.assertRedirects(response, reverse('tienda:configuracion'))
+        linea = LineaModeloProducto.objects.get(nombre='Nova Absolute')
+
+        response = self.client.post(reverse('tienda:crear_disciplina_producto'), {
+            'nombre': 'Jiu Jitsu', 'activa': 'on',
+        })
+        self.assertRedirects(response, reverse('tienda:configuracion'))
+        disciplina = DisciplinaProducto.objects.get(nombre='Jiu Jitsu')
+
+        response = self.client.post(reverse('tienda:crear_producto'), {
+            'nombre': 'Kimono Nova',
+            'marca': marca.id,
+            'linea_modelo': linea.id,
+            'disciplina': disciplina.id,
+            'moneda': 'COP',
+            'costo_unitario': '200000',
+            'precio_venta': '300000',
+            'stock_inicial': '2',
+            'stock_minimo': '0',
+            'activo': 'on',
+        })
+
+        producto = ProductoTienda.objects.get(nombre='Kimono Nova')
+        self.assertRedirects(response, reverse('tienda:configuracion'))
+        self.assertEqual(producto.marca, marca)
+        self.assertEqual(producto.linea_modelo, linea)
+        self.assertEqual(producto.disciplina, disciplina)
+
+    def test_lineas_modelos_se_filtran_por_marca(self):
+        marca_uno = MarcaProducto.objects.create(nombre='Marca uno')
+        marca_dos = MarcaProducto.objects.create(nombre='Marca dos')
+        linea_uno = LineaModeloProducto.objects.create(
+            marca=marca_uno, nombre='Línea uno',
+        )
+        LineaModeloProducto.objects.create(marca=marca_dos, nombre='Línea dos')
+
+        response = self.client.get(
+            reverse('tienda:lineas_modelos_por_marca'), {'marca': marca_uno.id}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['resultados'], [
+            {'id': linea_uno.id, 'nombre': 'Línea uno'},
+        ])
+
+    def test_catalogos_inactivos_no_se_ofrecen_en_productos_nuevos(self):
+        marca = MarcaProducto.objects.create(nombre='Marca histórica', activa=False)
+        linea = LineaModeloProducto.objects.create(
+            marca=marca, nombre='Modelo histórico', activa=False,
+        )
+        disciplina = DisciplinaProducto.objects.create(
+            nombre='Disciplina histórica', activa=False,
+        )
+
+        formulario_nuevo = ProductoTiendaForm()
+        self.assertNotIn(marca, formulario_nuevo.fields['marca'].queryset)
+        self.assertNotIn(linea, formulario_nuevo.fields['linea_modelo'].queryset)
+        self.assertNotIn(disciplina, formulario_nuevo.fields['disciplina'].queryset)
+
+        producto = ProductoTienda.objects.create(
+            nombre='Producto histórico', marca=marca, linea_modelo=linea,
+            disciplina=disciplina, costo_unitario=1, precio_venta=2,
+        )
+        formulario_edicion = ProductoTiendaForm(instance=producto)
+        self.assertIn(marca, formulario_edicion.fields['marca'].queryset)
+        self.assertIn(linea, formulario_edicion.fields['linea_modelo'].queryset)
+        self.assertIn(disciplina, formulario_edicion.fields['disciplina'].queryset)
+
+    def test_producto_rechaza_linea_modelo_de_otra_marca(self):
+        marca_uno = MarcaProducto.objects.create(nombre='Marca A')
+        marca_dos = MarcaProducto.objects.create(nombre='Marca B')
+        linea = LineaModeloProducto.objects.create(marca=marca_dos, nombre='Modelo B')
+
+        formulario = ProductoTiendaForm(data={
+            'nombre': 'Producto inválido',
+            'marca': marca_uno.id,
+            'linea_modelo': linea.id,
+            'moneda': 'COP',
+            'costo_unitario': '1',
+            'precio_venta': '2',
+            'stock_minimo': '0',
+            'activo': 'on',
+        })
+
+        self.assertFalse(formulario.is_valid())
+        self.assertIn('linea_modelo', formulario.errors)
 
     def test_panel_requiere_usuario_del_personal(self):
         self.client.logout()
@@ -155,6 +254,26 @@ class TiendaTests(TestCase):
 
         self.assertEqual(
             ProductoTienda.objects.filter(referencia__isnull=True).count(),
+            2,
+        )
+
+    def test_varios_productos_pueden_compartir_el_mismo_sku(self):
+        response = self.client.post(reverse('tienda:crear_producto'), {
+            'nombre': 'Camiseta academia segunda variante',
+            'referencia': self.producto.referencia,
+            'descripcion': '',
+            'color': 'Azul',
+            'talla': 'M',
+            'precio_venta': '85000',
+            'costo_unitario': '42000',
+            'stock_minimo': '1',
+            'stock_inicial': '3',
+            'activo': 'on',
+        })
+
+        self.assertRedirects(response, reverse('tienda:configuracion'))
+        self.assertEqual(
+            ProductoTienda.objects.filter(referencia='CAM-001').count(),
             2,
         )
 
@@ -369,6 +488,40 @@ class TiendaTests(TestCase):
         response = self.client.get(reverse('tienda:panel'))
 
         self.assertContains(response, '$ 200.000,00')
+
+    def test_categoria_tienda_es_independiente_y_conserva_movimientos(self):
+        categoria = CategoriaMovimientoTienda.objects.create(
+            nombre='Donaciones tienda pruebas',
+            tipo=CategoriaMovimientoTienda.Tipos.INGRESO,
+            naturaleza=CategoriaMovimientoTienda.Naturalezas.NO_OPERACIONAL,
+        )
+        datos = {
+            'cuenta': self.cuenta.id,
+            'categoria': categoria.id,
+            'concepto': 'Aporte a la tienda',
+            'valor': '40000',
+            'fecha': timezone.localtime().strftime('%Y-%m-%dT%H:%M'),
+            'observaciones': '',
+            'soporte': SimpleUploadedFile(
+                'aporte-tienda.pdf', b'%PDF soporte', content_type='application/pdf'
+            ),
+        }
+        response = self.client.post(reverse('tienda:registrar_ingreso'), datos)
+
+        self.assertRedirects(response, reverse('tienda:panel'))
+        movimiento = MovimientoTienda.objects.get(concepto='Aporte a la tienda')
+        self.assertEqual(movimiento.categoria, categoria)
+        self.assertFalse(MovimientoFinanciero.objects.exists())
+        panel = self.client.get(reverse('tienda:panel'))
+        resumen = next(
+            item for item in panel.context['resumenes'] if item['codigo'] == 'COP'
+        )
+        self.assertEqual(resumen['ingresos_no_operacionales'], 40000)
+        self.assertEqual(resumen['ingresos_operacionales'], 0)
+
+        categoria.activa = False
+        categoria.save(update_fields=['activa'])
+        self.assertEqual(movimiento.categoria_id, categoria.id)
 
     def test_venta_credito_exige_cliente_y_registra_cartera_sin_ingreso(self):
         cliente = ClienteTienda.objects.create(

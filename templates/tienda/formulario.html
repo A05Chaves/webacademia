@@ -11,7 +11,7 @@
     <div class="col-lg-8 col-xl-7">
         <div class="card bg-dark text-light border-secondary">
             <div class="card-body p-4">
-                <form method="post">
+                <form method="post" enctype="multipart/form-data">
                     {% csrf_token %}
 
                     {% if form.non_field_errors %}
@@ -68,5 +68,35 @@
         </div>
     </div>
 </div>
+
+{% if form.marca and form.linea_modelo %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const marca = document.getElementById('{{ form.marca.id_for_label }}');
+    const linea = document.getElementById('{{ form.linea_modelo.id_for_label }}');
+    if (!marca || !linea) return;
+    const url = '{% url "tienda:lineas_modelos_por_marca" %}';
+
+    async function actualizarLineas(conservarActual = false) {
+        const actual = conservarActual ? linea.value : '';
+        linea.innerHTML = '<option value="">---------</option>';
+        if (!marca.value) return;
+        const respuesta = await fetch(`${url}?marca=${encodeURIComponent(marca.value)}&actual=${encodeURIComponent(actual)}`);
+        const datos = await respuesta.json();
+        for (const item of datos.resultados) {
+            linea.add(new Option(
+                item.nombre,
+                item.id,
+                false,
+                String(item.id) === String(actual)
+            ));
+        }
+    }
+
+    marca.addEventListener('change', () => actualizarLineas(false));
+    actualizarLineas(true);
+});
+</script>
+{% endif %}
 
 {% endblock %}

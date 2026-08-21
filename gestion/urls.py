@@ -113,6 +113,11 @@ urlpatterns = [
          views.reset_password_alumno, name='reset_password_alumno'),
 
     path('finanzas/gasto/crear/', views.registrar_gasto, name='registrar_gasto'),
+    path(
+        'finanzas/ingreso/crear/',
+        views.registrar_ingreso_manual,
+        name='registrar_ingreso_manual',
+    ),
 
     path('finanzas/pago-programado/crear/',
          views.crear_pago_programado, name='crear_pago_programado'),
@@ -162,6 +167,16 @@ urlpatterns = [
         'configuraciones/cuentas/<int:cuenta_id>/editar/',
         views.configurar_cuentas,
         name='editar_cuenta_financiera'
+    ),
+    path(
+        'configuraciones/categorias-financieras/',
+        views.configurar_categorias_financieras,
+        name='configurar_categorias_financieras',
+    ),
+    path(
+        'configuraciones/categorias-financieras/<int:categoria_id>/editar/',
+        views.configurar_categorias_financieras,
+        name='editar_categoria_financiera',
     ),
     path(
         'configurar-horario/',

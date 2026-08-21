@@ -1258,6 +1258,7 @@ class GastoForm(forms.ModelForm):
             'concepto',
             'valor',
             'fecha',
+            'soporte',
             'observaciones',
         ]
 
@@ -1278,6 +1279,10 @@ class GastoForm(forms.ModelForm):
             'observaciones': forms.Textarea(attrs={
                 'class': 'form-control',
                 'rows': 3
+            }),
+            'soporte': forms.ClearableFileInput(attrs={
+                'class': 'form-control',
+                'accept': '.pdf,.jpg,.jpeg,.png,.webp',
             }),
 
         }
@@ -1333,6 +1338,19 @@ class GastoForm(forms.ModelForm):
                 'Selecciona una categoría o agrega un tipo de gasto nuevo.',
             )
 
+        categoria_final = cleaned_data.get('categoria')
+        if (
+            categoria_final
+            and categoria_final.naturaleza
+            == CategoriaFinanciera.Naturalezas.NO_OPERACIONAL
+            and not cleaned_data.get('soporte')
+            and not getattr(self.instance, 'soporte', None)
+        ):
+            self.add_error(
+                'soporte',
+                'Adjunta el soporte del movimiento no operacional.',
+            )
+
         return cleaned_data
 
     def save(self, commit=True):
@@ -1357,6 +1375,168 @@ class GastoForm(forms.ModelForm):
                 'El valor del gasto debe ser mayor que cero.'
             )
         return valor
+
+
+class CategoriaFinancieraForm(forms.ModelForm):
+    class Meta:
+        model = CategoriaFinanciera
+        fields = ['nombre', 'tipo', 'naturaleza', 'descripcion', 'activa']
+        widgets = {
+            'nombre': forms.TextInput(attrs={'class': 'form-control'}),
+            'tipo': forms.Select(attrs={'class': 'form-select'}),
+            'naturaleza': forms.Select(attrs={'class': 'form-select'}),
+            'descripcion': forms.TextInput(attrs={'class': 'form-control'}),
+            'activa': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk and self.instance.movimientos.exists():
+            for campo in ('tipo', 'naturaleza'):
+                self.fields[campo].disabled = True
+            self.fields['naturaleza'].help_text = (
+                'La naturaleza no puede cambiar porque esta categoría ya tiene historial.'
+            )
+
+    def clean_nombre(self):
+        return self.cleaned_data['nombre'].strip().upper()
+
+
+class IngresoManualAcademiaForm(forms.ModelForm):
+    nueva_categoria = forms.CharField(
+        required=False,
+        max_length=100,
+        label='Nueva categoría de ingreso',
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Ej. DONACIONES, APORTES O PATROCINIOS',
+        }),
+        help_text='Si la categoría no existe, escríbela aquí y quedará disponible para futuros ingresos.',
+    )
+    naturaleza_nueva_categoria = forms.ChoiceField(
+        required=False,
+        label='Naturaleza de la nueva categoría',
+        choices=CategoriaFinanciera.Naturalezas.choices,
+        initial=CategoriaFinanciera.Naturalezas.NO_OPERACIONAL,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    class Meta:
+        model = MovimientoFinanciero
+        fields = [
+            'cuenta', 'categoria', 'evento', 'concepto', 'valor',
+            'fecha', 'soporte', 'observaciones',
+        ]
+        widgets = {
+            'cuenta': forms.Select(attrs={'class': 'form-select'}),
+            'categoria': forms.Select(attrs={'class': 'form-select'}),
+            'evento': forms.Select(attrs={'class': 'form-select'}),
+            'concepto': forms.TextInput(attrs={'class': 'form-control'}),
+            'valor': forms.NumberInput(attrs={
+                'class': 'form-control', 'min': '0.01', 'step': '0.01',
+            }),
+            'fecha': forms.DateTimeInput(attrs={
+                'class': 'form-control', 'type': 'datetime-local',
+            }),
+            'soporte': forms.ClearableFileInput(attrs={
+                'class': 'form-control',
+                'accept': '.pdf,.jpg,.jpeg,.png,.webp',
+            }),
+            'observaciones': forms.Textarea(attrs={
+                'class': 'form-control', 'rows': 3,
+            }),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['cuenta'].queryset = CuentaFinanciera.objects.filter(activa=True)
+        self.fields['categoria'].queryset = CategoriaFinanciera.objects.filter(
+            activa=True,
+            tipo__in=[
+                CategoriaFinanciera.Tipos.INGRESO,
+                CategoriaFinanciera.Tipos.AMBOS,
+            ],
+        )
+        self.fields['categoria'].required = False
+        self.fields['categoria'].empty_label = 'Selecciona una categoría existente'
+        self.fields['categoria'].label = 'Categoría existente'
+        self.fields['evento'].required = False
+        self.fields['evento'].queryset = Evento.objects.order_by('-fecha_inicio', 'nombre')
+        self.fields['evento'].empty_label = 'Sin evento relacionado'
+        self.fields['evento'].label = 'Evento relacionado (opcional)'
+        self.fields['evento'].help_text = (
+            'Selecciona un evento únicamente cuando el ingreso pertenezca a un '
+            'torneo, seminario u otra actividad ya creada.'
+        )
+
+    def clean(self):
+        cleaned = super().clean()
+        categoria = cleaned.get('categoria')
+        nueva_categoria = (cleaned.get('nueva_categoria') or '').strip().upper()
+        cleaned['nueva_categoria'] = nueva_categoria
+        naturaleza_nueva = (
+            cleaned.get('naturaleza_nueva_categoria')
+            or CategoriaFinanciera.Naturalezas.NO_OPERACIONAL
+        )
+
+        if nueva_categoria:
+            existente = CategoriaFinanciera.objects.filter(
+                nombre__iexact=nueva_categoria
+            ).first()
+            if existente:
+                if not existente.activa:
+                    self.add_error(
+                        'nueva_categoria',
+                        'Esta categoría ya existe, pero está inhabilitada. Reactívala desde Configuración.',
+                    )
+                elif existente.tipo not in (
+                    CategoriaFinanciera.Tipos.INGRESO,
+                    CategoriaFinanciera.Tipos.AMBOS,
+                ):
+                    self.add_error(
+                        'nueva_categoria',
+                        'Esta categoría existe, pero está configurada únicamente para gastos.',
+                    )
+                else:
+                    categoria = existente
+                    cleaned['categoria'] = existente
+            else:
+                categoria = None
+                cleaned['categoria'] = None
+        elif not categoria:
+            self.add_error(
+                'categoria',
+                'Selecciona una categoría existente o escribe una nueva.',
+            )
+
+        naturaleza_final = (
+            categoria.naturaleza if categoria else naturaleza_nueva
+        )
+        if (
+            (categoria or nueva_categoria)
+            and naturaleza_final == CategoriaFinanciera.Naturalezas.NO_OPERACIONAL
+            and not cleaned.get('soporte')
+        ):
+            self.add_error('soporte', 'Adjunta el soporte del ingreso no operacional.')
+        return cleaned
+
+    def save(self, commit=True):
+        movimiento = super().save(commit=False)
+        nueva_categoria = self.cleaned_data.get('nueva_categoria')
+        categoria = self.cleaned_data.get('categoria')
+        if nueva_categoria and not categoria:
+            categoria = CategoriaFinanciera.objects.create(
+                nombre=nueva_categoria,
+                tipo=CategoriaFinanciera.Tipos.INGRESO,
+                naturaleza=self.cleaned_data.get('naturaleza_nueva_categoria')
+                or CategoriaFinanciera.Naturalezas.NO_OPERACIONAL,
+                activa=True,
+            )
+        movimiento.categoria = categoria
+        movimiento.tipo = MovimientoFinanciero.Tipos.INGRESO
+        if commit:
+            movimiento.save()
+        return movimiento
 
 # PAGOS PROGRAMADOS
 

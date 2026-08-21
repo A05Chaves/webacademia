@@ -27,6 +27,6 @@ class PagoProgramadoAdmin(admin.ModelAdmin):
 
 @admin.register(CategoriaFinanciera)
 class CategoriaFinancieraAdmin(admin.ModelAdmin):
-    list_display = ('id', 'nombre', 'tipo', 'activa')
-    list_filter = ('tipo', 'activa')
+    list_display = ('id', 'nombre', 'tipo', 'naturaleza', 'activa')
+    list_filter = ('tipo', 'naturaleza', 'activa')
     search_fields = ('nombre',)

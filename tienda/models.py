@@ -49,6 +49,56 @@ class SubcategoriaProducto(models.Model):
         return f'{self.categoria.nombre} / {self.nombre}'
 
 
+class MarcaProducto(models.Model):
+    nombre = models.CharField(max_length=100, unique=True)
+    activa = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['nombre']
+        verbose_name = 'Marca de producto'
+        verbose_name_plural = 'Marcas de productos'
+
+    def __str__(self):
+        return self.nombre
+
+
+class LineaModeloProducto(models.Model):
+    marca = models.ForeignKey(
+        MarcaProducto,
+        on_delete=models.PROTECT,
+        related_name='lineas_modelos',
+    )
+    nombre = models.CharField(max_length=100)
+    activa = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['marca__nombre', 'nombre']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['marca', 'nombre'],
+                name='linea_modelo_unica_por_marca',
+            ),
+        ]
+        verbose_name = 'Línea o modelo de producto'
+        verbose_name_plural = 'Líneas y modelos de productos'
+
+    def __str__(self):
+        return f'{self.marca.nombre} / {self.nombre}'
+
+
+class DisciplinaProducto(models.Model):
+    nombre = models.CharField(max_length=80, unique=True)
+    activa = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['nombre']
+        verbose_name = 'Disciplina de producto'
+        verbose_name_plural = 'Disciplinas de productos'
+
+    def __str__(self):
+        return self.nombre
+
+
 class CuentaTienda(models.Model):
     class Tipos(models.TextChoices):
         EFECTIVO = 'EFECTIVO', 'Efectivo'
@@ -97,6 +147,42 @@ class CuentaTienda(models.Model):
 
     def __str__(self):
         return f'{self.nombre} ({self.moneda})'
+
+
+class CategoriaMovimientoTienda(models.Model):
+    class Tipos(models.TextChoices):
+        INGRESO = 'INGRESO', 'Ingreso'
+        EGRESO = 'EGRESO', 'Gasto'
+
+    class Naturalezas(models.TextChoices):
+        OPERACIONAL = 'OPERACIONAL', 'Operacional'
+        NO_OPERACIONAL = 'NO_OPERACIONAL', 'No operacional'
+
+    nombre = models.CharField(max_length=100)
+    tipo = models.CharField(max_length=10, choices=Tipos.choices)
+    naturaleza = models.CharField(
+        max_length=20,
+        choices=Naturalezas.choices,
+        default=Naturalezas.OPERACIONAL,
+    )
+    descripcion = models.CharField(max_length=250, blank=True)
+    activa = models.BooleanField(default=True)
+    creado = models.DateTimeField(auto_now_add=True)
+    actualizado = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['tipo', 'naturaleza', 'nombre']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['nombre', 'tipo', 'naturaleza'],
+                name='categoria_mov_tienda_unica',
+            ),
+        ]
+        verbose_name = 'Categoría contable de tienda'
+        verbose_name_plural = 'Categorías contables de tienda'
+
+    def __str__(self):
+        return f'{self.nombre} · {self.get_naturaleza_display()}'
 
 
 class ClienteTienda(models.Model):
@@ -161,15 +247,33 @@ class ProductoTienda(models.Model):
     )
     nombre = models.CharField(max_length=150)
     referencia = models.CharField(
-        max_length=60, unique=True, null=True, blank=True,
-        help_text='SKU único de esta variante.',
+        max_length=60, null=True, blank=True,
+        help_text='SKU o referencia comercial. Puede repetirse en varios productos o variantes.',
     )
     codigo_barras = models.CharField(
         max_length=80, unique=True, null=True, blank=True)
     descripcion = models.TextField(blank=True)
-    marca = models.CharField(max_length=100, blank=True)
-    linea_modelo = models.CharField(max_length=100, blank=True)
-    disciplina = models.CharField(max_length=80, blank=True)
+    marca = models.ForeignKey(
+        MarcaProducto,
+        on_delete=models.PROTECT,
+        related_name='productos',
+        null=True,
+        blank=True,
+    )
+    linea_modelo = models.ForeignKey(
+        LineaModeloProducto,
+        on_delete=models.PROTECT,
+        related_name='productos',
+        null=True,
+        blank=True,
+    )
+    disciplina = models.ForeignKey(
+        DisciplinaProducto,
+        on_delete=models.PROTECT,
+        related_name='productos',
+        null=True,
+        blank=True,
+    )
     publico = models.CharField(
         max_length=10, choices=Publicos.choices, blank=True)
     genero = models.CharField(
@@ -222,6 +326,10 @@ class ProductoTienda(models.Model):
         if self.subcategoria and self.categoria_id != self.subcategoria.categoria_id:
             raise ValidationError(
                 {'subcategoria': 'La subcategoría no pertenece a la categoría.'})
+        if self.linea_modelo and self.marca_id != self.linea_modelo.marca_id:
+            raise ValidationError({
+                'linea_modelo': 'La línea o modelo no pertenece a la marca seleccionada.'
+            })
 
     def save(self, *args, **kwargs):
         self.referencia = self.referencia or None
@@ -415,9 +523,17 @@ class MovimientoTienda(models.Model):
         COMPRA = 'COMPRA', 'Compra de producto'
         GASTO = 'GASTO', 'Gasto general'
         TRANSFERENCIA = 'TRANSFERENCIA', 'Transferencia entre cuentas'
+        OTRO_INGRESO = 'OTRO_INGRESO', 'Otro ingreso'
 
     cuenta = models.ForeignKey(
         CuentaTienda, on_delete=models.PROTECT, related_name='movimientos')
+    categoria = models.ForeignKey(
+        CategoriaMovimientoTienda,
+        on_delete=models.PROTECT,
+        related_name='movimientos',
+        null=True,
+        blank=True,
+    )
     tipo = models.CharField(max_length=10, choices=Tipos.choices)
     origen = models.CharField(max_length=20, choices=Origenes.choices)
     concepto = models.CharField(max_length=200)
@@ -439,6 +555,12 @@ class MovimientoTienda(models.Model):
         max_digits=14, decimal_places=2, null=True, blank=True)
     fecha = models.DateTimeField(default=timezone.now)
     observaciones = models.TextField(blank=True)
+    soporte = models.FileField(
+        upload_to='tienda/soportes/%Y/%m/',
+        blank=True,
+        null=True,
+        help_text='Factura, recibo, comprobante, imagen o PDF relacionado.',
+    )
     registrado_por = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='movimientos_tienda_registrados',

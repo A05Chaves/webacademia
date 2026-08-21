@@ -1,0 +1,40 @@
+{% extends 'gestion/base.html' %}
+{% block content %}
+<div class="page-heading">
+    <div class="page-heading-main">
+        <h2 class="page-heading-title"><i class="fa-solid fa-arrow-trend-up"></i><span>{{ titulo }}</span></h2>
+        <p class="page-heading-subtitle text-secondary">Registra donaciones, aportes u otros ingresos. El evento solo se usa cuando el dinero corresponde realmente a una actividad creada.</p>
+    </div>
+    <div class="page-heading-actions"><a href="{% url 'gestion:dashboard' %}" class="btn btn-outline-light">Volver</a></div>
+</div>
+
+<form method="post" enctype="multipart/form-data" class="card bg-dark text-light border-secondary">
+    <div class="card-body p-4">{% csrf_token %}
+        {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="row g-3">
+            <div class="col-md-6"><label class="form-label" for="{{ form.cuenta.id_for_label }}">Cuenta que recibe el dinero</label>{{ form.cuenta }}{{ form.cuenta.errors }}</div>
+            <div class="col-md-6"><label class="form-label" for="{{ form.categoria.id_for_label }}">{{ form.categoria.label }}</label>{{ form.categoria }}{{ form.categoria.errors }}</div>
+
+            <div class="col-12"><div class="border border-info rounded p-3">
+                <h3 class="h6 text-info"><i class="fa-solid fa-circle-plus"></i> ¿La categoría no está en la lista?</h3>
+                <div class="row g-3">
+                    <div class="col-md-7"><label class="form-label" for="{{ form.nueva_categoria.id_for_label }}">{{ form.nueva_categoria.label }}</label>{{ form.nueva_categoria }}<div class="form-text">{{ form.nueva_categoria.help_text }}</div>{{ form.nueva_categoria.errors }}</div>
+                    <div class="col-md-5"><label class="form-label" for="{{ form.naturaleza_nueva_categoria.id_for_label }}">{{ form.naturaleza_nueva_categoria.label }}</label>{{ form.naturaleza_nueva_categoria }}{{ form.naturaleza_nueva_categoria.errors }}</div>
+                </div>
+            </div></div>
+
+            <div class="col-12"><div class="border border-secondary rounded p-3">
+                <label class="form-label" for="{{ form.evento.id_for_label }}">{{ form.evento.label }}</label>{{ form.evento }}
+                <div class="form-text">{{ form.evento.help_text }}</div>{{ form.evento.errors }}
+            </div></div>
+
+            <div class="col-md-8"><label class="form-label" for="{{ form.concepto.id_for_label }}">Concepto</label>{{ form.concepto }}{{ form.concepto.errors }}</div>
+            <div class="col-md-4"><label class="form-label" for="{{ form.valor.id_for_label }}">Valor</label>{{ form.valor }}{{ form.valor.errors }}</div>
+            <div class="col-md-6"><label class="form-label" for="{{ form.fecha.id_for_label }}">Fecha</label>{{ form.fecha }}{{ form.fecha.errors }}</div>
+            <div class="col-md-6"><label class="form-label" for="{{ form.soporte.id_for_label }}">Soporte</label>{{ form.soporte }}<div class="form-text">Obligatorio para ingresos no operacionales.</div>{{ form.soporte.errors }}</div>
+            <div class="col-12"><label class="form-label" for="{{ form.observaciones.id_for_label }}">Observaciones</label>{{ form.observaciones }}{{ form.observaciones.errors }}</div>
+        </div>
+        <div class="d-flex justify-content-end gap-2 mt-4"><a href="{% url 'gestion:dashboard' %}" class="btn btn-outline-light">Cancelar</a><button class="btn btn-success"><i class="fa-solid fa-floppy-disk"></i> Registrar ingreso</button></div>
+    </div>
+</form>
+{% endblock %}

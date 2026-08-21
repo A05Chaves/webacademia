@@ -1,0 +1,45 @@
+{% extends 'gestion/base.html' %}
+{% block content %}
+<div class="page-heading">
+    <div class="page-heading-main">
+        <h2 class="page-heading-title"><i class="fa-solid fa-tags"></i><span>Categorías contables de la academia</span></h2>
+        <p class="page-heading-subtitle text-secondary">Estas categorías solo clasifican movimientos de la academia. Inhabilitarlas no elimina su historial.</p>
+    </div>
+    <div class="page-heading-actions"><a href="{% url 'gestion:configuraciones' %}" class="btn btn-outline-light">Volver</a></div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <div class="card bg-dark text-light border-secondary">
+            <div class="card-header"><strong>{% if categoria_edicion %}Editar{% else %}Nueva{% endif %} categoría</strong></div>
+            <div class="card-body">
+                <form method="post">{% csrf_token %}
+                    {% for field in form %}
+                        {% if field.field.widget.input_type == 'checkbox' %}
+                            <div class="form-check mb-3">{{ field }}<label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label></div>
+                        {% else %}
+                            <div class="mb-3"><label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}</div>
+                        {% endif %}
+                        {% for error in field.errors %}<div class="text-danger small mb-2">{{ error }}</div>{% endfor %}
+                    {% endfor %}
+                    <button class="btn btn-success"><i class="fa-solid fa-floppy-disk"></i> Guardar</button>
+                    {% if categoria_edicion %}<a href="{% url 'gestion:configurar_categorias_financieras' %}" class="btn btn-outline-light">Cancelar edición</a>{% endif %}
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-7">
+        <div class="card bg-dark text-light border-secondary">
+            <div class="table-responsive"><table class="table table-dark table-hover mb-0">
+                <thead><tr><th>Categoría</th><th>Movimiento</th><th>Naturaleza</th><th>Estado</th><th></th></tr></thead>
+                <tbody>{% for categoria in categorias %}<tr class="{% if not categoria.activa %}opacity-50{% endif %}">
+                    <td><strong>{{ categoria.nombre }}</strong><br><small class="text-secondary">{{ categoria.descripcion|default:'Sin descripción' }}</small></td>
+                    <td>{{ categoria.get_tipo_display }}</td><td>{{ categoria.get_naturaleza_display }}</td>
+                    <td>{% if categoria.activa %}<span class="badge bg-success">Activa</span>{% else %}<span class="badge bg-secondary">Inhabilitada</span>{% endif %}</td>
+                    <td><a href="{% url 'gestion:editar_categoria_financiera' categoria.id %}" class="btn btn-outline-info btn-sm"><i class="fa-solid fa-pen"></i></a></td>
+                </tr>{% empty %}<tr><td colspan="5" class="text-center py-4">No hay categorías configuradas.</td></tr>{% endfor %}</tbody>
+            </table></div>
+        </div>
+    </div>
+</div>
+{% endblock %}

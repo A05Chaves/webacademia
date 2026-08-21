@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -308,3 +309,131 @@ class VistasContablesTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertIn('/login/', response.url)
+
+    def test_categoria_no_operacional_se_inhabilita_sin_perder_historial(self):
+        categoria = CategoriaFinanciera.objects.create(
+            nombre='Donaciones academia',
+            tipo=CategoriaFinanciera.Tipos.INGRESO,
+            naturaleza=CategoriaFinanciera.Naturalezas.NO_OPERACIONAL,
+        )
+        movimiento = MovimientoFinanciero.objects.create(
+            cuenta=self.cuenta,
+            categoria=categoria,
+            tipo=MovimientoFinanciero.Tipos.INGRESO,
+            concepto='Aporte histórico',
+            valor=50000,
+        )
+
+        response = self.client.post(
+            reverse('gestion:editar_categoria_financiera', args=[categoria.id]),
+            {
+                'nombre': categoria.nombre,
+                'tipo': categoria.tipo,
+                'naturaleza': categoria.naturaleza,
+                'descripcion': 'Categoría inhabilitada',
+            },
+        )
+
+        self.assertRedirects(
+            response, reverse('gestion:configurar_categorias_financieras')
+        )
+        categoria.refresh_from_db()
+        movimiento.refresh_from_db()
+        self.assertFalse(categoria.activa)
+        self.assertEqual(movimiento.categoria, categoria)
+
+    def test_ingreso_no_operacional_exige_soporte_y_aparece_en_dashboard(self):
+        categoria = CategoriaFinanciera.objects.create(
+            nombre='Aporte extraordinario',
+            tipo=CategoriaFinanciera.Tipos.INGRESO,
+            naturaleza=CategoriaFinanciera.Naturalezas.NO_OPERACIONAL,
+        )
+        datos = {
+            'cuenta': self.cuenta.id,
+            'categoria': categoria.id,
+            'concepto': 'Donación externa',
+            'valor': '75000',
+            'fecha': timezone.localtime().strftime('%Y-%m-%dT%H:%M'),
+            'observaciones': '',
+        }
+        sin_soporte = self.client.post(
+            reverse('gestion:registrar_ingreso_manual'), datos
+        )
+        self.assertEqual(sin_soporte.status_code, 200)
+        self.assertFalse(MovimientoFinanciero.objects.exists())
+
+        datos['soporte'] = SimpleUploadedFile(
+            'aporte.pdf', b'%PDF-1.4 soporte', content_type='application/pdf'
+        )
+        con_soporte = self.client.post(
+            reverse('gestion:registrar_ingreso_manual'), datos
+        )
+        self.assertRedirects(con_soporte, reverse('gestion:dashboard'))
+        dashboard = self.client.get(reverse('gestion:dashboard'))
+        self.assertEqual(dashboard.context['ingresos_no_operacionales_mes'], 75000)
+        self.assertEqual(dashboard.context['ingresos_operacionales_mes'], 0)
+
+    def test_otro_ingreso_crea_categoria_reutilizable_sin_exigir_evento(self):
+        response = self.client.post(
+            reverse('gestion:registrar_ingreso_manual'),
+            {
+                'cuenta': self.cuenta.id,
+                'categoria': '',
+                'nueva_categoria': 'Aportes especiales',
+                'naturaleza_nueva_categoria': (
+                    CategoriaFinanciera.Naturalezas.OPERACIONAL
+                ),
+                'evento': '',
+                'concepto': 'Aporte de aliado',
+                'valor': '60000',
+                'fecha': timezone.localtime().strftime('%Y-%m-%dT%H:%M'),
+                'observaciones': '',
+            },
+        )
+
+        self.assertRedirects(response, reverse('gestion:dashboard'))
+        categoria = CategoriaFinanciera.objects.get(nombre='APORTES ESPECIALES')
+        movimiento = MovimientoFinanciero.objects.get(concepto='Aporte de aliado')
+        self.assertEqual(categoria.tipo, CategoriaFinanciera.Tipos.INGRESO)
+        self.assertEqual(
+            categoria.naturaleza,
+            CategoriaFinanciera.Naturalezas.OPERACIONAL,
+        )
+        self.assertEqual(movimiento.categoria, categoria)
+        self.assertIsNone(movimiento.evento)
+
+        formulario_futuro = self.client.get(
+            reverse('gestion:registrar_ingreso_manual')
+        )
+        self.assertContains(formulario_futuro, 'APORTES ESPECIALES')
+        self.assertContains(formulario_futuro, 'Sin evento relacionado')
+
+        evento = Evento.objects.create(
+            tipo=Evento.Tipos.SEMINARIO,
+            nombre='Seminario contable',
+            descripcion='Evento relacionado con el ingreso',
+            fecha_inicio=timezone.now() + timedelta(days=10),
+            lugar='Academia',
+            precio_estudiante=50000,
+            precio_externo=70000,
+        )
+        ingreso_evento = self.client.post(
+            reverse('gestion:registrar_ingreso_manual'),
+            {
+                'cuenta': self.cuenta.id,
+                'categoria': categoria.id,
+                'nueva_categoria': '',
+                'evento': evento.id,
+                'concepto': 'Ingreso del seminario',
+                'valor': '90000',
+                'fecha': timezone.localtime().strftime('%Y-%m-%dT%H:%M'),
+                'observaciones': '',
+            },
+        )
+        self.assertRedirects(ingreso_evento, reverse('gestion:dashboard'))
+        self.assertEqual(
+            MovimientoFinanciero.objects.get(
+                concepto='Ingreso del seminario'
+            ).evento,
+            evento,
+        )
