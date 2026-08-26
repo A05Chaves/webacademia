@@ -327,6 +327,17 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'REF-900')
 
+    def test_historial_muestra_cuenta_donde_se_consigno(self):
+        self.nuevo_pago()
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse('gestion:lista_pagos'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Cuenta consignada')
+        self.assertContains(response, self.cuenta.nombre)
+        self.assertContains(response, self.metodo.nombre)
+
     def test_promocion_publicada_aparece_en_home(self):
         hoy = timezone.localdate()
         promocion = Promocion.objects.create(

@@ -945,7 +945,7 @@ def lista_pagos(request):
         'suscripcion',
         'plan',
         'promocion',
-        'metodo_qr',
+        'metodo_qr__cuenta_financiera',
         'validado_por'
     ).all()
     fecha_desde = request.GET.get('fecha_desde', '').strip()

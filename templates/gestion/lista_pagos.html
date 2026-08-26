@@ -32,12 +32,13 @@
 
 <div class="card bg-dark text-light border-secondary">
 <div class="table-responsive"><table class="table table-dark table-hover align-middle mb-0">
-    <thead><tr><th>#</th><th>Fecha</th><th>Estudiante / pagador</th><th>Concepto</th><th>Referencia</th><th class="text-end">Valor</th><th>Estado</th><th class="text-end">Acciones</th></tr></thead>
+    <thead><tr><th>#</th><th>Fecha</th><th>Estudiante / pagador</th><th>Concepto</th><th>Cuenta consignada</th><th>Referencia</th><th class="text-end">Valor</th><th>Estado</th><th class="text-end">Acciones</th></tr></thead>
     <tbody>{% for pago in pagos %}<tr>
         <td>{{ pago.id }}{% if pago.posible_duplicado %}<span class="badge bg-warning text-dark d-block mt-1">Posible duplicado</span>{% endif %}</td>
         <td>{{ pago.fecha_reporte|date:'d/m/Y H:i' }}</td>
         <td><strong>{{ pago.alumno|default:pago.pagador_nombre }}</strong><br><small class="text-secondary">{{ pago.alumno.documento|default:pago.pagador_documento }}{% if pago.alumno.documento_acudiente %} · Acudiente {{ pago.alumno.documento_acudiente }}{% endif %}</small></td>
         <td>{{ pago.get_tipo_display }}{% if pago.plan %}<br><small class="text-secondary">{{ pago.plan.nombre }}</small>{% endif %}</td>
+        <td>{% if pago.metodo_qr.cuenta_financiera %}<strong>{{ pago.metodo_qr.cuenta_financiera.nombre }}</strong><br><small class="text-secondary">{{ pago.metodo_qr.nombre }}</small>{% else %}<span class="text-secondary">Sin cuenta asociada</span><br><small class="text-secondary">{{ pago.metodo_qr.nombre }}</small>{% endif %}</td>
         <td>{{ pago.referencia_pago|default:'—' }}</td>
         <td class="text-end">$ {{ pago.valor|floatformat:0 }}</td>
         <td><span class="badge {% if pago.estado == 'APROBADO' %}bg-success{% elif pago.estado == 'RECHAZADO' %}bg-danger{% else %}bg-warning text-dark{% endif %}">{{ pago.get_estado_display }}</span></td>
@@ -46,6 +47,6 @@
             {% if pago.suscripcion %}<a href="{% url 'gestion:editar_suscripcion' pago.suscripcion.id %}" class="btn btn-outline-warning btn-sm" title="Ver suscripción"><i class="fa-solid fa-id-card"></i></a>{% endif %}
             {% if pago.estado == 'APROBADO' and pago.numero_comprobante %}<a href="{% url 'gestion:descargar_comprobante_pago' pago.token_comprobante %}" class="btn btn-primary btn-sm" title="Descargar comprobante"><i class="fa-solid fa-download"></i></a><form method="post" action="{% url 'gestion:reenviar_comprobante_pago' pago.id %}">{% csrf_token %}<button class="btn btn-outline-info btn-sm" title="Reenviar por correo"><i class="fa-solid fa-envelope"></i></button></form>{% endif %}
         </div></td>
-    </tr>{% empty %}<tr><td colspan="8" class="text-center py-5 text-secondary">No hay pagos para los filtros seleccionados.</td></tr>{% endfor %}</tbody>
+    </tr>{% empty %}<tr><td colspan="9" class="text-center py-5 text-secondary">No hay pagos para los filtros seleccionados.</td></tr>{% endfor %}</tbody>
 </table></div></div>
 {% endblock %}

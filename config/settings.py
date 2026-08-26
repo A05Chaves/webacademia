@@ -36,6 +36,14 @@ ALLOWED_HOSTS = [
     'localhost',
 ]
 
+# Los POST llegan desde el dominio público HTTPS, aunque la aplicación también
+# puede ser atendida internamente por el dominio de PythonAnywhere. Django debe
+# reconocer ambos orígenes explícitamente para validar CSRF sin deshabilitarlo.
+CSRF_TRUSTED_ORIGINS = [
+    'https://bjj.lu-a.com',
+    'https://alfredochaves.pythonanywhere.com',
+]
+
 PUBLIC_BASE_URL = config(
     'PUBLIC_BASE_URL',
     default='https://bjj.lu-a.com',
