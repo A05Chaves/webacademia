@@ -419,6 +419,97 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
             80000,
         )
 
+    def test_jornada_infantil_exige_reglamento_para_menores_al_guardar(self):
+        self.client.force_login(self.admin)
+        inicio = timezone.localtime(timezone.now()) + timedelta(days=10)
+        formato = '%Y-%m-%dT%H:%M'
+
+        response = self.client.post(reverse('gestion:crear_evento'), {
+            'tipo': Evento.Tipos.SEMINARIO,
+            'nombre': 'Seminario con validación infantil',
+            'descripcion': 'Prueba de documentos por jornada',
+            'fecha_inicio': inicio.strftime(formato),
+            'lugar': 'Galeras BJJ',
+            'precio_estudiante': '0',
+            'precio_externo': '0',
+            'publico': Evento.Publicos.ADULTOS,
+            'alcance_torneo': Evento.AlcancesTorneo.INTERNO,
+            'consentimiento_evento': 'Consentimiento configurado.',
+            'reglamento_adultos': 'Reglamento para adultos.',
+            'reglamento_menores': '',
+            'orden': '10',
+            'activo': 'on',
+            'jornadas-TOTAL_FORMS': '1',
+            'jornadas-INITIAL_FORMS': '0',
+            'jornadas-MIN_NUM_FORMS': '0',
+            'jornadas-MAX_NUM_FORMS': '1000',
+            'jornadas-0-nombre': 'Jornada infantil',
+            'jornadas-0-publico': JornadaEvento.Publicos.MENORES,
+            'jornadas-0-fecha_inicio': inicio.strftime(formato),
+            'jornadas-0-fecha_fin': (inicio + timedelta(hours=2)).strftime(formato),
+            'jornadas-0-precio_estudiante': '0',
+            'jornadas-0-precio_externo': '0',
+            'jornadas-0-orden': '1',
+            'jornadas-0-activa': 'on',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            'Una jornada infantil requiere el reglamento para menores y acudientes.',
+        )
+        self.assertFalse(Evento.objects.filter(
+            nombre='Seminario con validación infantil'
+        ).exists())
+
+    def test_evento_incompleto_indica_faltante_y_conserva_inscripciones(self):
+        evento = Evento.objects.create(
+            tipo=Evento.Tipos.SEMINARIO,
+            nombre='Seminario legado incompleto',
+            descripcion='Evento creado antes de la validación por jornadas',
+            fecha_inicio=timezone.now() + timedelta(days=10),
+            lugar='Galeras BJJ',
+            precio_estudiante=0,
+            precio_externo=0,
+            publico=Evento.Publicos.ADULTOS,
+            consentimiento_evento='Consentimiento configurado.',
+            reglamento_adultos='Reglamento para adultos.',
+            reglamento_menores='',
+            publicada_home=True,
+        )
+        JornadaEvento.objects.create(
+            evento=evento,
+            nombre='Jornada infantil',
+            publico=JornadaEvento.Publicos.MENORES,
+            fecha_inicio=evento.fecha_inicio,
+            precio_estudiante=0,
+            precio_externo=0,
+        )
+        InscripcionEvento.objects.create(
+            evento=evento,
+            participante_nombre='Participante existente',
+            participante_documento='LEGADO-1',
+            fecha_nacimiento=timezone.localdate().replace(year=2015),
+            correo='legado@example.com',
+            telefono='3000000000',
+        )
+
+        response = self.client.get(
+            reverse('gestion:inscribirse_evento', args=[evento.id]),
+            follow=True,
+        )
+
+        self.assertContains(response, 'reglamento para menores y acudientes')
+        self.assertContains(
+            response,
+            'Las inscripciones realizadas anteriormente se conservan.',
+        )
+        self.assertEqual(evento.inscripciones.count(), 1)
+
+        self.client.force_login(self.admin)
+        panel = self.client.get(reverse('gestion:promociones_eventos'))
+        self.assertContains(panel, 'Falta: reglamento para menores y acudientes')
+
     @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
     def test_seminario_reporta_valor_con_descuento_y_pago_se_aprueba(self):
         evento = Evento.objects.create(
@@ -478,6 +569,12 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
         self.assertEqual(inscripcion.jornada, jornada)
         self.assertEqual(inscripcion.tarifa_publicada, 80000)
         self.assertEqual(inscripcion.pago.valor, 65000)
+        self.assertEqual(
+            inscripcion.texto_consentimiento, evento.consentimiento_evento
+        )
+        self.assertEqual(
+            inscripcion.texto_reglamento, evento.reglamento_adultos
+        )
 
         self.client.force_login(self.admin)
         historial = self.client.get(

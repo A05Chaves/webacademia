@@ -2,6 +2,7 @@ from django import forms
 from django.contrib.auth import password_validation
 from django.contrib.auth.forms import UsernameField
 from django.contrib.auth.hashers import make_password
+from django.db.models import Q
 from django.utils import timezone
 from .models import RegistroLegalEstudiante
 from alumnos.models import Alumno
@@ -11,6 +12,38 @@ from instructores.models import Instructor
 from planes.models import Plan
 
 User = get_user_model()
+
+
+def contactos_repetidos(correo='', celular='', excluir_registro_id=None):
+    """Indica contactos compartidos sin tratarlos como identificadores únicos."""
+    registros = RegistroLegalEstudiante.objects.exclude(
+        estado=RegistroLegalEstudiante.Estados.RECHAZADO
+    )
+    if excluir_registro_id:
+        registros = registros.exclude(pk=excluir_registro_id)
+
+    coincidencias = {}
+    correo = (correo or '').strip()
+    celular = (celular or '').strip()
+
+    if correo and (
+        registros.filter(correo__iexact=correo).exists()
+        or User.objects.filter(email__iexact=correo).exists()
+    ):
+        coincidencias['correo'] = (
+            'Este correo ya está asociado a otro estudiante o acudiente.'
+        )
+
+    if celular and (
+        registros.filter(Q(celular=celular) | Q(celular_acudiente=celular)).exists()
+        or User.objects.filter(telefono=celular).exists()
+        or Alumno.objects.filter(telefono_acudiente=celular).exists()
+    ):
+        coincidencias['celular'] = (
+            'Este celular ya está asociado a otro estudiante o acudiente.'
+        )
+
+    return coincidencias
 
 
 class RegistroLegalEstudianteForm(forms.ModelForm):
@@ -41,6 +74,14 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
             'autocomplete': 'new-password',
         }),
     )
+    confirmar_contacto_repetido = forms.BooleanField(
+        required=False,
+        label=(
+            'Confirmo que el correo y/o celular son correctos y pueden '
+            'compartirse con otro estudiante.'
+        ),
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+    )
 
     class Meta:
         model = RegistroLegalEstudiante
@@ -57,6 +98,7 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
             'direccion',
             'celular',
             'correo',
+            'confirmar_contacto_repetido',
             'usuario_solicitado',
             'password1',
             'password2',
@@ -316,6 +358,7 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
 
         documento = cleaned_data.get('documento')
         celular = cleaned_data.get('celular')
+        correo = cleaned_data.get('correo')
 
         if documento:
             existe_registro = RegistroLegalEstudiante.objects.filter(
@@ -342,18 +385,20 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
                     'Ya existe un estudiante o registro con este documento, o está asignado a un instructor.'
                 )
 
-        if celular:
-            existe_celular = RegistroLegalEstudiante.objects.filter(
-                celular=celular
-            ).exclude(
-                estado=RegistroLegalEstudiante.Estados.RECHAZADO
-            ).exists()
-
-            if existe_celular:
-                self.add_error(
-                    'celular',
-                    'Ya existe un registro con este celular.'
-                )
+        coincidencias_contacto = contactos_repetidos(
+            correo,
+            celular,
+            self.instance.pk if self.instance and self.instance.pk else None,
+        )
+        if (
+            coincidencias_contacto
+            and not cleaned_data.get('confirmar_contacto_repetido')
+        ):
+            detalles = ' '.join(coincidencias_contacto.values())
+            self.add_error(
+                'confirmar_contacto_repetido',
+                f'{detalles} Confirma que los datos son correctos para continuar.',
+            )
 
         return cleaned_data
 

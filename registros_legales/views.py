@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from alumnos.models import Alumno
 from instructores.models import Instructor
 
-from .forms import RegistroLegalEstudianteForm
+from .forms import RegistroLegalEstudianteForm, contactos_repetidos
 from .models import RegistroLegalEstudiante
 
 
@@ -15,6 +15,7 @@ from .models import RegistroLegalEstudiante
 def validar_datos_registro(request):
     documento = request.POST.get('documento', '').strip()
     celular = request.POST.get('celular', '').strip()
+    correo = request.POST.get('correo', '').strip()
     username = request.POST.get('usuario_solicitado', '').strip()
     errores = {}
 
@@ -30,13 +31,6 @@ def validar_datos_registro(request):
             'o está asignado a un instructor.'
         )
 
-    if celular and RegistroLegalEstudiante.objects.filter(
-        celular=celular
-    ).exclude(
-        estado=RegistroLegalEstudiante.Estados.RECHAZADO
-    ).exists():
-        errores['celular'] = 'Ya existe un registro con este celular.'
-
     if username:
         if get_user_model().objects.filter(username__iexact=username).exists():
             errores['usuario_solicitado'] = 'Este nombre de usuario ya está en uso.'
@@ -47,7 +41,13 @@ def validar_datos_registro(request):
                 'Este nombre de usuario ya está reservado por otro registro.'
             )
 
-    return JsonResponse({'valido': not errores, 'errores': errores})
+    advertencias = contactos_repetidos(correo, celular)
+    return JsonResponse({
+        'valido': not errores,
+        'errores': errores,
+        'advertencias': advertencias,
+        'requiere_confirmacion_contacto': bool(advertencias),
+    })
 
 
 def registro_publico(request):

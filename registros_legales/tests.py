@@ -78,6 +78,7 @@ class RegistroLegalObligatorioTests(TestCase):
         opcionales_para_adulto = {
             'nombre_acudiente', 'documento_acudiente',
             'parentesco_acudiente', 'celular_acudiente',
+            'confirmar_contacto_repetido',
         }
         for name, field in form.fields.items():
             if name not in opcionales_para_adulto:
@@ -310,7 +311,7 @@ class RegistroLegalObligatorioTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Ya existe un estudiante o registro')
-        self.assertContains(response, 'Ya existe un registro con este celular')
+        self.assertContains(response, 'Este celular ya está asociado')
         self.assertEqual(RegistroLegalEstudiante.objects.count(), 1)
 
     def test_registro_rechazado_no_bloquea_una_nueva_solicitud(self):
@@ -377,6 +378,7 @@ class RegistroLegalObligatorioTests(TestCase):
             'documento': '1000000002',
             'celular': '3000000002',
             'usuario_solicitado': 'estudiante_familia_2',
+            'confirmar_contacto_repetido': 'on',
             'foto': self.foto_valida(),
         })
         response = self.client.post(reverse('registro_publico'), segundo)
@@ -403,8 +405,51 @@ class RegistroLegalObligatorioTests(TestCase):
         self.assertEqual(response.status_code, 200)
         resultado = response.json()
         self.assertFalse(resultado['valido'])
+        self.assertEqual(set(resultado['errores']), {'documento'})
+        self.assertTrue(resultado['requiere_confirmacion_contacto'])
         self.assertEqual(
-            set(resultado['errores']), {'documento', 'celular'}
+            set(resultado['advertencias']), {'correo', 'celular'}
+        )
+
+    def test_celular_repetido_solicita_confirmacion_sin_bloquear_el_campo(self):
+        primero = self.datos_validos()
+        primero['foto'] = self.foto_valida()
+        self.client.post(reverse('registro_publico'), primero)
+
+        segundo = self.datos_validos()
+        segundo.update({
+            'documento': '1000000002',
+            'correo': 'otro-correo@example.com',
+            'usuario_solicitado': 'estudiante_contacto_2',
+        })
+        form = RegistroLegalEstudianteForm(
+            data=segundo, files={'foto': self.foto_valida()}
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertNotIn('celular', form.errors)
+        self.assertIn('confirmar_contacto_repetido', form.errors)
+
+    def test_correo_y_celular_repetidos_se_permiten_si_se_confirman(self):
+        primero = self.datos_validos()
+        primero['foto'] = self.foto_valida()
+        self.client.post(reverse('registro_publico'), primero)
+
+        segundo = self.datos_validos()
+        segundo.update({
+            'documento': '1000000002',
+            'usuario_solicitado': 'estudiante_contacto_2',
+            'confirmar_contacto_repetido': 'on',
+            'foto': self.foto_valida(),
+        })
+        response = self.client.post(reverse('registro_publico'), segundo)
+
+        self.assertRedirects(response, reverse('registro_exitoso'))
+        self.assertEqual(
+            RegistroLegalEstudiante.objects.filter(
+                correo=primero['correo'], celular=primero['celular']
+            ).count(),
+            2,
         )
 
     def test_validacion_intermedia_detecta_usuario_reservado(self):

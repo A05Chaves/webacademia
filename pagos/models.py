@@ -223,6 +223,39 @@ class Evento(models.Model):
             and self.cupos_disponibles != 0
         )
 
+    @property
+    def documentos_legales_faltantes(self):
+        if self.tipo not in (self.Tipos.TORNEO, self.Tipos.SEMINARIO):
+            return []
+
+        publicos_jornadas = {
+            jornada.publico for jornada in self.jornadas.all() if jornada.activa
+        }
+        requiere_adultos = (
+            self.Publicos.ADULTOS in publicos_jornadas
+            or self.Publicos.TODOS in publicos_jornadas
+            or (
+                not publicos_jornadas
+                and self.publico != self.Publicos.MENORES
+            )
+        )
+        requiere_menores = (
+            self.Publicos.MENORES in publicos_jornadas
+            or self.Publicos.TODOS in publicos_jornadas
+            or (
+                not publicos_jornadas
+                and self.publico != self.Publicos.ADULTOS
+            )
+        )
+        faltantes = []
+        if not (self.consentimiento_evento or '').strip():
+            faltantes.append('consentimiento informado')
+        if requiere_adultos and not (self.reglamento_adultos or '').strip():
+            faltantes.append('reglamento para adultos')
+        if requiere_menores and not (self.reglamento_menores or '').strip():
+            faltantes.append('reglamento para menores y acudientes')
+        return faltantes
+
     def __str__(self):
         return self.nombre
 

@@ -2737,9 +2737,45 @@ def editar_evento(request, evento_id=None):
         instance=instancia_jornadas,
         prefix='jornadas',
     )
-    if request.method == 'POST' and form.is_valid():
-        es_seminario = form.cleaned_data['tipo'] == Evento.Tipos.SEMINARIO
-        if not es_seminario or jornadas_formset.is_valid():
+    if request.method == 'POST':
+        formulario_valido = form.is_valid()
+        es_seminario = (
+            formulario_valido
+            and form.cleaned_data['tipo'] == Evento.Tipos.SEMINARIO
+        )
+        jornadas_validas = not es_seminario or jornadas_formset.is_valid()
+        if formulario_valido and jornadas_validas and es_seminario:
+            publicos_jornadas = {
+                jornada_form.cleaned_data.get('publico')
+                for jornada_form in jornadas_formset.forms
+                if jornada_form.cleaned_data
+                and not jornada_form.cleaned_data.get('DELETE')
+                and jornada_form.cleaned_data.get('activa')
+            }
+            if (
+                (
+                    Evento.Publicos.ADULTOS in publicos_jornadas
+                    or Evento.Publicos.TODOS in publicos_jornadas
+                )
+                and not (form.cleaned_data.get('reglamento_adultos') or '').strip()
+            ):
+                form.add_error(
+                    'reglamento_adultos',
+                    'Una jornada para adultos requiere su reglamento.',
+                )
+            if (
+                (
+                    Evento.Publicos.MENORES in publicos_jornadas
+                    or Evento.Publicos.TODOS in publicos_jornadas
+                )
+                and not (form.cleaned_data.get('reglamento_menores') or '').strip()
+            ):
+                form.add_error(
+                    'reglamento_menores',
+                    'Una jornada infantil requiere el reglamento para menores y acudientes.',
+                )
+            formulario_valido = not form.errors
+        if formulario_valido and jornadas_validas:
             evento_guardado = form.save()
             if es_seminario:
                 jornadas_formset.instance = evento_guardado
@@ -3140,36 +3176,13 @@ def aplicar_promocion(request, promocion_id):
 
 def inscribirse_evento(request, evento_id):
     evento = get_object_or_404(Evento, id=evento_id, activo=True)
-    publicos_jornadas = set(
-        evento.jornadas.filter(activa=True).values_list('publico', flat=True)
-    )
-    requiere_reglamento_adultos = (
-        Evento.Publicos.ADULTOS in publicos_jornadas
-        or Evento.Publicos.TODOS in publicos_jornadas
-        or (
-            not publicos_jornadas
-            and evento.publico != Evento.Publicos.MENORES
-        )
-    )
-    requiere_reglamento_menores = (
-        Evento.Publicos.MENORES in publicos_jornadas
-        or Evento.Publicos.TODOS in publicos_jornadas
-        or (
-            not publicos_jornadas
-            and evento.publico != Evento.Publicos.ADULTOS
-        )
-    )
-    if (
-        evento.tipo in (Evento.Tipos.TORNEO, Evento.Tipos.SEMINARIO)
-        and (
-            not evento.consentimiento_evento.strip()
-            or (requiere_reglamento_adultos and not evento.reglamento_adultos.strip())
-            or (requiere_reglamento_menores and not evento.reglamento_menores.strip())
-        )
-    ):
+    documentos_faltantes = evento.documentos_legales_faltantes
+    if documentos_faltantes:
         messages.error(
             request,
-            'Este evento todavía no tiene completos el consentimiento y sus reglamentos.',
+            'No se habilitó la inscripción. Falta configurar: '
+            + ', '.join(documentos_faltantes)
+            + '. Las inscripciones realizadas anteriormente se conservan.',
         )
         return redirect('gestion:home_publica')
     if not evento.disponible:
@@ -3241,7 +3254,7 @@ def inscribirse_evento(request, evento_id):
                     inscripcion.evento = evento
                     inscripcion.alumno = alumno
                     inscripcion.tarifa_publicada = precio
-                    if evento.tipo == Evento.Tipos.TORNEO:
+                    if evento.tipo in (Evento.Tipos.TORNEO, Evento.Tipos.SEMINARIO):
                         inscripcion.texto_consentimiento = evento.consentimiento_evento
                         nacimiento = form.cleaned_data['fecha_nacimiento']
                         hoy = timezone.localdate()
@@ -3252,6 +3265,7 @@ def inscribirse_evento(request, evento_id):
                             evento.reglamento_menores
                             if edad < 18 else evento.reglamento_adultos
                         )
+                    if evento.tipo == Evento.Tipos.TORNEO:
                         inscripcion.fecha_firma = timezone.now()
                         forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR', '')
                         inscripcion.ip_firma = (

@@ -108,6 +108,17 @@
                                 <div class="col-12"><label class="form-label" for="{{ form.direccion.id_for_label }}">Dirección <span class="required">*</span></label>{{ form.direccion }}<div class="field-error text-danger">{{ form.direccion.errors }}</div></div>
                                 <div class="col-md-6"><label class="form-label" for="{{ form.celular.id_for_label }}">Celular <span class="required">*</span></label>{{ form.celular }}<div class="field-error text-danger">{{ form.celular.errors }}</div></div>
                                 <div class="col-md-6"><label class="form-label" for="{{ form.correo.id_for_label }}">Correo <span class="required">*</span></label>{{ form.correo }}<div class="form-text">Puede ser el correo familiar o del acudiente y utilizarse en varios estudiantes.</div><div class="field-error text-danger">{{ form.correo.errors }}</div></div>
+                                <div class="col-12" id="contactDuplicateWarning" {% if not form.confirmar_contacto_repetido.errors %}hidden{% endif %}>
+                                    <div class="alert alert-warning mb-0" role="alert">
+                                        <strong>Verifica los datos de contacto</strong>
+                                        <div id="contactDuplicateMessages" class="mt-1"></div>
+                                        <div class="form-check mt-3">
+                                            {{ form.confirmar_contacto_repetido }}
+                                            <label class="form-check-label" for="{{ form.confirmar_contacto_repetido.id_for_label }}">{{ form.confirmar_contacto_repetido.label }}</label>
+                                        </div>
+                                        <div class="field-error text-danger">{{ form.confirmar_contacto_repetido.errors }}</div>
+                                    </div>
+                                </div>
                                 <div class="col-12 mt-4"><h3 class="h5 mb-1">Datos de acceso</h3><p class="text-muted mb-0">Elige las credenciales que utilizarás cuando la academia apruebe tu registro.</p></div>
                                 <div class="col-12"><label class="form-label" for="{{ form.usuario_solicitado.id_for_label }}">Usuario <span class="required">*</span></label>{{ form.usuario_solicitado }}{% if form.usuario_solicitado.help_text %}<div class="form-text">{{ form.usuario_solicitado.help_text }}</div>{% endif %}<div class="field-error text-danger">{{ form.usuario_solicitado.errors }}</div></div>
                                 <div class="col-md-6"><label class="form-label" for="{{ form.password1.id_for_label }}">Contraseña <span class="required">*</span></label>{{ form.password1 }}{% if form.password1.help_text %}<div class="form-text small">{{ form.password1.help_text|safe }}</div>{% endif %}<div class="field-error text-danger">{{ form.password1.errors }}</div></div>
@@ -309,6 +320,9 @@ const tipoEstudiante = document.getElementById('id_tipo_estudiante');
 const bloqueAcudiente = document.getElementById('bloqueAcudiente');
 const adultGuardianMessage = document.getElementById('adultGuardianMessage');
 const guardianFields = ['id_nombre_acudiente', 'id_documento_acudiente', 'id_parentesco_acudiente', 'id_celular_acudiente'].map(id => document.getElementById(id));
+const contactWarning = document.getElementById('contactDuplicateWarning');
+const contactWarningMessages = document.getElementById('contactDuplicateMessages');
+const contactConfirmation = document.getElementById('id_confirmar_contacto_repetido');
 let currentStep = 0;
 
 const serverErrors = Array.from(document.querySelectorAll('[data-error-field]'));
@@ -402,17 +416,53 @@ async function validateUniqueData() {
         if (!response.ok) throw new Error('No se pudo validar');
         const result = await response.json();
         Object.entries(result.errores).forEach(([name, message]) => showRemoteError(name, message));
+        const contactFingerprint = `${document.getElementById('id_correo').value.trim().toLocaleLowerCase()}|${document.getElementById('id_celular').value.trim()}`;
+        if (result.requiere_confirmacion_contacto) {
+            if (contactWarning.dataset.contactFingerprint !== contactFingerprint) {
+                contactConfirmation.checked = false;
+            }
+            contactWarning.dataset.contactFingerprint = contactFingerprint;
+            contactWarning.hidden = false;
+            contactWarningMessages.innerHTML = Object.values(result.advertencias)
+                .map(message => `<div>${message}</div>`).join('');
+            contactConfirmation.required = true;
+            if (!contactConfirmation.checked) {
+                contactConfirmation.setCustomValidity(
+                    'Confirma que el correo y/o celular compartidos son correctos.'
+                );
+                contactConfirmation.reportValidity();
+            } else {
+                contactConfirmation.setCustomValidity('');
+            }
+        } else {
+            contactWarning.hidden = true;
+            contactWarningMessages.textContent = '';
+            contactConfirmation.checked = false;
+            contactConfirmation.required = false;
+            contactConfirmation.setCustomValidity('');
+            delete contactWarning.dataset.contactFingerprint;
+        }
         if (!result.valido) {
             const firstInvalid = document.querySelector('#registroEstudianteForm .is-invalid');
             firstInvalid?.reportValidity();
             firstInvalid?.focus();
         }
-        return result.valido;
+        return result.valido && (
+            !result.requiere_confirmacion_contacto || contactConfirmation.checked
+        );
     } catch (error) {
         alert('No fue posible verificar los datos. Revisa tu conexión e intenta nuevamente.');
         return false;
     }
 }
+
+contactConfirmation.addEventListener('change', () => {
+    contactConfirmation.setCustomValidity(
+        contactConfirmation.checked
+            ? ''
+            : 'Confirma que el correo y/o celular compartidos son correctos.'
+    );
+});
 
 function updateGuardianFields() {
     const isMinor = tipoEstudiante.value === 'MENOR';
