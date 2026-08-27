@@ -513,9 +513,7 @@ class EventoForm(forms.ModelForm):
                 'fecha_limite_inscripcion',
                 'El cierre de inscripciones debe ser posterior a su apertura.',
             )
-        requiere_documentos_legales = cleaned.get('tipo') in (
-            Evento.Tipos.TORNEO, Evento.Tipos.SEMINARIO,
-        )
+        requiere_documentos_legales = cleaned.get('tipo') == Evento.Tipos.TORNEO
         if (
             requiere_documentos_legales
             and not (cleaned.get('consentimiento_evento') or '').strip()
@@ -760,6 +758,8 @@ class InscripcionEventoForm(forms.ModelForm):
             self.fields.pop('foto_participante')
             self.fields.pop('firma_base64')
             self.fields.pop('peso')
+            self.fields.pop('acepta_reglamento')
+            self.fields.pop('acepta_consentimiento')
             if tiene_jornadas:
                 self.fields['jornada'].required = True
             else:
@@ -911,14 +911,18 @@ class InscripcionEventoForm(forms.ModelForm):
                     self.add_error('peso', 'El peso es inferior al permitido en esta categoría.')
                 if categoria.peso_maximo is not None and peso > categoria.peso_maximo:
                     self.add_error('peso', 'El peso supera el permitido en esta categoría.')
-        if not cleaned.get('acepta_consentimiento'):
-            self.add_error('acepta_consentimiento', 'Debes aceptar el consentimiento.')
         if (
             self.evento
-            and self.evento.tipo in (Evento.Tipos.TORNEO, Evento.Tipos.SEMINARIO)
-            and not cleaned.get('acepta_reglamento')
+            and self.evento.tipo == Evento.Tipos.TORNEO
         ):
-            self.add_error('acepta_reglamento', 'Debes aceptar el reglamento del evento.')
+            if not cleaned.get('acepta_consentimiento'):
+                self.add_error(
+                    'acepta_consentimiento', 'Debes aceptar el consentimiento.'
+                )
+            if not cleaned.get('acepta_reglamento'):
+                self.add_error(
+                    'acepta_reglamento', 'Debes aceptar el reglamento del torneo.'
+                )
 
         alumno = None
         documento = (cleaned.get('participante_documento') or '').strip()

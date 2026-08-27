@@ -225,7 +225,7 @@ class Evento(models.Model):
 
     @property
     def documentos_legales_faltantes(self):
-        if self.tipo not in (self.Tipos.TORNEO, self.Tipos.SEMINARIO):
+        if self.tipo != self.Tipos.TORNEO:
             return []
 
         publicos_jornadas = {

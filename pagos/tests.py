@@ -419,7 +419,7 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
             80000,
         )
 
-    def test_jornada_infantil_exige_reglamento_para_menores_al_guardar(self):
+    def test_jornada_infantil_de_seminario_no_exige_documentos_legales(self):
         self.client.force_login(self.admin)
         inicio = timezone.localtime(timezone.now()) + timedelta(days=10)
         formato = '%Y-%m-%dT%H:%M'
@@ -453,16 +453,12 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
             'jornadas-0-activa': 'on',
         })
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(
-            response,
-            'Una jornada infantil requiere el reglamento para menores y acudientes.',
-        )
-        self.assertFalse(Evento.objects.filter(
-            nombre='Seminario con validación infantil'
-        ).exists())
+        self.assertRedirects(response, reverse('gestion:promociones_eventos'))
+        evento = Evento.objects.get(nombre='Seminario con validación infantil')
+        self.assertEqual(evento.jornadas.count(), 1)
+        self.assertEqual(evento.documentos_legales_faltantes, [])
 
-    def test_evento_incompleto_indica_faltante_y_conserva_inscripciones(self):
+    def test_seminario_legado_sin_documentos_sigue_recibiendo_inscripciones(self):
         evento = Evento.objects.create(
             tipo=Evento.Tipos.SEMINARIO,
             nombre='Seminario legado incompleto',
@@ -496,19 +492,16 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
 
         response = self.client.get(
             reverse('gestion:inscribirse_evento', args=[evento.id]),
-            follow=True,
         )
 
-        self.assertContains(response, 'reglamento para menores y acudientes')
-        self.assertContains(
-            response,
-            'Las inscripciones realizadas anteriormente se conservan.',
-        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Consentimiento informado')
+        self.assertNotContains(response, 'Reglamento del evento')
         self.assertEqual(evento.inscripciones.count(), 1)
 
         self.client.force_login(self.admin)
         panel = self.client.get(reverse('gestion:promociones_eventos'))
-        self.assertContains(panel, 'Falta: reglamento para menores y acudientes')
+        self.assertNotContains(panel, 'Falta: reglamento para menores y acudientes')
 
     @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
     def test_seminario_reporta_valor_con_descuento_y_pago_se_aprueba(self):
@@ -538,8 +531,10 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
         )
         self.assertNotContains(pagina, 'name="peso"')
         self.assertContains(pagina, 'Valor pagado')
-        self.assertContains(pagina, evento.consentimiento_evento)
-        self.assertContains(pagina, evento.reglamento_adultos)
+        self.assertNotContains(pagina, 'Consentimiento informado')
+        self.assertNotContains(pagina, 'Reglamento del evento')
+        self.assertNotContains(pagina, 'name="acepta_consentimiento"')
+        self.assertNotContains(pagina, 'name="acepta_reglamento"')
         response = self.client.post(
             reverse('gestion:inscribirse_evento', args=[evento.id]),
             {
@@ -549,8 +544,6 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
                 'correo': 'seminario@example.com',
                 'telefono': '3009876543',
                 'jornada': jornada.id,
-                'acepta_reglamento': 'on',
-                'acepta_consentimiento': 'on',
                 'metodo_qr': self.metodo.id,
                 'valor_pagado': '65000',
                 'referencia_pago': 'SEM-DESCUENTO-1',
@@ -569,12 +562,8 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
         self.assertEqual(inscripcion.jornada, jornada)
         self.assertEqual(inscripcion.tarifa_publicada, 80000)
         self.assertEqual(inscripcion.pago.valor, 65000)
-        self.assertEqual(
-            inscripcion.texto_consentimiento, evento.consentimiento_evento
-        )
-        self.assertEqual(
-            inscripcion.texto_reglamento, evento.reglamento_adultos
-        )
+        self.assertEqual(inscripcion.texto_consentimiento, '')
+        self.assertEqual(inscripcion.texto_reglamento, '')
 
         self.client.force_login(self.admin)
         historial = self.client.get(
@@ -1216,9 +1205,9 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
             'precio_externo': '0',
             'publico': Evento.Publicos.TODOS,
             'alcance_torneo': Evento.AlcancesTorneo.INTERNO,
-            'consentimiento_evento': 'Consentimiento del seminario.',
-            'reglamento_adultos': 'Reglamento para adultos.',
-            'reglamento_menores': 'Reglamento para menores.',
+            'consentimiento_evento': '',
+            'reglamento_adultos': '',
+            'reglamento_menores': '',
             'orden': '10',
             'activo': 'on',
         })

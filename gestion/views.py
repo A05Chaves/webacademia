@@ -2744,37 +2744,6 @@ def editar_evento(request, evento_id=None):
             and form.cleaned_data['tipo'] == Evento.Tipos.SEMINARIO
         )
         jornadas_validas = not es_seminario or jornadas_formset.is_valid()
-        if formulario_valido and jornadas_validas and es_seminario:
-            publicos_jornadas = {
-                jornada_form.cleaned_data.get('publico')
-                for jornada_form in jornadas_formset.forms
-                if jornada_form.cleaned_data
-                and not jornada_form.cleaned_data.get('DELETE')
-                and jornada_form.cleaned_data.get('activa')
-            }
-            if (
-                (
-                    Evento.Publicos.ADULTOS in publicos_jornadas
-                    or Evento.Publicos.TODOS in publicos_jornadas
-                )
-                and not (form.cleaned_data.get('reglamento_adultos') or '').strip()
-            ):
-                form.add_error(
-                    'reglamento_adultos',
-                    'Una jornada para adultos requiere su reglamento.',
-                )
-            if (
-                (
-                    Evento.Publicos.MENORES in publicos_jornadas
-                    or Evento.Publicos.TODOS in publicos_jornadas
-                )
-                and not (form.cleaned_data.get('reglamento_menores') or '').strip()
-            ):
-                form.add_error(
-                    'reglamento_menores',
-                    'Una jornada infantil requiere el reglamento para menores y acudientes.',
-                )
-            formulario_valido = not form.errors
         if formulario_valido and jornadas_validas:
             evento_guardado = form.save()
             if es_seminario:
@@ -3254,7 +3223,7 @@ def inscribirse_evento(request, evento_id):
                     inscripcion.evento = evento
                     inscripcion.alumno = alumno
                     inscripcion.tarifa_publicada = precio
-                    if evento.tipo in (Evento.Tipos.TORNEO, Evento.Tipos.SEMINARIO):
+                    if evento.tipo == Evento.Tipos.TORNEO:
                         inscripcion.texto_consentimiento = evento.consentimiento_evento
                         nacimiento = form.cleaned_data['fecha_nacimiento']
                         hoy = timezone.localdate()
