@@ -543,6 +543,24 @@ class TiendaTests(TestCase):
         self.assertFalse(MovimientoTienda.objects.exists())
         self.assertEqual(DetalleVentaTienda.objects.get().costo_unitario, 40000)
 
+    def test_formulario_venta_incluye_datos_para_vista_previa_de_factura(self):
+        response = self.client.get(reverse('tienda:registrar_venta'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Vista previa de la factura')
+        self.assertContains(response, 'Total de la venta')
+        self.assertEqual(
+            response.context['productos_vista_previa'][str(self.producto.id)],
+            {
+                'nombre': self.producto.nombre_variante,
+                'precio': '80000.00',
+                'moneda': 'COP',
+                'stock': 10,
+            },
+        )
+        self.assertContains(response, 'Camiseta academia')
+        self.assertContains(response, '80000.00')
+
     def test_estudiante_aparece_como_comprador_y_se_vincula_a_la_venta(self):
         usuario = get_user_model().objects.create_user(
             username='comprador_alumno',

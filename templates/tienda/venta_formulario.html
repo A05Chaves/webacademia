@@ -5,11 +5,82 @@
 <h5 class="border-bottom pb-2 mb-3">Producto y valor</h5><div class="row g-3 mb-4">
 {% include 'tienda/venta_campo.html' with field=form.producto col='col-md-8' %}{% include 'tienda/venta_campo.html' with field=form.cantidad col='col-md-4' %}{% include 'tienda/venta_campo.html' with field=form.descuento_porcentaje col='col-md-4' %}{% include 'tienda/venta_campo.html' with field=form.modalidad col='col-md-4' %}<div id="bloque-cuenta" class="col-md-4">{% include 'tienda/venta_campo.html' with field=form.cuenta col='' %}</div>{% include 'tienda/venta_campo.html' with field=form.observaciones col='col-12' %}
 </div>
+<section id="vista-previa-venta" class="card bg-black border-info mb-4" aria-live="polite">
+<div class="card-header border-info d-flex justify-content-between align-items-center gap-3"><div><h5 class="mb-0"><i class="fa-solid fa-receipt me-2"></i>Vista previa de la factura</h5><small class="text-secondary">Resumen preliminar antes de registrar la venta</small></div><span id="vista-modalidad" class="badge text-bg-info">Contado</span></div>
+<div class="card-body">
+<div id="vista-sin-producto" class="text-secondary text-center py-3">Selecciona un producto para calcular la venta.</div>
+<div id="vista-con-producto" class="d-none">
+<div class="row g-3 align-items-stretch">
+<div class="col-lg-7"><div class="h-100 border rounded p-3"><div class="d-flex justify-content-between gap-3 mb-2"><span class="text-secondary">Producto</span><strong id="vista-producto" class="text-end"></strong></div><div class="d-flex justify-content-between gap-3 mb-2"><span class="text-secondary">Comprador</span><span id="vista-comprador" class="text-end">Consumidor final</span></div><div class="d-flex justify-content-between gap-3"><span class="text-secondary">Detalle</span><span id="vista-detalle" class="text-end"></span></div><div id="vista-stock" class="small text-secondary text-end mt-2"></div></div></div>
+<div class="col-lg-5"><div class="h-100 border border-info rounded p-3"><div class="d-flex justify-content-between mb-2"><span>Subtotal</span><strong id="vista-subtotal"></strong></div><div class="d-flex justify-content-between mb-3"><span id="vista-descuento-etiqueta">Descuento (0%)</span><strong id="vista-descuento" class="text-warning"></strong></div><div class="border-top border-info pt-3 d-flex justify-content-between align-items-end gap-3"><span class="fs-5">Total de la venta</span><strong id="vista-total" class="fs-3 text-info text-end"></strong></div><div id="vista-nota-modalidad" class="small text-secondary text-end mt-2"></div></div></div>
+</div></div></div>
+</section>
 <div id="bloque-credito"><h5 class="border-bottom pb-2 mb-3">Condiciones del crédito</h5><div class="row g-3 mb-4">{% include 'tienda/venta_campo.html' with field=form.numero_cuotas col='col-md-6' %}{% include 'tienda/venta_campo.html' with field=form.fecha_vencimiento col='col-md-6' %}</div></div>
 <h5 class="border-bottom pb-2 mb-3">Comprador</h5><div class="row g-3"><div class="col-md-8">{% include 'tienda/venta_campo.html' with field=form.cliente col='' %}</div><div class="col-md-4 d-flex align-items-center"><div class="form-check">{{ form.registrar_comprador }}<label for="{{ form.registrar_comprador.id_for_label }}" class="form-check-label">{{ form.registrar_comprador.label }}</label></div></div></div>
 <div id="comprador-nuevo" class="border rounded p-3 mt-3"><div class="row g-3">{% include 'tienda/venta_campo.html' with field=form.comprador_nombres col='col-md-6' %}{% include 'tienda/venta_campo.html' with field=form.comprador_tipo_documento col='col-md-3' %}{% include 'tienda/venta_campo.html' with field=form.comprador_numero_documento col='col-md-3' %}{% include 'tienda/venta_campo.html' with field=form.comprador_whatsapp col='col-md-6' %}{% include 'tienda/venta_campo.html' with field=form.comprador_correo col='col-md-6' %}<div class="col-12"><div class="form-check">{{ form.comprador_acepta_whatsapp }}<label class="form-check-label" for="{{ form.comprador_acepta_whatsapp.id_for_label }}">{{ form.comprador_acepta_whatsapp.label }}</label></div></div></div></div>
 <div class="d-flex justify-content-end gap-2 mt-4"><a href="{% url 'tienda:panel' %}" class="btn btn-outline-light">Cancelar</a><button class="btn btn-success"><i class="fa-solid fa-floppy-disk"></i> Registrar venta</button></div></div></form>
+{{ productos_vista_previa|json_script:"productos-venta-data" }}
 <script>
-function actualizarVenta(){const credito=document.getElementById('id_modalidad').value==='CREDITO';document.getElementById('bloque-credito').classList.toggle('d-none',!credito);document.getElementById('bloque-cuenta').classList.toggle('d-none',credito);const nuevo=document.getElementById('id_registrar_comprador').checked;document.getElementById('comprador-nuevo').classList.toggle('d-none',!nuevo);document.getElementById('id_cliente').disabled=nuevo;}
-document.getElementById('id_modalidad').addEventListener('change',actualizarVenta);document.getElementById('id_registrar_comprador').addEventListener('change',actualizarVenta);actualizarVenta();
+const productosVenta = JSON.parse(document.getElementById('productos-venta-data').textContent);
+const campoProducto = document.getElementById('id_producto');
+const campoCantidad = document.getElementById('id_cantidad');
+const campoDescuento = document.getElementById('id_descuento_porcentaje');
+const campoModalidad = document.getElementById('id_modalidad');
+const campoCliente = document.getElementById('id_cliente');
+const campoNuevoComprador = document.getElementById('id_registrar_comprador');
+const campoNombreComprador = document.getElementById('id_comprador_nombres');
+
+function numeroSeguro(valor, predeterminado = 0) {
+    const numero = Number.parseFloat(String(valor || '').replace(',', '.'));
+    return Number.isFinite(numero) ? numero : predeterminado;
+}
+
+function dinero(valor, moneda) {
+    return `$ ${new Intl.NumberFormat('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(valor)} ${moneda}`;
+}
+
+function nombreComprador() {
+    if (campoNuevoComprador.checked) {
+        return campoNombreComprador.value.trim() || 'Nuevo comprador';
+    }
+    const opcion = campoCliente.options[campoCliente.selectedIndex];
+    return campoCliente.value && opcion ? opcion.text.trim() : 'Consumidor final';
+}
+
+function actualizarVistaPrevia() {
+    const producto = productosVenta[campoProducto.value];
+    const sinProducto = document.getElementById('vista-sin-producto');
+    const conProducto = document.getElementById('vista-con-producto');
+    sinProducto.classList.toggle('d-none', Boolean(producto));
+    conProducto.classList.toggle('d-none', !producto);
+    if (!producto) return;
+
+    const cantidad = Math.max(1, Math.trunc(numeroSeguro(campoCantidad.value, 1)));
+    const porcentaje = Math.min(100, Math.max(0, numeroSeguro(campoDescuento.value)));
+    const precio = numeroSeguro(producto.precio);
+    const subtotal = precio * cantidad;
+    const descuento = Math.round((subtotal * porcentaje / 100) * 100) / 100;
+    const total = subtotal - descuento;
+    const credito = campoModalidad.value === 'CREDITO';
+
+    document.getElementById('vista-producto').textContent = producto.nombre;
+    document.getElementById('vista-comprador').textContent = nombreComprador();
+    document.getElementById('vista-detalle').textContent = `${cantidad} × ${dinero(precio, producto.moneda)}`;
+    document.getElementById('vista-subtotal').textContent = dinero(subtotal, producto.moneda);
+    document.getElementById('vista-descuento-etiqueta').textContent = `Descuento (${new Intl.NumberFormat('es-CO', {maximumFractionDigits: 2}).format(porcentaje)}%)`;
+    document.getElementById('vista-descuento').textContent = `− ${dinero(descuento, producto.moneda)}`;
+    document.getElementById('vista-total').textContent = dinero(total, producto.moneda);
+    document.getElementById('vista-modalidad').textContent = credito ? 'Crédito' : 'Contado';
+    document.getElementById('vista-nota-modalidad').textContent = credito ? 'Este valor quedará como saldo inicial de cartera.' : 'Este valor ingresará a la cuenta seleccionada.';
+
+    const stock = Number.parseInt(producto.stock, 10);
+    const vistaStock = document.getElementById('vista-stock');
+    vistaStock.textContent = cantidad > stock ? `Inventario insuficiente: hay ${stock} unidad${stock === 1 ? '' : 'es'} disponible${stock === 1 ? '' : 's'}.` : `Inventario después de la venta: ${stock - cantidad}`;
+    vistaStock.classList.toggle('text-danger', cantidad > stock);
+    vistaStock.classList.toggle('text-secondary', cantidad <= stock);
+}
+
+function actualizarVenta(){const credito=campoModalidad.value==='CREDITO';document.getElementById('bloque-credito').classList.toggle('d-none',!credito);document.getElementById('bloque-cuenta').classList.toggle('d-none',credito);const nuevo=campoNuevoComprador.checked;document.getElementById('comprador-nuevo').classList.toggle('d-none',!nuevo);campoCliente.disabled=nuevo;actualizarVistaPrevia();}
+[campoProducto, campoCantidad, campoDescuento, campoCliente, campoNombreComprador].forEach(campo => {campo.addEventListener('change', actualizarVistaPrevia);campo.addEventListener('input', actualizarVistaPrevia);});
+campoModalidad.addEventListener('change',actualizarVenta);campoNuevoComprador.addEventListener('change',actualizarVenta);actualizarVenta();
 </script>{% endblock %}

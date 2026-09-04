@@ -580,7 +580,23 @@ def registrar_venta(request):
             if 'modalidad' not in request.POST:
                 return redirect('tienda:panel')
             return redirect('tienda:detalle_venta', venta_id=venta.id)
-    return render(request, 'tienda/venta_formulario.html', {'form': form})
+    productos_vista_previa = {
+        str(producto.pk): {
+            'nombre': producto.nombre_variante,
+            'precio': str(producto.precio_venta),
+            'moneda': producto.moneda,
+            'stock': producto.stock,
+        }
+        for producto in form.fields['producto'].queryset
+    }
+    return render(
+        request,
+        'tienda/venta_formulario.html',
+        {
+            'form': form,
+            'productos_vista_previa': productos_vista_previa,
+        },
+    )
 
 
 @staff_member_required
