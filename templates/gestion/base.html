@@ -780,6 +780,115 @@
         });
     }
 
+    const nombresCamposMonetarios = new Set([
+        'precio', 'precio_venta', 'precio_estudiante', 'precio_externo',
+        'precio_aplicado', 'costo_unitario', 'valor', 'valor_pagado',
+        'saldo_inicial', 'saldo_pendiente', 'monto', 'subtotal', 'total',
+        'descuento', 'tarifa', 'tarifa_publicada', 'aporte'
+    ]);
+
+    function esCampoMonetario(campo) {
+        if (!(campo instanceof HTMLInputElement)) return false;
+        if (campo.dataset.valorMonetario === 'false') return false;
+        if (campo.dataset.valorMonetario === 'true') return true;
+        if (!['number', 'text'].includes(campo.type)) return false;
+        const nombreBase = (campo.name || '').split('-').pop();
+        return nombresCamposMonetarios.has(nombreBase);
+    }
+
+    function separarPartesMonetarias(valor, aceptarPuntoDecimal = true) {
+        let texto = String(valor ?? '').trim();
+        const negativo = texto.startsWith('-');
+        texto = texto.replace(/[^\d.,]/g, '');
+        if (!texto) return { negativo, entero: '', decimales: '', tieneDecimales: false };
+
+        const ultimaComa = texto.lastIndexOf(',');
+        const ultimoPunto = texto.lastIndexOf('.');
+        const cantidadComas = (texto.match(/,/g) || []).length;
+        const cantidadPuntos = (texto.match(/\./g) || []).length;
+        let separadorDecimal = '';
+        if (ultimaComa >= 0 && ultimoPunto >= 0) {
+            const ultimoSeparador = ultimaComa > ultimoPunto ? ',' : '.';
+            const posicion = Math.max(ultimaComa, ultimoPunto);
+            const posteriores = texto.length - posicion - 1;
+            if (posteriores <= 2) separadorDecimal = ultimoSeparador;
+        } else if (ultimaComa >= 0) {
+            const posteriores = texto.length - ultimaComa - 1;
+            if ((cantidadComas === 1 || posteriores <= 2) && posteriores <= 2) {
+                separadorDecimal = ',';
+            }
+        } else if (ultimoPunto >= 0 && aceptarPuntoDecimal) {
+            const posteriores = texto.length - ultimoPunto - 1;
+            if ((cantidadPuntos === 1 || posteriores <= 2) && posteriores <= 2) {
+                separadorDecimal = '.';
+            }
+        }
+
+        let entero;
+        let decimales = '';
+        if (separadorDecimal) {
+            const posicion = texto.lastIndexOf(separadorDecimal);
+            entero = texto.slice(0, posicion).replace(/\D/g, '');
+            decimales = texto.slice(posicion + 1).replace(/\D/g, '').slice(0, 2);
+        } else {
+            entero = texto.replace(/\D/g, '');
+        }
+        return {
+            negativo,
+            entero: entero || '0',
+            decimales,
+            tieneDecimales: Boolean(separadorDecimal),
+        };
+    }
+
+    function formatearValorMonetario(valor, aceptarPuntoDecimal = true) {
+        if (valor === null || valor === undefined || String(valor).trim() === '') return '';
+        const partes = separarPartesMonetarias(valor, aceptarPuntoDecimal);
+        if (!partes.entero) return '';
+        const enteroLimpio = partes.entero.replace(/^0+(?=\d)/, '');
+        const enteroAgrupado = enteroLimpio.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        return `${partes.negativo ? '-' : ''}${enteroAgrupado}${
+            partes.tieneDecimales ? ',' + partes.decimales : ''
+        }`;
+    }
+
+    function desformatearValorMonetario(valor) {
+        if (valor === null || valor === undefined || String(valor).trim() === '') return '';
+        const partes = separarPartesMonetarias(valor, false);
+        if (!partes.entero) return '';
+        return `${partes.negativo ? '-' : ''}${partes.entero}${
+            partes.tieneDecimales && partes.decimales ? '.' + partes.decimales : ''
+        }`;
+    }
+
+    function prepararCampoMonetario(campo) {
+        if (!esCampoMonetario(campo) || campo.dataset.monedaLista === 'true') return;
+        campo.dataset.monedaLista = 'true';
+        campo.dataset.valorMonetario = 'true';
+        campo.type = 'text';
+        campo.inputMode = 'decimal';
+        campo.autocomplete = 'off';
+        campo.value = formatearValorMonetario(campo.value);
+        campo.addEventListener('input', function () {
+            const posicionFinal = campo.selectionStart === campo.value.length;
+            campo.value = formatearValorMonetario(campo.value, false);
+            if (posicionFinal && document.activeElement === campo) {
+                campo.setSelectionRange(campo.value.length, campo.value.length);
+            }
+        });
+    }
+
+    function prepararCamposMonetarios(contenedor = document) {
+        if (contenedor instanceof HTMLInputElement) prepararCampoMonetario(contenedor);
+        contenedor.querySelectorAll?.('input').forEach(prepararCampoMonetario);
+    }
+
+    function limpiarCamposMonetarios(contenedor) {
+        contenedor.querySelectorAll?.('input[data-valor-monetario="true"]').forEach(campo => {
+            campo.value = desformatearValorMonetario(campo.value);
+        });
+    }
+
     document.addEventListener('input', function (evento) {
         if (evento.target instanceof HTMLInputElement || evento.target instanceof HTMLTextAreaElement) {
             if (evento.target.matches('[data-solo-numeros="true"]')) {
@@ -790,8 +899,16 @@
     });
 
     document.addEventListener('submit', function (evento) {
+        limpiarCamposMonetarios(evento.target);
         normalizarCamposNumericos(evento.target);
         normalizarTextosMayuscula(evento.target);
+        setTimeout(function () {
+            if (evento.defaultPrevented) {
+                evento.target.querySelectorAll('input[data-valor-monetario="true"]').forEach(campo => {
+                    campo.value = formatearValorMonetario(campo.value);
+                });
+            }
+        }, 0);
     }, true);
 
     const mesesFechaLegible = [
@@ -886,6 +1003,7 @@
     document.addEventListener('DOMContentLoaded', function () {
         normalizarTextosMayuscula();
         normalizarCamposNumericos();
+        prepararCamposMonetarios();
         prepararFechasDelFormulario();
         prepararPasswords();
         const alertaClase = document.querySelector('[data-clase-feedback][data-voz]');
@@ -906,6 +1024,7 @@
                         }
                         normalizarTextosMayuscula(nodo);
                         normalizarCamposNumericos(nodo);
+                        prepararCamposMonetarios(nodo);
                         prepararFechasDelFormulario(nodo);
                         prepararPasswords(nodo);
                     }

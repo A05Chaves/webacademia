@@ -31,7 +31,17 @@ const campoNuevoComprador = document.getElementById('id_registrar_comprador');
 const campoNombreComprador = document.getElementById('id_comprador_nombres');
 
 function numeroSeguro(valor, predeterminado = 0) {
-    const numero = Number.parseFloat(String(valor || '').replace(',', '.'));
+    const texto = String(valor || '').trim();
+    let normalizado;
+    if (texto.includes(',')) {
+        normalizado = texto.replace(/\./g, '').replace(',', '.');
+    } else {
+        const puntos = (texto.match(/\./g) || []).length;
+        normalizado = puntos > 1 || (puntos === 1 && /\.\d{3}$/.test(texto))
+            ? texto.replace(/\./g, '')
+            : texto;
+    }
+    const numero = Number.parseFloat(normalizado);
     return Number.isFinite(numero) ? numero : predeterminado;
 }
 
