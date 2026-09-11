@@ -899,13 +899,26 @@
     });
 
     document.addEventListener('submit', function (evento) {
+        const formulario = evento.target;
+        if (formulario.dataset.prevenirEnvioDoble === 'true') {
+            if (formulario.dataset.envioEnCurso === 'true') {
+                evento.preventDefault();
+                return;
+            }
+            formulario.dataset.envioEnCurso = 'true';
+        }
         limpiarCamposMonetarios(evento.target);
         normalizarCamposNumericos(evento.target);
         normalizarTextosMayuscula(evento.target);
         setTimeout(function () {
             if (evento.defaultPrevented) {
+                delete formulario.dataset.envioEnCurso;
                 evento.target.querySelectorAll('input[data-valor-monetario="true"]').forEach(campo => {
                     campo.value = formatearValorMonetario(campo.value);
+                });
+            } else if (formulario.dataset.prevenirEnvioDoble === 'true') {
+                formulario.querySelectorAll('button[type="submit"], input[type="submit"]').forEach(boton => {
+                    boton.disabled = true;
                 });
             }
         }, 0);

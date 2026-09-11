@@ -463,6 +463,7 @@
 
         <form method="post"
               action="{% url 'gestion:registrar_pago_alumno' %}"
+              data-prevenir-envio-doble="true"
               enctype="multipart/form-data">
 
             {% csrf_token %}

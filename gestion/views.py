@@ -7,6 +7,7 @@ from registros_legales.services import crear_alumno_desde_registro
 from urllib.parse import urlparse, parse_qs
 import calendar
 import hashlib
+import logging
 from .forms import ConfiguracionHomeForm
 from registros_legales.services import (
     crear_alumno_desde_registro,
@@ -103,6 +104,7 @@ from .models import ConfiguracionHome
 from alumnos.models import Alumno
 from django.contrib.auth import get_user_model
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 def _detalle_errores_formulario(form):
@@ -3143,7 +3145,7 @@ def aplicar_promocion(request, promocion_id):
     })
 
 
-def inscribirse_evento(request, evento_id):
+def _procesar_inscripcion_evento(request, evento_id):
     evento = get_object_or_404(Evento, id=evento_id, activo=True)
     documentos_faltantes = evento.documentos_legales_faltantes
     if documentos_faltantes:
@@ -3334,6 +3336,22 @@ def inscribirse_evento(request, evento_id):
         'form': form,
         'jornadas_activas': evento.jornadas.filter(activa=True),
     })
+
+
+def inscribirse_evento(request, evento_id):
+    try:
+        return _procesar_inscripcion_evento(request, evento_id)
+    except IntegrityError:
+        logger.exception(
+            'Conflicto de integridad al registrar una inscripción para el evento %s.',
+            evento_id,
+        )
+        messages.warning(
+            request,
+            'La inscripción ya había sido recibida o se envió dos veces. '
+            'No se generó un registro adicional; puedes verificarla con la administración.',
+        )
+        return redirect('gestion:home_publica')
 
 
 def datos_estudiante_torneo(request, evento_id):

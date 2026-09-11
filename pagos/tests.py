@@ -3,11 +3,13 @@ import json
 from datetime import timedelta
 from io import BytesIO
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from django.db import IntegrityError
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -590,6 +592,40 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
         self.assertEqual(inscripcion.estado, InscripcionEvento.Estados.CONFIRMADA)
         self.assertEqual(inscripcion.pago.estado, Pago.Estados.APROBADO)
         self.assertContains(aprobacion, 'Valor validado: $ 65.000')
+
+    def test_envio_duplicado_de_seminario_no_produce_error_500(self):
+        evento = Evento.objects.create(
+            tipo=Evento.Tipos.SEMINARIO,
+            nombre='Seminario protegido contra doble envío',
+            descripcion='Prueba de reintento simultáneo desde el móvil',
+            fecha_inicio=timezone.now() + timedelta(days=10),
+            lugar='Galeras BJJ',
+            precio_estudiante=0,
+            precio_externo=0,
+            publico=Evento.Publicos.ADULTOS,
+        )
+
+        with patch(
+            'pagos.models.InscripcionEvento.save',
+            side_effect=IntegrityError('inscripción repetida'),
+        ), patch('gestion.views.logger.exception'):
+            response = self.client.post(
+                reverse('gestion:inscribirse_evento', args=[evento.id]),
+                {
+                    'participante_nombre': 'Participante Repetido',
+                    'participante_documento': 'DOBLE-ENVIO-1',
+                    'fecha_nacimiento': '1990-05-10',
+                    'correo': 'doble@example.com',
+                    'telefono': '3001234567',
+                },
+                follow=True,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'La inscripción ya había sido recibida')
+        self.assertFalse(
+            InscripcionEvento.objects.filter(evento=evento).exists()
+        )
 
     def crear_torneo_gratuito(self):
         evento = Evento.objects.create(
