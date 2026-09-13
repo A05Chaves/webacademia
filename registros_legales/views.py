@@ -1,5 +1,6 @@
 from django.shortcuts import render, redirect
 from django.contrib import messages
+from django.db import IntegrityError, transaction
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.contrib.auth import get_user_model
@@ -7,7 +8,11 @@ from django.contrib.auth import get_user_model
 from alumnos.models import Alumno
 from instructores.models import Instructor
 
-from .forms import RegistroLegalEstudianteForm, contactos_repetidos
+from .forms import (
+    MENSAJE_REGISTRO_PENDIENTE,
+    RegistroLegalEstudianteForm,
+    contactos_repetidos,
+)
 from .models import RegistroLegalEstudiante
 
 
@@ -19,10 +24,22 @@ def validar_datos_registro(request):
     username = request.POST.get('usuario_solicitado', '').strip()
     errores = {}
 
-    if documento and (
-        RegistroLegalEstudiante.objects.filter(documento=documento).exclude(
+    registro_existente = None
+    if documento:
+        registro_existente = RegistroLegalEstudiante.objects.filter(
+            documento__iexact=documento
+        ).exclude(
             estado=RegistroLegalEstudiante.Estados.RECHAZADO
-        ).exists()
+        ).order_by('-creado').first()
+
+    if (
+        registro_existente
+        and registro_existente.estado
+        == RegistroLegalEstudiante.Estados.PENDIENTE_VALIDACION
+    ):
+        errores['documento'] = MENSAJE_REGISTRO_PENDIENTE
+    elif documento and (
+        registro_existente
         or Alumno.objects.filter(documento=documento).exists()
         or Instructor.objects.filter(documento=documento).exists()
     ):
@@ -69,14 +86,28 @@ def registro_publico(request):
 
             registro.ip_firma = get_client_ip(request)
             registro.estado = RegistroLegalEstudiante.Estados.PENDIENTE_VALIDACION
-            registro.save()
+            try:
+                with transaction.atomic():
+                    registro.save()
+            except IntegrityError:
+                if RegistroLegalEstudiante.objects.filter(
+                    documento__iexact=registro.documento,
+                    estado=RegistroLegalEstudiante.Estados.PENDIENTE_VALIDACION,
+                ).exists():
+                    form.add_error('documento', MENSAJE_REGISTRO_PENDIENTE)
+                else:
+                    form.add_error(
+                        None,
+                        'No se pudo guardar porque ya existe un registro con '
+                        'estos datos. Revisa el documento y el usuario.',
+                    )
+            else:
+                messages.success(
+                    request,
+                    'Registro enviado correctamente. Quedará pendiente de validación por un administrador.'
+                )
 
-            messages.success(
-                request,
-                'Registro enviado correctamente. Quedará pendiente de validación por un administrador.'
-            )
-
-            return redirect('registro_exitoso')
+                return redirect('registro_exitoso')
 
     else:
 

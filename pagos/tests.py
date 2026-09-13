@@ -627,6 +627,66 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
             InscripcionEvento.objects.filter(evento=evento).exists()
         )
 
+    def test_mensualidad_y_seminario_admiten_el_mismo_soporte_y_referencia(self):
+        contenido_soporte = b'%PDF-1.4\nMISMA TRANSACCION\n%%EOF'
+        primera_respuesta = self.client.post(
+            reverse('gestion:registrar_pago_alumno'),
+            {
+                'username': 'alumno-nuevos-pagos',
+                'password': 'clave-alumno',
+                'plan': self.plan.id,
+                'metodo_qr': self.metodo.id,
+                'valor': '120000',
+                'referencia_pago': 'TRANSACCION-COMPARTIDA-1',
+                'comprobante': SimpleUploadedFile(
+                    'transaccion.pdf', contenido_soporte
+                ),
+            },
+        )
+        self.assertRedirects(
+            primera_respuesta, reverse('gestion:home_publica')
+        )
+
+        evento = Evento.objects.create(
+            tipo=Evento.Tipos.SEMINARIO,
+            nombre='Seminario pagado junto con mensualidad',
+            descripcion='Dos conceptos cubiertos por una transferencia',
+            fecha_inicio=timezone.now() + timedelta(days=10),
+            lugar='Galeras BJJ',
+            precio_estudiante=65000,
+            precio_externo=65000,
+            publico=Evento.Publicos.ADULTOS,
+        )
+        segunda_respuesta = self.client.post(
+            reverse('gestion:inscribirse_evento', args=[evento.id]),
+            {
+                'participante_nombre': 'Visitante Transacción Compartida',
+                'participante_documento': 'SOPORTE-COMPARTIDO-1',
+                'fecha_nacimiento': '1990-05-10',
+                'correo': 'compartido@example.com',
+                'telefono': '3001234567',
+                'metodo_qr': self.metodo.id,
+                'valor_pagado': '65000',
+                'referencia_pago': 'TRANSACCION-COMPARTIDA-1',
+                'comprobante': SimpleUploadedFile(
+                    'transaccion.pdf', contenido_soporte
+                ),
+            },
+        )
+
+        self.assertRedirects(
+            segunda_respuesta, reverse('gestion:home_publica')
+        )
+        self.assertEqual(Pago.objects.count(), 2)
+        pago_evento = Pago.objects.get(tipo=Pago.Tipos.EVENTO)
+        self.assertEqual(pago_evento.inscripcion_evento.evento, evento)
+        self.assertEqual(
+            pago_evento.comprobante_hash,
+            Pago.objects.get(tipo=Pago.Tipos.MENSUALIDAD).comprobante_hash,
+        )
+        self.assertFalse(pago_evento.posible_duplicado)
+        self.assertIsNone(pago_evento.duplicado_de)
+
     def crear_torneo_gratuito(self):
         evento = Evento.objects.create(
             tipo=Evento.Tipos.TORNEO,

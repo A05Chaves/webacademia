@@ -7,6 +7,7 @@ from unittest.mock import patch
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import check_password
+from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
 from PIL import Image, ImageDraw
@@ -310,9 +311,45 @@ class RegistroLegalObligatorioTests(TestCase):
         response = self.client.post(reverse('registro_publico'), segundo_envio)
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Ya existe un estudiante o registro')
+        self.assertContains(
+            response,
+            'Ya existe un registro con este documento y está pendiente por validar por la administración.'
+        )
         self.assertContains(response, 'Este celular ya está asociado')
         self.assertEqual(RegistroLegalEstudiante.objects.count(), 1)
+
+    def test_base_de_datos_impide_dos_registros_pendientes_del_mismo_documento(self):
+        primero = RegistroLegalEstudianteForm(
+            data=self.datos_validos(), files={'foto': self.foto_valida()}
+        )
+        self.assertTrue(primero.is_valid(), primero.errors.as_json())
+        primero.save()
+
+        duplicado = self.datos_validos()
+        duplicado['usuario_solicitado'] = 'otro_usuario'
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            RegistroLegalEstudiante.objects.create(
+                tipo_estudiante=duplicado['tipo_estudiante'],
+                nombres='Otro',
+                apellidos='Registro',
+                documento=duplicado['documento'],
+                fecha_nacimiento=duplicado['fecha_nacimiento'],
+                direccion=duplicado['direccion'],
+                celular='3009999999',
+                correo='otro@example.com',
+                usuario_solicitado=duplicado['usuario_solicitado'],
+                password_hash='hash-temporal',
+                plan_interes=self.plan,
+                contacto_emergencia_nombre='Contacto',
+                contacto_emergencia_celular='3019999999',
+                eps='EPS',
+                condicion_medica='Ninguna',
+                acepta_reglamento=True,
+                acepta_riesgos=True,
+                autoriza_imagen=True,
+                texto_consentimiento='Aceptado',
+                firma_base64='firma',
+            )
 
     def test_registro_rechazado_no_bloquea_una_nueva_solicitud(self):
         primer_envio = self.datos_validos()
@@ -406,6 +443,11 @@ class RegistroLegalObligatorioTests(TestCase):
         resultado = response.json()
         self.assertFalse(resultado['valido'])
         self.assertEqual(set(resultado['errores']), {'documento'})
+        self.assertEqual(
+            resultado['errores']['documento'],
+            'Ya existe un registro con este documento y está pendiente por '
+            'validar por la administración. No es necesario realizar otro registro.',
+        )
         self.assertTrue(resultado['requiere_confirmacion_contacto'])
         self.assertEqual(
             set(resultado['advertencias']), {'correo', 'celular'}

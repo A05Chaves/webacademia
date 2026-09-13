@@ -91,6 +91,11 @@ class RegistroLegalEstudiante(models.Model):
                 condition=~Q(estado='RECHAZADO'),
                 name='registro_username_activo_unico_sin_mayusculas',
             ),
+            models.UniqueConstraint(
+                Lower('documento'),
+                condition=~Q(estado='RECHAZADO'),
+                name='registro_documento_activo_unico_sin_mayusculas',
+            ),
         ]
 
     def __str__(self):

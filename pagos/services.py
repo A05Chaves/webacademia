@@ -24,11 +24,16 @@ def calcular_hash_archivo(archivo):
 
 
 def marcar_posible_duplicado(pago):
-    """Marca coincidencias; no bloquea casos legítimos como pagos de hermanos."""
+    """Marca repeticiones del mismo concepto, no soportes de pagos combinados."""
     if pago.comprobante:
         pago.comprobante_hash = calcular_hash_archivo(pago.comprobante)
 
-    candidatos = Pago.objects.exclude(pk=pago.pk).order_by('-fecha_reporte')
+    # Una misma transferencia puede cubrir conceptos distintos, por ejemplo una
+    # mensualidad y un seminario. En ese caso el archivo y la referencia se
+    # comparten legítimamente y cada registro conserva el valor de su concepto.
+    candidatos = Pago.objects.exclude(pk=pago.pk).filter(
+        tipo=pago.tipo
+    ).order_by('-fecha_reporte')
     condiciones = Q()
     if pago.comprobante_hash:
         condiciones |= Q(comprobante_hash=pago.comprobante_hash)

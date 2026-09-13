@@ -13,6 +13,11 @@ from planes.models import Plan
 
 User = get_user_model()
 
+MENSAJE_REGISTRO_PENDIENTE = (
+    'Ya existe un registro con este documento y está pendiente por validar '
+    'por la administración. No es necesario realizar otro registro.'
+)
+
 
 def contactos_repetidos(correo='', celular='', excluir_registro_id=None):
     """Indica contactos compartidos sin tratarlos como identificadores únicos."""
@@ -361,11 +366,11 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
         correo = cleaned_data.get('correo')
 
         if documento:
-            existe_registro = RegistroLegalEstudiante.objects.filter(
-                documento=documento
+            registro_existente = RegistroLegalEstudiante.objects.filter(
+                documento__iexact=documento
             ).exclude(
                 estado=RegistroLegalEstudiante.Estados.RECHAZADO
-            ).exists()
+            ).order_by('-creado').first()
 
             existe_alumno = Alumno.objects.filter(
                 documento=documento
@@ -376,10 +381,12 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
             ).exists()
 
             if (
-                existe_registro
-                or existe_alumno
-                or existe_instructor
+                registro_existente
+                and registro_existente.estado
+                == RegistroLegalEstudiante.Estados.PENDIENTE_VALIDACION
             ):
+                self.add_error('documento', MENSAJE_REGISTRO_PENDIENTE)
+            elif registro_existente or existe_alumno or existe_instructor:
                 self.add_error(
                     'documento',
                     'Ya existe un estudiante o registro con este documento, o está asignado a un instructor.'
