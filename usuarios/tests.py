@@ -6,6 +6,33 @@ from django.urls import reverse
 from alumnos.models import Alumno
 
 
+class LoginNormalizadoTests(TestCase):
+    def setUp(self):
+        self.usuario = get_user_model().objects.create_user(
+            username='usuarioprueba',
+            password='ClaveLogin789!',
+        )
+
+    def test_login_quita_espacios_del_usuario(self):
+        response = self.client.post(reverse('login'), {
+            'username': ' usuario prueba ',
+            'password': 'ClaveLogin789!',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            int(self.client.session['_auth_user_id']),
+            self.usuario.id,
+        )
+
+    def test_login_incluye_control_para_ver_contrasena(self):
+        response = self.client.get(reverse('login'))
+
+        self.assertContains(response, 'id="mostrarPassword"')
+        self.assertContains(response, 'fa-eye')
+        self.assertContains(response, "replace(/\\s/g, '')", html=False)
+
+
 @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
 class RecuperacionPasswordFamiliarTests(TestCase):
     def setUp(self):

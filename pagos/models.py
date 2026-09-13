@@ -654,14 +654,15 @@ class InscripcionEvento(models.Model):
             models.UniqueConstraint(
                 fields=['evento', 'participante_documento', 'categoria_evento'],
                 condition=(
-                    ~Q(estado='CANCELADA') & Q(categoria_evento__isnull=False)
+                    ~Q(estado__in=('CANCELADA', 'RECHAZADA'))
+                    & Q(categoria_evento__isnull=False)
                 ),
                 name='inscripcion_categoria_documento_activa_unica',
             ),
             models.UniqueConstraint(
                 fields=['evento', 'participante_documento'],
                 condition=(
-                    ~Q(estado='CANCELADA')
+                    ~Q(estado__in=('CANCELADA', 'RECHAZADA'))
                     & Q(categoria_evento__isnull=True)
                     & Q(jornada__isnull=True)
                 ),
@@ -670,7 +671,7 @@ class InscripcionEvento(models.Model):
             models.UniqueConstraint(
                 fields=['evento', 'participante_documento', 'jornada'],
                 condition=(
-                    ~Q(estado='CANCELADA')
+                    ~Q(estado__in=('CANCELADA', 'RECHAZADA'))
                     & Q(categoria_evento__isnull=True)
                     & Q(jornada__isnull=False)
                 ),

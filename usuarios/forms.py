@@ -1,9 +1,17 @@
 from django import forms
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.contrib.auth.forms import PasswordResetForm
+from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm
 from django.db.models import Q
 from urllib.parse import urlparse
+
+
+class LoginSinEspaciosForm(AuthenticationForm):
+    """Normaliza el usuario sin modificar la contraseña ingresada."""
+
+    def clean_username(self):
+        username = self.cleaned_data.get('username', '')
+        return ''.join(username.split())
 
 
 class RecuperarPasswordIdentificadoForm(PasswordResetForm):

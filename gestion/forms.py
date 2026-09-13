@@ -705,6 +705,12 @@ class InscripcionEventoForm(forms.ModelForm):
         ]
         widgets = {
             'fecha_nacimiento': forms.DateInput(attrs={'type': 'date'}),
+            'participante_documento': forms.TextInput(attrs={
+                'data-normalizar-documento': 'true',
+            }),
+            'acudiente_documento': forms.TextInput(attrs={
+                'data-normalizar-documento': 'true',
+            }),
             'acepta_consentimiento': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'acepta_reglamento': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'foto_participante': forms.ClearableFileInput(attrs={
@@ -788,6 +794,14 @@ class InscripcionEventoForm(forms.ModelForm):
         if archivo:
             validate_payment_receipt(archivo)
         return archivo
+
+    def clean_participante_documento(self):
+        documento = self.cleaned_data.get('participante_documento') or ''
+        return documento.replace('.', '').strip()
+
+    def clean_acudiente_documento(self):
+        documento = self.cleaned_data.get('acudiente_documento') or ''
+        return documento.replace('.', '').strip()
 
     def clean_foto_participante(self):
         foto = self.cleaned_data.get('foto_participante')
@@ -1064,7 +1078,10 @@ class EditarInscripcionEventoForm(forms.ModelForm):
                 evento=self.evento,
                 participante_documento__iexact=documento,
             ).exclude(pk=self.instance.pk).exclude(
-                estado=InscripcionEvento.Estados.CANCELADA
+                estado__in=(
+                    InscripcionEvento.Estados.CANCELADA,
+                    InscripcionEvento.Estados.RECHAZADA,
+                )
             )
             if otras.filter(categoria_evento=categoria).exists():
                 self.add_error(
@@ -1096,7 +1113,10 @@ class EditarInscripcionEventoForm(forms.ModelForm):
                 participante_documento__iexact=documento,
                 jornada=jornada,
             ).exclude(pk=self.instance.pk).exclude(
-                estado=InscripcionEvento.Estados.CANCELADA
+                estado__in=(
+                    InscripcionEvento.Estados.CANCELADA,
+                    InscripcionEvento.Estados.RECHAZADA,
+                )
             ).exists():
                 self.add_error(
                     'jornada',

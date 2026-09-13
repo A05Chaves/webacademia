@@ -40,6 +40,14 @@
             border-radius: 14px !important;
         }
 
+        .password-group input {
+            border-radius: 14px 0 0 14px !important;
+        }
+
+        .password-group .btn {
+            border-radius: 0 14px 14px 0 !important;
+        }
+
         .btn {
             border-radius: 14px !important;
         }
@@ -72,6 +80,8 @@
             <label class="form-label">Usuario</label>
             <input type="text"
                    name="username"
+                   id="id_username"
+                   autocomplete="username"
                    autofocus
                    required
                    class="form-control">
@@ -79,10 +89,21 @@
 
         <div class="mb-4">
             <label class="form-label">Contraseña</label>
-            <input type="password"
-                   name="password"
-                   required
-                   class="form-control">
+            <div class="input-group password-group">
+                <input type="password"
+                       name="password"
+                       id="id_password"
+                       autocomplete="current-password"
+                       required
+                       class="form-control">
+                <button type="button"
+                        id="mostrarPassword"
+                        class="btn btn-outline-secondary"
+                        aria-label="Mostrar contraseña"
+                        aria-pressed="false">
+                    <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                </button>
+            </div>
         </div>
 
         <button type="submit" class="btn btn-dark w-100">
@@ -110,5 +131,27 @@
 
 </div>
 
+<script>
+const campoUsuario = document.getElementById('id_username');
+const campoPassword = document.getElementById('id_password');
+const botonPassword = document.getElementById('mostrarPassword');
+
+campoUsuario.addEventListener('input', () => {
+    campoUsuario.value = campoUsuario.value.replace(/\s/g, '');
+});
+
+botonPassword.addEventListener('click', () => {
+    const mostrar = campoPassword.type === 'password';
+    campoPassword.type = mostrar ? 'text' : 'password';
+    botonPassword.setAttribute('aria-pressed', String(mostrar));
+    botonPassword.setAttribute(
+        'aria-label', mostrar ? 'Ocultar contraseña' : 'Mostrar contraseña'
+    );
+    botonPassword.querySelector('i').className = mostrar
+        ? 'fa-solid fa-eye-slash'
+        : 'fa-solid fa-eye';
+    campoPassword.focus();
+});
+</script>
 </body>
 </html>

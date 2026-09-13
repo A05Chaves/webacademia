@@ -593,6 +593,75 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
         self.assertEqual(inscripcion.pago.estado, Pago.Estados.APROBADO)
         self.assertContains(aprobacion, 'Valor validado: $ 65.000')
 
+    def test_inscripcion_con_pago_rechazado_permite_volver_a_inscribirse(self):
+        evento = Evento.objects.create(
+            tipo=Evento.Tipos.SEMINARIO,
+            nombre='Seminario con reintento',
+            descripcion='Permite corregir una inscripción rechazada.',
+            fecha_inicio=timezone.now() + timedelta(days=10),
+            lugar='Galeras BJJ',
+            precio_estudiante=50000,
+            precio_externo=50000,
+            publico=Evento.Publicos.ADULTOS,
+        )
+        url_inscripcion = reverse(
+            'gestion:inscribirse_evento', args=[evento.id]
+        )
+        datos = {
+            'participante_nombre': 'Participante Reintento',
+            'participante_documento': 'REINTENTO-1',
+            'fecha_nacimiento': '1990-05-10',
+            'correo': 'reintento@example.com',
+            'telefono': '3009876543',
+            'metodo_qr': self.metodo.id,
+            'valor_pagado': '50000',
+            'referencia_pago': 'REINTENTO-ORIGINAL',
+            'comprobante': SimpleUploadedFile(
+                'original.pdf', b'%PDF-1.4\nORIGINAL\n%%EOF'
+            ),
+        }
+
+        primera = self.client.post(url_inscripcion, datos)
+        self.assertRedirects(primera, reverse('gestion:home_publica'))
+        anterior = InscripcionEvento.objects.get(evento=evento)
+
+        self.client.force_login(self.admin)
+        rechazo = self.client.post(
+            reverse('gestion:validar_pago', args=[anterior.pago_id]),
+            {
+                'estado': Pago.Estados.RECHAZADO,
+                'observacion_admin': 'El soporte debe corregirse.',
+            },
+        )
+        self.assertRedirects(rechazo, reverse('gestion:lista_pagos'))
+        anterior.refresh_from_db()
+        self.assertEqual(anterior.estado, InscripcionEvento.Estados.RECHAZADA)
+        self.client.logout()
+
+        datos_corregidos = {
+            **datos,
+            'referencia_pago': 'REINTENTO-CORREGIDO',
+            'comprobante': SimpleUploadedFile(
+                'corregido.pdf', b'%PDF-1.4\nCORREGIDO\n%%EOF'
+            ),
+        }
+        segunda = self.client.post(url_inscripcion, datos_corregidos)
+
+        self.assertRedirects(segunda, reverse('gestion:home_publica'))
+        self.assertEqual(evento.inscripciones.count(), 2)
+        self.assertEqual(
+            evento.inscripciones.filter(
+                estado=InscripcionEvento.Estados.RECHAZADA
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            evento.inscripciones.filter(
+                estado=InscripcionEvento.Estados.PENDIENTE
+            ).count(),
+            1,
+        )
+
     def test_envio_duplicado_de_seminario_no_produce_error_500(self):
         evento = Evento.objects.create(
             tipo=Evento.Tipos.SEMINARIO,

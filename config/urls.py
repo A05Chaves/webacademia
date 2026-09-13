@@ -22,7 +22,7 @@ from django.conf import settings
 from config.media_views import serve_media
 from django.contrib.auth import views as auth_views
 from django.urls import include
-from usuarios.forms import RecuperarPasswordIdentificadoForm
+from usuarios.forms import LoginSinEspaciosForm, RecuperarPasswordIdentificadoForm
 
 
 urlpatterns = [
@@ -30,7 +30,14 @@ urlpatterns = [
 
     path('media/<path:path>', serve_media, name='serve_media'),
 
-    path('login/', auth_views.LoginView.as_view(template_name='login.html'), name='login'),
+    path(
+        'login/',
+        auth_views.LoginView.as_view(
+            template_name='login.html',
+            authentication_form=LoginSinEspaciosForm,
+        ),
+        name='login',
+    ),
     path('logout/', auth_views.LogoutView.as_view(next_page='/'), name='logout'),
 
     path(

@@ -79,9 +79,13 @@ class InscripcionSeminarioDuplicadaTests(TestCase):
         )
 
     def test_repetir_inscripcion_muestra_error_en_jornada_sin_error_500(self):
+        datos_con_documento_formateado = {
+            **self.datos,
+            'participante_documento': '100.200.300',
+        }
         response = self.client.post(
             reverse('gestion:inscribirse_evento', args=[self.evento.id]),
-            self.datos,
+            datos_con_documento_formateado,
         )
 
         self.assertEqual(response.status_code, 200)

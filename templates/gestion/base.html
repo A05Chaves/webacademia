@@ -780,6 +780,17 @@
         });
     }
 
+    function normalizarDocumentos(contenedor = document) {
+        if (contenedor.matches?.('[data-normalizar-documento="true"]')) {
+            contenedor.value = contenedor.value.replace(/\./g, '');
+        }
+        contenedor.querySelectorAll?.(
+            '[data-normalizar-documento="true"]'
+        ).forEach(campo => {
+            campo.value = campo.value.replace(/\./g, '');
+        });
+    }
+
     const nombresCamposMonetarios = new Set([
         'precio', 'precio_venta', 'precio_estudiante', 'precio_externo',
         'precio_aplicado', 'costo_unitario', 'valor', 'valor_pagado',
@@ -894,6 +905,7 @@
             if (evento.target.matches('[data-solo-numeros="true"]')) {
                 evento.target.value = evento.target.value.replace(/\D/g, '');
             }
+            normalizarDocumentos(evento.target);
             convertirCampoAMayusculas(evento.target);
         }
     });
@@ -908,6 +920,7 @@
             formulario.dataset.envioEnCurso = 'true';
         }
         limpiarCamposMonetarios(evento.target);
+        normalizarDocumentos(evento.target);
         normalizarCamposNumericos(evento.target);
         normalizarTextosMayuscula(evento.target);
         setTimeout(function () {

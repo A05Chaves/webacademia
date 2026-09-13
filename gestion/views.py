@@ -2956,7 +2956,10 @@ def mover_inscripcion_categoria(request, inscripcion_id):
         participante_documento__iexact=inscripcion.participante_documento,
         categoria_evento=categoria,
     ).exclude(pk=inscripcion.pk).exclude(
-        estado=InscripcionEvento.Estados.CANCELADA
+        estado__in=(
+            InscripcionEvento.Estados.CANCELADA,
+            InscripcionEvento.Estados.RECHAZADA,
+        )
     ).exists()
     if inscripcion_duplicada:
         messages.error(
@@ -3165,8 +3168,11 @@ def _procesar_inscripcion_evento(request, evento_id):
         and evento.alcance_torneo == Evento.AlcancesTorneo.INTERNO
         and request.method == 'POST'
     ):
+        documento_participante = request.POST.get(
+            'participante_documento', ''
+        ).replace('.', '').strip()
         alumno_interno = Alumno.objects.select_related('user').filter(
-            documento__iexact=request.POST.get('participante_documento', '').strip()
+            documento__iexact=documento_participante
         ).first()
     form = InscripcionEventoForm(
         request.POST or None, request.FILES or None,
@@ -3184,7 +3190,10 @@ def _procesar_inscripcion_evento(request, evento_id):
                 participante_documento__iexact=(
                     form.cleaned_data['participante_documento']
                 ),
-            ).exclude(estado=InscripcionEvento.Estados.CANCELADA)
+            ).exclude(estado__in=(
+                InscripcionEvento.Estados.CANCELADA,
+                InscripcionEvento.Estados.RECHAZADA,
+            ))
             categoria_elegida = form.cleaned_data.get('categoria_evento')
             error_inscripcion = None
             if evento.tipo == Evento.Tipos.TORNEO:
