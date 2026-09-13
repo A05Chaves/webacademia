@@ -3217,7 +3217,12 @@ def _procesar_inscripcion_evento(request, evento_id):
             elif inscripciones_previas.exists():
                 error_inscripcion = 'Este participante ya está inscrito en el evento.'
             if error_inscripcion:
-                form.add_error('categoria_evento', error_inscripcion)
+                campo_error = None
+                if evento.tipo == Evento.Tipos.TORNEO:
+                    campo_error = 'categoria_evento'
+                elif 'jornada' in form.fields and form.cleaned_data.get('jornada'):
+                    campo_error = 'jornada'
+                form.add_error(campo_error, error_inscripcion)
             else:
                 precio = form.cleaned_data['tarifa_aplicable']
                 with transaction.atomic():

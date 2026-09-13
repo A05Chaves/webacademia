@@ -13,7 +13,8 @@ from datetime import date, datetime, time, timedelta
 from alumnos.models import Alumno
 from finanzas.models import CategoriaFinanciera, CuentaFinanciera, MovimientoFinanciero
 from pagos.models import (
-    CategoriaEvento, Evento, LlaveCategoriaEvento, MetodoPagoQR, Pago,
+    CategoriaEvento, Evento, InscripcionEvento, JornadaEvento,
+    LlaveCategoriaEvento, MetodoPagoQR, Pago,
 )
 from planes.models import Plan, Suscripcion
 from clases.models import ClaseProgramada, AsistenciaClase
@@ -27,6 +28,71 @@ from gestion.models import ConfiguracionClases, SesionTV
 from gestion.views import limites_confirmacion_clase
 from registros_legales.models import RegistroLegalEstudiante
 import base64
+
+
+class InscripcionSeminarioDuplicadaTests(TestCase):
+    def setUp(self):
+        ahora = timezone.now()
+        self.evento = Evento.objects.create(
+            tipo=Evento.Tipos.SEMINARIO,
+            nombre='Seminario de prueba',
+            descripcion='Evento para validar inscripciones duplicadas.',
+            fecha_inicio=ahora + timedelta(days=10),
+            fecha_fin=ahora + timedelta(days=10, hours=2),
+            fecha_inicio_inscripcion=ahora - timedelta(days=1),
+            fecha_limite_inscripcion=ahora + timedelta(days=5),
+            lugar='Academia Galeras',
+            precio_estudiante=0,
+            precio_externo=0,
+            publico=Evento.Publicos.TODOS,
+        )
+        self.jornada = JornadaEvento.objects.create(
+            evento=self.evento,
+            nombre='Jornada adultos',
+            publico=JornadaEvento.Publicos.ADULTOS,
+            fecha_inicio=ahora + timedelta(days=10),
+            fecha_fin=ahora + timedelta(days=10, hours=2),
+            precio_estudiante=0,
+            precio_externo=0,
+        )
+        self.datos = {
+            'participante_nombre': 'Participante Prueba',
+            'participante_documento': '100200300',
+            'fecha_nacimiento': '1990-05-10',
+            'correo': 'participante@example.com',
+            'telefono': '3001234567',
+            'acudiente_nombre': '',
+            'acudiente_documento': '',
+            'acudiente_telefono': '',
+            'jornada': self.jornada.id,
+        }
+        InscripcionEvento.objects.create(
+            evento=self.evento,
+            jornada=self.jornada,
+            participante_nombre=self.datos['participante_nombre'],
+            participante_documento=self.datos['participante_documento'],
+            fecha_nacimiento=self.datos['fecha_nacimiento'],
+            correo=self.datos['correo'],
+            telefono=self.datos['telefono'],
+            tarifa_publicada=0,
+            estado=InscripcionEvento.Estados.CONFIRMADA,
+        )
+
+    def test_repetir_inscripcion_muestra_error_en_jornada_sin_error_500(self):
+        response = self.client.post(
+            reverse('gestion:inscribirse_evento', args=[self.evento.id]),
+            self.datos,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            'Este participante ya está inscrito en la jornada seleccionada.',
+        )
+        self.assertEqual(
+            InscripcionEvento.objects.filter(evento=self.evento).count(),
+            1,
+        )
 
 
 class FormatoFiltrosFinancierosTests(TestCase):
