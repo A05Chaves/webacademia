@@ -60,6 +60,11 @@ urlpatterns = [
          views.datos_estudiante_torneo, name='datos_estudiante_torneo'),
     path('eventos/<int:evento_id>/inscripciones/', views.inscripciones_evento,
          name='inscripciones_evento'),
+    path(
+        'eventos/<int:evento_id>/inscripciones/exportar/',
+        views.exportar_inscripciones_evento,
+        name='exportar_inscripciones_evento',
+    ),
     path('eventos/<int:evento_id>/llaves/', views.llaves_evento_publicas,
          name='llaves_evento_publicas'),
     path('eventos/categorias/<int:categoria_id>/guardar-llave/',

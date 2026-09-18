@@ -16,6 +16,10 @@ from registros_legales.services import (
 from reportlab.lib.utils import ImageReader
 from io import BytesIO
 import base64
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.table import Table, TableStyleInfo
 from reportlab.pdfgen import canvas
 from django.http import HttpResponse
 from django.http import JsonResponse, Http404
@@ -71,6 +75,7 @@ from .forms import (
 from django.utils import timezone
 from django.utils.formats import number_format
 from django.utils.dateparse import parse_date
+from django.utils.text import slugify
 from notificaciones.models import Notificacion
 from instructores.models import Instructor
 
@@ -2850,6 +2855,124 @@ def inscripciones_evento(request, evento_id):
 
 
 @staff_member_required
+def exportar_inscripciones_evento(request, evento_id):
+    evento = get_object_or_404(Evento, id=evento_id)
+    inscripciones = evento.inscripciones.select_related(
+        'pago__metodo_qr', 'jornada', 'categoria_evento', 'academia_equipo'
+    ).order_by('participante_nombre', 'creada')
+
+    libro = Workbook()
+    hoja = libro.active
+    hoja.title = 'Inscripciones'
+    hoja.sheet_view.showGridLines = False
+
+    encabezados = [
+        'Participante', 'Documento', 'Fecha de nacimiento', 'Correo',
+        'Teléfono', 'Acudiente', 'Documento acudiente', 'Teléfono acudiente',
+        'Academia', 'Jornada o categoría', 'Estado de inscripción',
+        'Valor pagado', 'Estado del pago', 'Medio de pago', 'Referencia',
+        'Fecha de registro',
+    ]
+    ultima_columna = get_column_letter(len(encabezados))
+    hoja.merge_cells(f'A1:{ultima_columna}1')
+    hoja['A1'] = f'Inscripciones · {evento.nombre}'
+    hoja['A1'].font = Font(name='Arial', size=14, bold=True, color='FFFFFF')
+    hoja['A1'].fill = PatternFill('solid', fgColor='162636')
+    hoja['A1'].alignment = Alignment(horizontal='left', vertical='center')
+    hoja.row_dimensions[1].height = 26
+    hoja.merge_cells(f'A2:{ultima_columna}2')
+    hoja['A2'] = (
+        f'{evento.get_tipo_display()} · '
+        f'{timezone.localtime(evento.fecha_inicio).strftime("%d/%m/%Y %H:%M")} '
+        f'· {evento.lugar}'
+    )
+    hoja['A2'].font = Font(name='Arial', size=10, italic=True, color='555555')
+
+    fila_encabezados = 4
+    for columna, encabezado in enumerate(encabezados, start=1):
+        celda = hoja.cell(fila_encabezados, columna, encabezado)
+        celda.font = Font(name='Arial', size=10, bold=True, color='FFFFFF')
+        celda.fill = PatternFill('solid', fgColor='1F4E78')
+        celda.alignment = Alignment(horizontal='center', vertical='center')
+
+    for fila, inscripcion in enumerate(inscripciones, start=fila_encabezados + 1):
+        pago = inscripcion.pago
+        jornada_categoria = (
+            inscripcion.jornada.nombre
+            if inscripcion.jornada_id
+            else str(inscripcion.categoria_evento or inscripcion.categoria or 'General')
+        )
+        academia = (
+            inscripcion.academia_equipo.nombre
+            if inscripcion.academia_equipo_id
+            else inscripcion.academia_origen or 'Galeras BJJ'
+        )
+        fecha_registro = timezone.localtime(inscripcion.creada).replace(tzinfo=None)
+        valores = [
+            inscripcion.participante_nombre,
+            inscripcion.participante_documento,
+            inscripcion.fecha_nacimiento,
+            inscripcion.correo,
+            inscripcion.telefono,
+            inscripcion.acudiente_nombre,
+            inscripcion.acudiente_documento,
+            inscripcion.acudiente_telefono,
+            academia,
+            jornada_categoria,
+            inscripcion.get_estado_display(),
+            pago.valor if pago else None,
+            pago.get_estado_display() if pago else 'Sin costo',
+            str(pago.metodo_qr) if pago else '',
+            pago.referencia_pago if pago else '',
+            fecha_registro,
+        ]
+        for columna, valor in enumerate(valores, start=1):
+            celda = hoja.cell(fila, columna, valor)
+            celda.font = Font(name='Arial', size=10)
+            celda.alignment = Alignment(vertical='center')
+        hoja.cell(fila, 3).number_format = 'dd/mm/yyyy'
+        hoja.cell(fila, 12).number_format = '"$"#,##0'
+        hoja.cell(fila, 16).number_format = 'dd/mm/yyyy hh:mm'
+
+    ultima_fila = max(fila_encabezados + 1, hoja.max_row)
+    if not inscripciones.exists():
+        for columna in range(1, len(encabezados) + 1):
+            hoja.cell(fila_encabezados + 1, columna, '')
+        ultima_fila = fila_encabezados + 1
+    tabla = Table(
+        displayName=f'InscripcionesEvento{evento.id}',
+        ref=f'A{fila_encabezados}:{ultima_columna}{ultima_fila}',
+    )
+    tabla.tableStyleInfo = TableStyleInfo(
+        name='TableStyleMedium2',
+        showFirstColumn=False,
+        showLastColumn=False,
+        showRowStripes=True,
+        showColumnStripes=False,
+    )
+    hoja.add_table(tabla)
+    hoja.freeze_panes = f'A{fila_encabezados + 1}'
+    anchos = [26, 16, 18, 28, 16, 24, 19, 18, 24, 28, 21, 16, 18, 20, 20, 20]
+    for indice, ancho in enumerate(anchos, start=1):
+        hoja.column_dimensions[get_column_letter(indice)].width = ancho
+
+    salida = BytesIO()
+    libro.save(salida)
+    salida.seek(0)
+    nombre = slugify(evento.nombre) or f'evento-{evento.id}'
+    respuesta = HttpResponse(
+        salida.getvalue(),
+        content_type=(
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        ),
+    )
+    respuesta['Content-Disposition'] = (
+        f'attachment; filename="inscripciones-{nombre}.xlsx"'
+    )
+    return respuesta
+
+
+@staff_member_required
 @transaction.atomic
 def editar_inscripcion_evento(request, inscripcion_id):
     inscripcion = get_object_or_404(
@@ -3291,13 +3414,6 @@ def _procesar_inscripcion_evento(request, evento_id):
                         inscripcion.estado = InscripcionEvento.Estados.CONFIRMADA
                     pago = None
                     if precio > 0:
-                        pagador_nombre = (
-                            inscripcion.acudiente_nombre or inscripcion.participante_nombre
-                        )
-                        pagador_documento = (
-                            inscripcion.acudiente_documento
-                            or inscripcion.participante_documento
-                        )
                         pago = Pago(
                             alumno=alumno,
                             tipo=Pago.Tipos.EVENTO,
@@ -3305,8 +3421,8 @@ def _procesar_inscripcion_evento(request, evento_id):
                             valor=form.cleaned_data['valor_pagado'],
                             comprobante=form.cleaned_data['comprobante'],
                             referencia_pago=form.cleaned_data['referencia_pago'],
-                            pagador_nombre=pagador_nombre,
-                            pagador_documento=pagador_documento,
+                            pagador_nombre=inscripcion.participante_nombre,
+                            pagador_documento=inscripcion.participante_documento,
                             pagador_correo=inscripcion.correo,
                             concepto_detalle=(
                                 f'{evento.get_tipo_display()}: {evento.nombre}'

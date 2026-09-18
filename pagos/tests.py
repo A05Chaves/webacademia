@@ -13,6 +13,7 @@ from django.db import IntegrityError
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
+from openpyxl import load_workbook
 from PIL import Image, ImageDraw
 
 from alumnos.models import Alumno
@@ -661,6 +662,84 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
             ).count(),
             1,
         )
+
+    def test_pago_evento_se_registra_a_nombre_del_participante(self):
+        evento = Evento.objects.create(
+            tipo=Evento.Tipos.SEMINARIO,
+            nombre='Seminario infantil',
+            descripcion='Seminario para menores.',
+            fecha_inicio=timezone.now() + timedelta(days=10),
+            lugar='Galeras BJJ',
+            precio_estudiante=40000,
+            precio_externo=40000,
+            publico=Evento.Publicos.MENORES,
+        )
+
+        response = self.client.post(
+            reverse('gestion:inscribirse_evento', args=[evento.id]),
+            {
+                'participante_nombre': 'Estudiante Infantil',
+                'participante_documento': 'MENOR-100',
+                'fecha_nacimiento': '2015-05-10',
+                'correo': 'acudiente@example.com',
+                'telefono': '3009876543',
+                'acudiente_nombre': 'Nombre Acudiente',
+                'acudiente_documento': 'ACUDIENTE-100',
+                'acudiente_telefono': '3019876543',
+                'metodo_qr': self.metodo.id,
+                'valor_pagado': '40000',
+                'referencia_pago': 'PAGO-MENOR-100',
+                'comprobante': SimpleUploadedFile(
+                    'pago-menor.pdf', b'%PDF-1.4\nPAGO MENOR\n%%EOF'
+                ),
+            },
+        )
+
+        self.assertRedirects(response, reverse('gestion:home_publica'))
+        inscripcion = InscripcionEvento.objects.get(evento=evento)
+        self.assertEqual(inscripcion.acudiente_nombre, 'Nombre Acudiente')
+        self.assertEqual(inscripcion.pago.pagador_nombre, 'Estudiante Infantil')
+        self.assertEqual(inscripcion.pago.pagador_documento, 'MENOR-100')
+
+    def test_exporta_inscripciones_del_evento_en_excel(self):
+        evento = Evento.objects.create(
+            tipo=Evento.Tipos.SEMINARIO,
+            nombre='Seminario exportable',
+            descripcion='Seminario para probar el archivo Excel.',
+            fecha_inicio=timezone.now() + timedelta(days=10),
+            lugar='Galeras BJJ',
+            precio_estudiante=0,
+            precio_externo=0,
+        )
+        InscripcionEvento.objects.create(
+            evento=evento,
+            participante_nombre='Asistente Exportado',
+            participante_documento='EXP-100',
+            fecha_nacimiento='1994-06-15',
+            correo='exportado@example.com',
+            telefono='3005556677',
+            academia_origen='Academia Invitada',
+            estado=InscripcionEvento.Estados.CONFIRMADA,
+        )
+        self.client.force_login(self.admin)
+
+        response = self.client.get(
+            reverse('gestion:exportar_inscripciones_evento', args=[evento.id])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response['Content-Type'],
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        libro = load_workbook(BytesIO(response.content))
+        hoja = libro['Inscripciones']
+        self.assertEqual(hoja['A1'].value, 'Inscripciones · Seminario exportable')
+        self.assertEqual(hoja['A4'].value, 'Participante')
+        self.assertEqual(hoja['A5'].value, 'Asistente Exportado')
+        self.assertEqual(hoja['B5'].value, 'EXP-100')
+        self.assertEqual(hoja['K5'].value, 'Confirmada')
+        self.assertEqual(hoja.freeze_panes, 'A5')
 
     def test_envio_duplicado_de_seminario_no_produce_error_500(self):
         evento = Evento.objects.create(
