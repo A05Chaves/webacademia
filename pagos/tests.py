@@ -741,6 +741,77 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
         self.assertEqual(hoja['K5'].value, 'Confirmada')
         self.assertEqual(hoja.freeze_panes, 'A5')
 
+    def test_historial_evento_resume_y_filtra_pagos(self):
+        evento = Evento.objects.create(
+            tipo=Evento.Tipos.SEMINARIO,
+            nombre='Seminario con filtros',
+            descripcion='Evento para consultar pagos.',
+            fecha_inicio=timezone.now() + timedelta(days=10),
+            lugar='Galeras BJJ',
+            precio_estudiante=50000,
+            precio_externo=50000,
+        )
+
+        def crear_pago(nombre, documento, estado, referencia):
+            pago = Pago.objects.create(
+                tipo=Pago.Tipos.EVENTO,
+                metodo_qr=self.metodo,
+                valor=50000,
+                comprobante=SimpleUploadedFile(
+                    f'{documento}.pdf', b'%PDF-1.4\nPAGO\n%%EOF'
+                ),
+                referencia_pago=referencia,
+                pagador_nombre=nombre,
+                pagador_documento=documento,
+                estado=estado,
+            )
+            return InscripcionEvento.objects.create(
+                evento=evento,
+                pago=pago,
+                participante_nombre=nombre,
+                participante_documento=documento,
+                fecha_nacimiento='1990-05-10',
+                correo=f'{documento.lower()}@example.com',
+                telefono='3001234567',
+            )
+
+        crear_pago(
+            'Participante Aprobado', 'APROBADO-1', Pago.Estados.APROBADO,
+            'REF-APROBADA-1',
+        )
+        crear_pago(
+            'Participante Pendiente', 'PENDIENTE-1', Pago.Estados.PENDIENTE,
+            'REF-PENDIENTE-1',
+        )
+        InscripcionEvento.objects.create(
+            evento=evento,
+            participante_nombre='Participante Sin Costo',
+            participante_documento='GRATIS-1',
+            fecha_nacimiento='1990-05-10',
+            correo='gratis@example.com',
+            telefono='3007654321',
+            estado=InscripcionEvento.Estados.CONFIRMADA,
+        )
+        self.client.force_login(self.admin)
+        url = reverse('gestion:inscripciones_evento', args=[evento.id])
+
+        resumen = self.client.get(url)
+        self.assertContains(resumen, 'Pagos aprobados')
+        self.assertContains(resumen, 'Pendientes de aprobación')
+        self.assertContains(resumen, 'Inscripciones sin costo')
+        self.assertEqual(resumen.context['resumen_pagos']['aprobados'], 1)
+        self.assertEqual(resumen.context['resumen_pagos']['pendientes'], 1)
+        self.assertEqual(resumen.context['resumen_pagos']['sin_costo'], 1)
+
+        pendientes = self.client.get(url, {'estado_pago': 'PENDIENTE'})
+        self.assertContains(pendientes, 'Participante Pendiente')
+        self.assertNotContains(pendientes, 'Participante Aprobado')
+        self.assertNotContains(pendientes, 'Participante Sin Costo')
+
+        por_referencia = self.client.get(url, {'q': 'REF-APROBADA-1'})
+        self.assertContains(por_referencia, 'Participante Aprobado')
+        self.assertNotContains(por_referencia, 'Participante Pendiente')
+
     def test_envio_duplicado_de_seminario_no_produce_error_500(self):
         evento = Evento.objects.create(
             tipo=Evento.Tipos.SEMINARIO,

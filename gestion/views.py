@@ -2829,16 +2829,56 @@ def inscripciones_evento(request, evento_id):
     evento = get_object_or_404(
         Evento.objects.prefetch_related('categorias', 'jornadas'), id=evento_id
     )
-    inscripciones = evento.inscripciones.select_related(
+    inscripciones_base = evento.inscripciones.select_related(
         'alumno__user', 'pago', 'jornada', 'categoria_evento', 'academia_equipo'
     ).all()
     estados_no_inscritos = (
         InscripcionEvento.Estados.CANCELADA,
         InscripcionEvento.Estados.RECHAZADA,
     )
-    inscripciones_vigentes = inscripciones.exclude(
+    inscripciones_vigentes = inscripciones_base.exclude(
         estado__in=estados_no_inscritos
     )
+    resumen_pagos = inscripciones_base.aggregate(
+        aprobados=Count(
+            'id', filter=Q(pago__estado=Pago.Estados.APROBADO)
+        ),
+        pendientes=Count(
+            'id', filter=Q(pago__estado=Pago.Estados.PENDIENTE)
+        ),
+        rechazados=Count(
+            'id', filter=Q(pago__estado=Pago.Estados.RECHAZADO)
+        ),
+        sin_costo=Count('id', filter=Q(pago__isnull=True)),
+    )
+    busqueda = request.GET.get('q', '').strip()
+    estado_pago = request.GET.get('estado_pago', '').strip().upper()
+    jornada_id = request.GET.get('jornada', '').strip()
+    inscripciones = inscripciones_base
+    if busqueda:
+        inscripciones = inscripciones.filter(
+            Q(participante_nombre__icontains=busqueda)
+            | Q(participante_documento__icontains=busqueda)
+            | Q(correo__icontains=busqueda)
+            | Q(telefono__icontains=busqueda)
+            | Q(acudiente_nombre__icontains=busqueda)
+            | Q(acudiente_documento__icontains=busqueda)
+            | Q(pago__referencia_pago__icontains=busqueda)
+        )
+    if estado_pago in {
+        Pago.Estados.APROBADO,
+        Pago.Estados.PENDIENTE,
+        Pago.Estados.RECHAZADO,
+    }:
+        inscripciones = inscripciones.filter(pago__estado=estado_pago)
+    elif estado_pago == 'SIN_COSTO':
+        inscripciones = inscripciones.filter(pago__isnull=True)
+    else:
+        estado_pago = ''
+    if jornada_id.isdigit() and evento.jornadas.filter(pk=jornada_id).exists():
+        inscripciones = inscripciones.filter(jornada_id=jornada_id)
+    else:
+        jornada_id = ''
     jornadas_resumen = evento.jornadas.annotate(
         total_inscritos=Count(
             'inscripciones',
@@ -2849,6 +2889,11 @@ def inscripciones_evento(request, evento_id):
         'evento': evento,
         'inscripciones': inscripciones,
         'total_inscritos_evento': inscripciones_vigentes.count(),
+        'total_resultados': inscripciones.count(),
+        'resumen_pagos': resumen_pagos,
+        'busqueda': busqueda,
+        'estado_pago': estado_pago,
+        'jornada_seleccionada': jornada_id,
         'jornadas_resumen': jornadas_resumen,
         'categorias_activas': evento.categorias.filter(activa=True),
     })
