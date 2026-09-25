@@ -132,12 +132,11 @@
 </div>
 
 <script>
-const campoUsuario = document.getElementById('id_username');
 const campoPassword = document.getElementById('id_password');
 const botonPassword = document.getElementById('mostrarPassword');
 
-campoUsuario.addEventListener('input', () => {
-    campoUsuario.value = campoUsuario.value.replace(/\s/g, '');
+campoPassword.addEventListener('input', () => {
+    campoPassword.value = campoPassword.value.replace(/\s/g, '');
 });
 
 botonPassword.addEventListener('click', () => {

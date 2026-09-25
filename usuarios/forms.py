@@ -7,11 +7,11 @@ from urllib.parse import urlparse
 
 
 class LoginSinEspaciosForm(AuthenticationForm):
-    """Normaliza el usuario sin modificar la contraseña ingresada."""
+    """Permite espacios en el usuario y los elimina de la contraseña."""
 
-    def clean_username(self):
-        username = self.cleaned_data.get('username', '')
-        return ''.join(username.split())
+    def clean_password(self):
+        password = self.cleaned_data.get('password', '')
+        return ''.join(password.split())
 
 
 class RecuperarPasswordIdentificadoForm(PasswordResetForm):
