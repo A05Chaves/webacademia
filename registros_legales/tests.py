@@ -165,6 +165,14 @@ class RegistroLegalObligatorioTests(TestCase):
         self.assertContains(response, 'Fecha de diligenciamiento del registro')
         self.assertContains(response, 'no corresponde a la fecha de inicio del plan')
 
+    def test_formulario_permite_mostrar_ambas_contrasenas(self):
+        response = self.client.get(reverse('registro_publico'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-password-toggle="id_password1"')
+        self.assertContains(response, 'data-password-toggle="id_password2"')
+        self.assertContains(response, 'aria-label="Mostrar contraseña"', count=2)
+
     def test_registro_guarda_hash_y_no_contrasena_visible(self):
         form = RegistroLegalEstudianteForm(
             data=self.datos_validos(), files={'foto': self.foto_valida()}

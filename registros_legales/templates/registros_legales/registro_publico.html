@@ -32,6 +32,13 @@
         .signature-box { border: 2px dashed #adb5bd; transition: border-color .2s; }
         .signature-box.ready { border-color: #198754; }
         .summary-item { background: #f8f9fa; border-radius: .75rem; padding: .8rem; height: 100%; }
+        .password-input-group .password-toggle {
+            align-items: center;
+            display: inline-flex;
+            justify-content: center;
+            min-width: 3rem;
+        }
+        .password-toggle svg { height: 1.2rem; width: 1.2rem; }
         .fecha-control-legible { display: flex; position: relative; width: 100%; }
         .fecha-input-presentacion {
             align-items: center;
@@ -121,8 +128,8 @@
                                 </div>
                                 <div class="col-12 mt-4"><h3 class="h5 mb-1">Datos de acceso</h3><p class="text-muted mb-0">Elige las credenciales que utilizarás cuando la academia apruebe tu registro.</p></div>
                                 <div class="col-12"><label class="form-label" for="{{ form.usuario_solicitado.id_for_label }}">Usuario <span class="required">*</span></label>{{ form.usuario_solicitado }}{% if form.usuario_solicitado.help_text %}<div class="form-text">{{ form.usuario_solicitado.help_text }}</div>{% endif %}<div class="field-error text-danger">{{ form.usuario_solicitado.errors }}</div></div>
-                                <div class="col-md-6"><label class="form-label" for="{{ form.password1.id_for_label }}">Contraseña <span class="required">*</span></label>{{ form.password1 }}{% if form.password1.help_text %}<div class="form-text small">{{ form.password1.help_text|safe }}</div>{% endif %}<div class="field-error text-danger">{{ form.password1.errors }}</div></div>
-                                <div class="col-md-6"><label class="form-label" for="{{ form.password2.id_for_label }}">Confirmar contraseña <span class="required">*</span></label>{{ form.password2 }}<div class="field-error text-danger">{{ form.password2.errors }}</div></div>
+                                <div class="col-md-6"><label class="form-label" for="{{ form.password1.id_for_label }}">Contraseña <span class="required">*</span></label><div class="input-group password-input-group">{{ form.password1 }}<button type="button" class="btn btn-outline-secondary password-toggle" data-password-toggle="{{ form.password1.id_for_label }}" aria-label="Mostrar contraseña" title="Mostrar contraseña"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></div>{% if form.password1.help_text %}<div class="form-text small">{{ form.password1.help_text|safe }}</div>{% endif %}<div class="field-error text-danger">{{ form.password1.errors }}</div></div>
+                                <div class="col-md-6"><label class="form-label" for="{{ form.password2.id_for_label }}">Confirmar contraseña <span class="required">*</span></label><div class="input-group password-input-group">{{ form.password2 }}<button type="button" class="btn btn-outline-secondary password-toggle" data-password-toggle="{{ form.password2.id_for_label }}" aria-label="Mostrar contraseña" title="Mostrar contraseña"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></div><div class="field-error text-danger">{{ form.password2.errors }}</div></div>
                             </div>
                         </section>
 
@@ -201,6 +208,20 @@
 <script>
 const patronCamposSinMayusculas = /(usuario|username|password|contrase|correo|email|url|enlace|firma|token|csrf|json|buscar|busqueda|search)/i;
 const patronCamposNombrePropio = /(nombre|apellido|first_name|last_name)/i;
+
+document.querySelectorAll('[data-password-toggle]').forEach(boton => {
+    boton.addEventListener('click', () => {
+        const campo = document.getElementById(boton.dataset.passwordToggle);
+        if (!campo) return;
+        const mostrar = campo.type === 'password';
+        campo.type = mostrar ? 'text' : 'password';
+        const etiqueta = mostrar ? 'Ocultar contraseña' : 'Mostrar contraseña';
+        boton.setAttribute('aria-label', etiqueta);
+        boton.setAttribute('title', etiqueta);
+        boton.setAttribute('aria-pressed', mostrar ? 'true' : 'false');
+        campo.focus({preventScroll: true});
+    });
+});
 
 function convertirANombrePropio(valor) {
     return valor.toLocaleLowerCase('es-CO').replace(
