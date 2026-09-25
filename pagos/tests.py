@@ -341,6 +341,19 @@ class PagosAcademiaNuevosFlujosTests(TestCase):
         self.assertContains(response, self.cuenta.nombre)
         self.assertContains(response, self.metodo.nombre)
 
+    def test_historial_permite_ver_soporte_original_del_pago(self):
+        pago = self.nuevo_pago()
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse('gestion:lista_pagos'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Ver soporte')
+        self.assertContains(
+            response,
+            reverse('serve_media', args=[pago.comprobante.name]),
+        )
+
     def test_promocion_publicada_aparece_en_home(self):
         hoy = timezone.localdate()
         promocion = Promocion.objects.create(

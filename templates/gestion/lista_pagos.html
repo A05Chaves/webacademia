@@ -43,6 +43,7 @@
         <td class="text-end">$ {{ pago.valor|floatformat:0 }}</td>
         <td><span class="badge {% if pago.estado == 'APROBADO' %}bg-success{% elif pago.estado == 'RECHAZADO' %}bg-danger{% else %}bg-warning text-dark{% endif %}">{{ pago.get_estado_display }}</span></td>
         <td><div class="d-flex gap-2 justify-content-end flex-wrap">
+            {% if pago.comprobante %}<a href="{% url 'serve_media' pago.comprobante.name %}" target="_blank" rel="noopener" class="btn btn-outline-info btn-sm" title="Ver el soporte de pago cargado por el usuario"><i class="fa-solid fa-paperclip"></i> Ver soporte</a>{% endif %}
             {% if pago.estado == 'PENDIENTE' %}<a href="{% url 'gestion:validar_pago' pago.id %}" class="btn btn-success btn-sm"><i class="fa-solid fa-clipboard-check"></i> Revisar pago y suscripción</a>{% endif %}
             {% if pago.suscripcion %}<a href="{% url 'gestion:editar_suscripcion' pago.suscripcion.id %}" class="btn btn-outline-warning btn-sm" title="Ver suscripción"><i class="fa-solid fa-id-card"></i></a>{% endif %}
             {% if pago.estado == 'APROBADO' and pago.numero_comprobante %}<a href="{% url 'gestion:descargar_comprobante_pago' pago.token_comprobante %}" class="btn btn-primary btn-sm" title="Descargar comprobante"><i class="fa-solid fa-download"></i></a><form method="post" action="{% url 'gestion:reenviar_comprobante_pago' pago.id %}">{% csrf_token %}<button class="btn btn-outline-info btn-sm" title="Reenviar por correo"><i class="fa-solid fa-envelope"></i></button></form>{% endif %}
