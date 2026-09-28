@@ -20,6 +20,7 @@ from django.views.decorators.http import require_POST
 from alumnos.models import Alumno
 
 from .forms import (
+    AbonoCompraForm,
     AbonoVentaForm,
     AjusteInventarioForm,
     CarteraInicialTiendaForm,
@@ -34,6 +35,7 @@ from .forms import (
     LineaModeloProductoForm,
     MarcaProductoForm,
     ProductoTiendaForm,
+    ProveedorTiendaForm,
     SubcategoriaProductoForm,
     TransferenciaTiendaForm,
     VentaTiendaForm,
@@ -44,8 +46,10 @@ from .models import (
     CategoriaMovimientoTienda,
     CategoriaProducto,
     ClienteTienda,
+    CompraProveedorTienda,
     CuentaTienda,
     CuotaVentaTienda,
+    CuotaCompraTienda,
     DetalleVentaTienda,
     DisciplinaProducto,
     Monedas,
@@ -53,6 +57,7 @@ from .models import (
     LineaModeloProducto,
     MarcaProducto,
     ProductoTienda,
+    ProveedorTienda,
     SubcategoriaProducto,
     VentaTienda,
 )
@@ -114,6 +119,22 @@ def _crear_cuotas(venta):
         )
 
 
+def _crear_cuotas_compra(compra):
+    if compra.modalidad != CompraProveedorTienda.Modalidades.CREDITO or compra.saldo_pendiente <= 0:
+        return
+    numero_cuotas = max(compra.numero_cuotas, 1)
+    valor_base = (compra.saldo_pendiente / numero_cuotas).quantize(Decimal('0.01'))
+    acumulado = Decimal('0')
+    for numero in range(1, numero_cuotas + 1):
+        valor = valor_base if numero < numero_cuotas else compra.saldo_pendiente - acumulado
+        acumulado += valor
+        CuotaCompraTienda.objects.create(
+            compra=compra, numero=numero,
+            fecha_vencimiento=_sumar_meses(compra.fecha_vencimiento, numero - 1),
+            valor=valor, saldo=valor,
+        )
+
+
 def _cliente_desde_comprador(comprador):
     if isinstance(comprador, ClienteTienda):
         return comprador
@@ -146,6 +167,45 @@ def _cliente_desde_comprador(comprador):
         correo=usuario.email or '',
         direccion=comprador.direccion or '',
     )
+
+
+def _datos_compradores_venta():
+    hoy = timezone.localdate()
+    resultado = {}
+    alumnos = Alumno.objects.select_related('user').order_by(
+        'user__first_name', 'user__last_name', 'documento'
+    )
+    for alumno in alumnos:
+        nacimiento = alumno.fecha_nacimiento
+        edad = None
+        if nacimiento:
+            edad = hoy.year - nacimiento.year - (
+                (hoy.month, hoy.day) < (nacimiento.month, nacimiento.day)
+            )
+        resultado[f'alumno:{alumno.pk}'] = {
+            'nombres': str(alumno),
+            'tipo_documento': (
+                ClienteTienda.TiposDocumento.TI
+                if edad is not None and edad < 18
+                else ClienteTienda.TiposDocumento.CC
+            ),
+            'numero_documento': alumno.documento,
+            'whatsapp': alumno.user.telefono or alumno.telefono_acudiente or '',
+            'correo': alumno.user.email or '',
+            'direccion': alumno.direccion or '',
+            'origen': 'Estudiante de la academia',
+        }
+    for cliente in ClienteTienda.objects.filter(activo=True).order_by('nombres'):
+        resultado[f'cliente:{cliente.pk}'] = {
+            'nombres': cliente.nombres,
+            'tipo_documento': cliente.tipo_documento,
+            'numero_documento': cliente.numero_documento,
+            'whatsapp': cliente.telefono_whatsapp,
+            'correo': cliente.correo,
+            'direccion': cliente.direccion,
+            'origen': 'Cliente externo registrado',
+        }
+    return resultado
 
 
 def _resumen_moneda(moneda, desde, hasta):
@@ -226,6 +286,12 @@ def panel(request):
     creditos = VentaTienda.objects.exclude(
         estado__in=[VentaTienda.Estados.PAGADA, VentaTienda.Estados.ANULADA]
     ).select_related('cliente')[:8]
+    compras_pendientes = CompraProveedorTienda.objects.filter(
+        saldo_pendiente__gt=0
+    ).select_related('proveedor', 'producto').order_by('fecha_vencimiento')[:8]
+    entregas_pendientes = VentaTienda.objects.filter(
+        tipo_entrega=VentaTienda.TiposEntrega.SOBRE_PEDIDO, entregada=False,
+    ).select_related('cliente').order_by('fecha_entrega_estimada')[:8]
 
     nombres_meses = ('Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic')
     hoy = timezone.localdate()
@@ -266,6 +332,8 @@ def panel(request):
         'cantidad_productos_bajo_stock': cantidad_productos_bajo_stock,
         'ultima_venta': ultima_venta,
         'movimientos': movimientos, 'creditos': creditos,
+        'compras_pendientes': compras_pendientes,
+        'entregas_pendientes': entregas_pendientes,
         'labels_flujo': labels,
         'entradas_cop': series[Monedas.COP],
         'entradas_usd': series[Monedas.USD],
@@ -297,12 +365,14 @@ def configuracion(request):
     return render(request, 'tienda/configuracion.html', {
         'cuentas': cuentas,
         'productos': ProductoTienda.objects.select_related(
-            'categoria', 'subcategoria', 'marca', 'linea_modelo', 'disciplina'
+            'categoria', 'subcategoria', 'marca', 'linea_modelo', 'disciplina',
+            'proveedor_catalogo',
         ),
         'categorias': CategoriaProducto.objects.prefetch_related('subcategorias'),
         'marcas': MarcaProducto.objects.prefetch_related('lineas_modelos'),
         'lineas_modelos': LineaModeloProducto.objects.select_related('marca'),
         'disciplinas_producto': DisciplinaProducto.objects.all(),
+        'proveedores': ProveedorTienda.objects.all(),
         'categorias_contables': CategoriaMovimientoTienda.objects.all(),
         'clientes': ClienteTienda.objects.all()[:30],
     })
@@ -433,6 +503,30 @@ def disciplina_producto(request, disciplina_id=None):
 
 
 @staff_member_required
+def proveedor_tienda(request, proveedor_id=None):
+    instancia = (
+        get_object_or_404(ProveedorTienda, id=proveedor_id)
+        if proveedor_id else None
+    )
+    form = ProveedorTiendaForm(request.POST or None, instance=instancia)
+    if request.method == 'POST' and form.is_valid():
+        guardado = form.save()
+        messages.success(
+            request,
+            f'Proveedor "{guardado.nombre}" guardado correctamente.',
+        )
+        return redirect('tienda:configuracion')
+    return _render_formulario(
+        request,
+        form,
+        'Editar proveedor' if instancia else 'Nuevo proveedor',
+        'fa-truck-field',
+        'Guardar proveedor',
+        volver_url='tienda:configuracion',
+    )
+
+
+@staff_member_required
 def lineas_modelos_por_marca(request):
     marca_id = request.GET.get('marca', '')
     actual_id = request.GET.get('actual', '')
@@ -453,6 +547,23 @@ def lineas_modelos_por_marca(request):
 
 
 @staff_member_required
+def subcategorias_por_categoria(request):
+    categoria_id = request.GET.get('categoria', '')
+    actual_id = request.GET.get('actual', '')
+    subcategorias = SubcategoriaProducto.objects.none()
+    if categoria_id.isdigit():
+        filtro_estado = Q(activa=True)
+        if actual_id.isdigit():
+            filtro_estado |= Q(pk=actual_id)
+        subcategorias = SubcategoriaProducto.objects.filter(
+            categoria_id=categoria_id
+        ).filter(filtro_estado).order_by('nombre')
+    return JsonResponse({'resultados': [
+        {'id': item.id, 'nombre': item.nombre} for item in subcategorias
+    ]})
+
+
+@staff_member_required
 def cliente(request, cliente_id=None):
     instancia = get_object_or_404(ClienteTienda, id=cliente_id) if cliente_id else None
     form = ClienteTiendaForm(request.POST or None, instance=instancia)
@@ -467,7 +578,9 @@ def cliente(request, cliente_id=None):
 @staff_member_required
 def producto(request, producto_id=None):
     instancia = get_object_or_404(ProductoTienda, id=producto_id) if producto_id else None
-    form = ProductoTiendaForm(request.POST or None, instance=instancia)
+    form = ProductoTiendaForm(
+        request.POST or None, request.FILES or None, instance=instancia
+    )
     if request.method == 'POST' and form.is_valid():
         creando = instancia is None
         guardado = form.save(commit=False)
@@ -512,7 +625,8 @@ def registrar_venta(request):
         with transaction.atomic():
             item = ProductoTienda.objects.select_for_update().get(id=form.cleaned_data['producto'].id, activo=True)
             cantidad = form.cleaned_data['cantidad']
-            if cantidad > item.stock:
+            sobre_pedido = form.cleaned_data['tipo_entrega'] == VentaTienda.TiposEntrega.SOBRE_PEDIDO
+            if not sobre_pedido and cantidad > item.stock:
                 form.add_error('cantidad', f'No hay inventario suficiente. Disponibles: {item.stock}.')
             else:
                 subtotal = item.precio_venta * cantidad
@@ -530,15 +644,20 @@ def registrar_venta(request):
                         numero_documento=form.cleaned_data['comprador_numero_documento'],
                         telefono_whatsapp=form.cleaned_data.get('comprador_whatsapp', ''),
                         correo=form.cleaned_data.get('comprador_correo', ''),
+                        direccion=form.cleaned_data.get('comprador_direccion', ''),
                         acepta_whatsapp=form.cleaned_data.get('comprador_acepta_whatsapp', False),
                     )
                 venta = VentaTienda.objects.create(
                     cliente=cliente_venta, modalidad=modalidad,
                     estado=VentaTienda.Estados.PAGADA if modalidad == VentaTienda.Modalidades.CONTADO else VentaTienda.Estados.PENDIENTE,
-                    moneda=item.moneda, subtotal=subtotal, descuento=descuento, total=total,
+                    moneda=form.cleaned_data['moneda'], subtotal=subtotal, descuento=descuento, total=total,
                     saldo_pendiente=total if modalidad == VentaTienda.Modalidades.CREDITO else 0,
                     fecha_vencimiento=form.cleaned_data.get('fecha_vencimiento'),
                     numero_cuotas=form.cleaned_data.get('numero_cuotas') or 1,
+                    tipo_entrega=form.cleaned_data['tipo_entrega'],
+                    fecha_entrega_estimada=form.cleaned_data.get('fecha_entrega_estimada'),
+                    entregada=not sobre_pedido,
+                    fecha_entrega_real=None if sobre_pedido else timezone.now(),
                     observaciones=form.cleaned_data['observaciones'], registrado_por=request.user,
                 )
                 DetalleVentaTienda.objects.create(
@@ -555,13 +674,16 @@ def registrar_venta(request):
                         cantidad=cantidad, costo_unitario=item.costo_unitario,
                         observaciones=form.cleaned_data['observaciones'], registrado_por=request.user,
                     )
-                item.stock -= cantidad
-                item.save(update_fields=['stock', 'actualizado'])
+                if not sobre_pedido:
+                    item.stock -= cantidad
+                    item.save(update_fields=['stock', 'actualizado'])
         if venta:
             messages.success(
                 request,
                 f'Venta registrada: {item.nombre_variante} ({cantidad} unidad{"es" if cantidad != 1 else ""}). '
-                f'Total: {_valor_tienda(total)} {item.moneda}. Inventario restante: {item.stock}. '
+                f'Total: {_valor_tienda(total)} {item.moneda}. '
+                + (f'Entrega pendiente para {venta.fecha_entrega_estimada:%d/%m/%Y}. ' if sobre_pedido else f'Inventario restante: {item.stock}. ')
+                +
                 f'Comprobante: {venta.numero}.',
             )
             if venta.cliente and venta.cliente.correo:
@@ -595,6 +717,7 @@ def registrar_venta(request):
         {
             'form': form,
             'productos_vista_previa': productos_vista_previa,
+            'compradores_vista_previa': _datos_compradores_venta(),
         },
     )
 
@@ -606,15 +729,29 @@ def registrar_compra(request):
         with transaction.atomic():
             item = ProductoTienda.objects.select_for_update().get(id=form.cleaned_data['producto'].id, activo=True)
             cantidad, costo_nuevo = form.cleaned_data['cantidad'], form.cleaned_data['costo_unitario']
-            total = costo_nuevo * cantidad
-            cuenta_tienda = form.cleaned_data['cuenta']
-            MovimientoTienda.objects.create(
-                cuenta=cuenta_tienda, tipo=MovimientoTienda.Tipos.EGRESO,
-                origen=MovimientoTienda.Origenes.COMPRA, concepto=f'Compra - {item.nombre_variante}',
-                valor=total, moneda=cuenta_tienda.moneda, producto=item, cantidad=cantidad,
-                costo_unitario=costo_nuevo, observaciones=form.cleaned_data['observaciones'],
-                registrado_por=request.user,
+            total = form.cleaned_data['total_compra']
+            abono = form.cleaned_data['abono_inicial']
+            compra = CompraProveedorTienda.objects.create(
+                proveedor=item.proveedor_catalogo, producto=item, cantidad=cantidad,
+                costo_unitario=costo_nuevo, total=total, moneda=item.moneda,
+                modalidad=form.cleaned_data['modalidad'],
+                estado=(CompraProveedorTienda.Estados.PAGADA if abono == total else
+                        CompraProveedorTienda.Estados.PARCIAL if abono else CompraProveedorTienda.Estados.PENDIENTE),
+                abono_inicial=abono, saldo_pendiente=total - abono,
+                fecha_vencimiento=form.cleaned_data.get('fecha_vencimiento'),
+                numero_cuotas=form.cleaned_data.get('numero_cuotas') or 1,
+                observaciones=form.cleaned_data['observaciones'], registrado_por=request.user,
             )
+            if abono:
+                cuenta_tienda = form.cleaned_data['cuenta']
+                MovimientoTienda.objects.create(
+                    cuenta=cuenta_tienda, tipo=MovimientoTienda.Tipos.EGRESO,
+                    origen=MovimientoTienda.Origenes.COMPRA, concepto=f'Pago compra {compra.numero}',
+                    valor=abono, moneda=cuenta_tienda.moneda, producto=item, compra=compra,
+                    cantidad=cantidad, costo_unitario=costo_nuevo,
+                    observaciones=form.cleaned_data['observaciones'], registrado_por=request.user,
+                )
+            _crear_cuotas_compra(compra)
             stock_anterior = item.stock
             unidades_totales = stock_anterior + cantidad
             item.costo_unitario = (
@@ -627,9 +764,82 @@ def registrar_compra(request):
                 stock_anterior=stock_anterior, stock_nuevo=item.stock, costo_unitario=costo_nuevo,
                 motivo='Entrada automática por compra.', registrado_por=request.user,
             )
-        messages.success(request, f'Compra registrada. Nuevo costo promedio: {_valor_tienda(item.costo_unitario)} {item.moneda}.')
+        messages.success(request, f'Compra {compra.numero} registrada por {_valor_tienda(total)} {item.moneda}. Saldo pendiente: {_valor_tienda(compra.saldo_pendiente)} {item.moneda}.')
         return redirect('tienda:panel')
-    return _render_formulario(request, form, 'Registrar compra', 'fa-boxes-stacked', 'Registrar compra', 'btn-warning')
+    productos = {str(p.pk): {'costo': str(p.costo_unitario), 'moneda': p.moneda} for p in form.fields['producto'].queryset}
+    return render(request, 'tienda/compra_formulario.html', {'form': form, 'productos_compra': productos})
+
+
+@staff_member_required
+def compras_credito(request):
+    compras = CompraProveedorTienda.objects.filter(saldo_pendiente__gt=0).select_related(
+        'proveedor', 'producto'
+    ).prefetch_related('cuotas').order_by('fecha_vencimiento')
+    return render(request, 'tienda/compras_credito.html', {'compras': compras})
+
+
+@staff_member_required
+def registrar_abono_compra(request, compra_id):
+    compra = get_object_or_404(CompraProveedorTienda, pk=compra_id, saldo_pendiente__gt=0)
+    form = AbonoCompraForm(request.POST or None, compra=compra)
+    if request.method == 'POST' and form.is_valid():
+        with transaction.atomic():
+            compra = CompraProveedorTienda.objects.select_for_update().get(pk=compra.pk)
+            cuota = CuotaCompraTienda.objects.select_for_update().get(pk=form.cleaned_data['cuota'].pk)
+            valor = form.cleaned_data['valor']
+            movimiento = MovimientoTienda.objects.create(
+                cuenta=form.cleaned_data['cuenta'], tipo=MovimientoTienda.Tipos.EGRESO,
+                origen=MovimientoTienda.Origenes.COMPRA, concepto=f'Abono compra {compra.numero}',
+                valor=valor, moneda=compra.moneda, producto=compra.producto, compra=compra,
+                observaciones=form.cleaned_data['observaciones'], registrado_por=request.user,
+            )
+            restante = valor
+            cuotas = list(compra.cuotas.select_for_update().filter(saldo__gt=0).order_by('fecha_vencimiento', 'numero'))
+            if cuota in cuotas:
+                cuotas.remove(cuota)
+                cuotas.insert(0, cuota)
+            for item_cuota in cuotas:
+                if restante <= 0:
+                    break
+                aplicado = min(restante, item_cuota.saldo)
+                item_cuota.saldo -= aplicado
+                item_cuota.estado = (CuotaCompraTienda.Estados.PAGADA if item_cuota.saldo == 0 else CuotaCompraTienda.Estados.PARCIAL)
+                item_cuota.save(update_fields=['saldo', 'estado'])
+                restante -= aplicado
+            compra.actualizar_saldo()
+        messages.success(request, f'Pago de {_valor_tienda(movimiento.valor)} {compra.moneda} registrado. Saldo: {_valor_tienda(compra.saldo_pendiente)} {compra.moneda}.')
+        return redirect('tienda:compras_credito')
+    return _render_formulario(request, form, f'Pagar compra {compra.numero}', 'fa-money-check-dollar', 'Registrar pago', volver_url='tienda:compras_credito')
+
+
+@staff_member_required
+@require_POST
+def marcar_venta_entregada(request, venta_id):
+    with transaction.atomic():
+        venta = get_object_or_404(VentaTienda.objects.select_for_update(), pk=venta_id)
+        if venta.tipo_entrega != VentaTienda.TiposEntrega.SOBRE_PEDIDO or venta.entregada:
+            messages.info(request, 'Esta venta no tiene una entrega pendiente.')
+            return redirect('tienda:detalle_venta', venta_id=venta.id)
+        detalles = list(venta.detalles.select_related('producto'))
+        for detalle in detalles:
+            producto = ProductoTienda.objects.select_for_update().get(pk=detalle.producto_id)
+            if producto.stock < detalle.cantidad:
+                messages.error(request, f'No se puede entregar: {producto.nombre_variante} solo tiene {producto.stock} unidades.')
+                return redirect('tienda:detalle_venta', venta_id=venta.id)
+            stock_anterior = producto.stock
+            producto.stock -= detalle.cantidad
+            producto.save(update_fields=['stock', 'actualizado'])
+            AjusteInventario.objects.create(
+                producto=producto, tipo=AjusteInventario.Tipos.SALIDA,
+                cantidad=detalle.cantidad, stock_anterior=stock_anterior,
+                stock_nuevo=producto.stock, costo_unitario=detalle.costo_unitario,
+                motivo=f'Entrega de venta sobre pedido {venta.numero}.', registrado_por=request.user,
+            )
+        venta.entregada = True
+        venta.fecha_entrega_real = timezone.now()
+        venta.save(update_fields=['entregada', 'fecha_entrega_real'])
+    messages.success(request, f'La venta {venta.numero} fue marcada como entregada.')
+    return redirect('tienda:detalle_venta', venta_id=venta.id)
 
 
 @staff_member_required

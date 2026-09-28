@@ -1,6 +1,7 @@
 from datetime import timedelta
 from decimal import Decimal
 from io import BytesIO
+from tempfile import TemporaryDirectory
 
 from django.contrib.auth import get_user_model
 from django.core import mail
@@ -9,6 +10,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from pypdf import PdfReader
+from PIL import Image
 
 from alumnos.models import Alumno
 from finanzas.models import MovimientoFinanciero
@@ -16,9 +18,10 @@ from finanzas.models import MovimientoFinanciero
 from .forms import ProductoTiendaForm, VentaTiendaForm
 from .models import (
     AjusteInventario, AplicacionAbonoCuota, CategoriaMovimientoTienda,
-    CategoriaProducto, ClienteTienda, DisciplinaProducto,
-    CuentaTienda, CuotaVentaTienda, DetalleVentaTienda, MovimientoTienda,
+    CategoriaProducto, ClienteTienda, CompraProveedorTienda, DisciplinaProducto,
+    CuentaTienda, CuotaCompraTienda, CuotaVentaTienda, DetalleVentaTienda, MovimientoTienda,
     LineaModeloProducto, MarcaProducto, ProductoTienda, VentaTienda,
+    ProveedorTienda,
 )
 
 
@@ -82,6 +85,69 @@ class TiendaTests(TestCase):
         self.assertEqual(producto.marca, marca)
         self.assertEqual(producto.linea_modelo, linea)
         self.assertEqual(producto.disciplina, disciplina)
+
+    def test_configura_proveedor_por_codigo_y_carga_foto_del_producto(self):
+        proveedor = ProveedorTienda.objects.create(
+            codigo='PROV-001',
+            nombre='Proveedor Deportivo',
+            contacto='Laura Compras',
+        )
+        imagen = Image.new('RGB', (40, 40), 'red')
+        contenido = BytesIO()
+        imagen.save(contenido, format='PNG')
+        contenido.seek(0)
+
+        with TemporaryDirectory() as media_root, self.settings(MEDIA_ROOT=media_root):
+            response = self.client.post(reverse('tienda:crear_producto'), {
+                'nombre': 'Producto con foto',
+                'codigo_proveedor_seleccionado': proveedor.id,
+                'moneda': 'COP',
+                'costo_unitario': '20000',
+                'precio_venta': '35000',
+                'stock_inicial': '2',
+                'stock_minimo': '0',
+                'activo': 'on',
+                'imagen': SimpleUploadedFile(
+                    'producto.png', contenido.read(), content_type='image/png'
+                ),
+            })
+
+            producto = ProductoTienda.objects.get(nombre='Producto con foto')
+            self.assertRedirects(response, reverse('tienda:configuracion'))
+            self.assertEqual(producto.proveedor_catalogo, proveedor)
+            self.assertEqual(producto.proveedor, 'Proveedor Deportivo')
+            self.assertEqual(producto.codigo_proveedor, 'PROV-001')
+            self.assertTrue(producto.imagen.name.startswith('tienda/productos/'))
+
+    def test_configuracion_permite_crear_y_conservar_proveedor_inactivo(self):
+        response = self.client.post(reverse('tienda:crear_proveedor'), {
+            'codigo': 'abc-99',
+            'nombre': 'distribuciones sur',
+            'activo': 'on',
+        })
+        proveedor = ProveedorTienda.objects.get()
+        self.assertRedirects(response, reverse('tienda:configuracion'))
+        self.assertEqual(proveedor.codigo, 'ABC-99')
+        self.assertEqual(proveedor.nombre, 'Distribuciones Sur')
+
+        proveedor.activo = False
+        proveedor.save(update_fields=['activo'])
+        producto = ProductoTienda.objects.create(
+            nombre='Producto histórico proveedor',
+            proveedor_catalogo=proveedor,
+            costo_unitario=1,
+            precio_venta=2,
+        )
+        self.assertNotIn(
+            proveedor,
+            ProductoTiendaForm().fields['proveedor_catalogo'].queryset,
+        )
+        self.assertIn(
+            proveedor,
+            ProductoTiendaForm(instance=producto).fields[
+                'proveedor_catalogo'
+            ].queryset,
+        )
 
     def test_lineas_modelos_se_filtran_por_marca(self):
         marca_uno = MarcaProducto.objects.create(nombre='Marca uno')
@@ -581,6 +647,15 @@ class TiendaTests(TestCase):
         self.assertContains(formulario, 'Estudiantes de la academia')
         self.assertContains(formulario, 'Laura Estudiante')
         self.assertContains(formulario, f'value="alumno:{alumno.id}"')
+        datos = formulario.context['compradores_vista_previa'][
+            f'alumno:{alumno.id}'
+        ]
+        self.assertEqual(datos['nombres'], 'Laura Estudiante')
+        self.assertEqual(datos['numero_documento'], alumno.documento)
+        self.assertEqual(datos['whatsapp'], '3007654321')
+        self.assertEqual(datos['correo'], 'laura@example.com')
+        self.assertEqual(datos['direccion'], 'Dirección del estudiante')
+        self.assertContains(formulario, 'Datos cargados automáticamente')
 
         response = self.client.post(reverse('tienda:registrar_venta'), {
             'producto': self.producto.id,
@@ -865,3 +940,58 @@ class TiendaTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(mail.outbox), 1)
         self.assertContains(response, 'Comprobante enviado a reenvio@example.com')
+
+    def test_compra_credito_crea_cuotas_y_solo_egresa_el_abono(self):
+        vencimiento = timezone.localdate() + timedelta(days=10)
+        response = self.client.post(reverse('tienda:registrar_compra'), {
+            'producto': self.producto.id, 'cantidad': 4,
+            'costo_unitario': '50000', 'modalidad': 'CREDITO',
+            'abono_inicial': '50000', 'cuenta': self.cuenta.id,
+            'numero_cuotas': 3, 'fecha_vencimiento': vencimiento.isoformat(),
+            'observaciones': 'Compra financiada',
+        })
+
+        self.assertRedirects(response, reverse('tienda:panel'))
+        compra = CompraProveedorTienda.objects.get()
+        self.assertEqual(compra.total, Decimal('200000'))
+        self.assertEqual(compra.saldo_pendiente, Decimal('150000'))
+        self.assertEqual(compra.cuotas.count(), 3)
+        self.assertEqual(sum(compra.cuotas.values_list('valor', flat=True)), Decimal('150000'))
+        self.assertEqual(MovimientoTienda.objects.get().valor, Decimal('50000'))
+        self.producto.refresh_from_db()
+        self.assertEqual(self.producto.stock, 14)
+
+    def test_venta_sobre_pedido_no_descuenta_hasta_entregar(self):
+        response = self.client.post(reverse('tienda:registrar_venta'), {
+            'moneda': 'COP', 'producto': self.producto.id, 'cantidad': 12,
+            'modalidad': 'CONTADO', 'cuenta': self.cuenta.id,
+            'tipo_entrega': 'SOBRE_PEDIDO',
+            'fecha_entrega_estimada': (timezone.localdate() + timedelta(days=5)).isoformat(),
+            'descuento_porcentaje': 0,
+        })
+        venta = VentaTienda.objects.get()
+        self.assertRedirects(response, reverse('tienda:detalle_venta', args=[venta.id]))
+        self.producto.refresh_from_db()
+        self.assertEqual(self.producto.stock, 10)
+        self.assertFalse(venta.entregada)
+
+        # Sigue pendiente si todavía no existe inventario suficiente.
+        response = self.client.post(reverse('tienda:marcar_venta_entregada', args=[venta.id]))
+        venta.refresh_from_db()
+        self.assertFalse(venta.entregada)
+        self.assertRedirects(response, reverse('tienda:detalle_venta', args=[venta.id]))
+
+    def test_subcategorias_se_consultan_por_categoria(self):
+        categoria = CategoriaProducto.objects.create(codigo='UNI-TEST', nombre='Uniformes prueba')
+        otra = CategoriaProducto.objects.create(codigo='ACC-TEST', nombre='Accesorios prueba')
+        subcategoria = categoria.subcategorias.create(codigo='KIM', nombre='Kimonos')
+        otra.subcategorias.create(codigo='BOL', nombre='Bolsos')
+
+        response = self.client.get(reverse('tienda:subcategorias_por_categoria'), {
+            'categoria': categoria.id,
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['resultados'], [
+            {'id': subcategoria.id, 'nombre': 'Kimonos'},
+        ])

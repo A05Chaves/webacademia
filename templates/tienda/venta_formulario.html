@@ -3,7 +3,7 @@
 <form method="post" class="card bg-dark text-light border-secondary"><div class="card-body p-4">{% csrf_token %}
 {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
 <h5 class="border-bottom pb-2 mb-3">Producto y valor</h5><div class="row g-3 mb-4">
-{% include 'tienda/venta_campo.html' with field=form.producto col='col-md-8' %}{% include 'tienda/venta_campo.html' with field=form.cantidad col='col-md-4' %}{% include 'tienda/venta_campo.html' with field=form.descuento_porcentaje col='col-md-4' %}{% include 'tienda/venta_campo.html' with field=form.modalidad col='col-md-4' %}<div id="bloque-cuenta" class="col-md-4">{% include 'tienda/venta_campo.html' with field=form.cuenta col='' %}</div>{% include 'tienda/venta_campo.html' with field=form.observaciones col='col-12' %}
+{% include 'tienda/venta_campo.html' with field=form.moneda col='col-md-3' %}{% include 'tienda/venta_campo.html' with field=form.producto col='col-md-6' %}{% include 'tienda/venta_campo.html' with field=form.cantidad col='col-md-3' %}{% include 'tienda/venta_campo.html' with field=form.descuento_porcentaje col='col-md-3' %}{% include 'tienda/venta_campo.html' with field=form.modalidad col='col-md-3' %}<div id="bloque-cuenta" class="col-md-3">{% include 'tienda/venta_campo.html' with field=form.cuenta col='' %}</div>{% include 'tienda/venta_campo.html' with field=form.tipo_entrega col='col-md-3' %}<div id="bloque-fecha-entrega" class="col-md-4">{% include 'tienda/venta_campo.html' with field=form.fecha_entrega_estimada col='' %}</div>{% include 'tienda/venta_campo.html' with field=form.observaciones col='col-12' %}
 </div>
 <section id="vista-previa-venta" class="card bg-black border-info mb-4" aria-live="polite">
 <div class="card-header border-info d-flex justify-content-between align-items-center gap-3"><div><h5 class="mb-0"><i class="fa-solid fa-receipt me-2"></i>Vista previa de la factura</h5><small class="text-secondary">Resumen preliminar antes de registrar la venta</small></div><span id="vista-modalidad" class="badge text-bg-info">Contado</span></div>
@@ -17,18 +17,29 @@
 </section>
 <div id="bloque-credito"><h5 class="border-bottom pb-2 mb-3">Condiciones del crédito</h5><div class="row g-3 mb-4">{% include 'tienda/venta_campo.html' with field=form.numero_cuotas col='col-md-6' %}{% include 'tienda/venta_campo.html' with field=form.fecha_vencimiento col='col-md-6' %}</div></div>
 <h5 class="border-bottom pb-2 mb-3">Comprador</h5><div class="row g-3"><div class="col-md-8">{% include 'tienda/venta_campo.html' with field=form.cliente col='' %}</div><div class="col-md-4 d-flex align-items-center"><div class="form-check">{{ form.registrar_comprador }}<label for="{{ form.registrar_comprador.id_for_label }}" class="form-check-label">{{ form.registrar_comprador.label }}</label></div></div></div>
-<div id="comprador-nuevo" class="border rounded p-3 mt-3"><div class="row g-3">{% include 'tienda/venta_campo.html' with field=form.comprador_nombres col='col-md-6' %}{% include 'tienda/venta_campo.html' with field=form.comprador_tipo_documento col='col-md-3' %}{% include 'tienda/venta_campo.html' with field=form.comprador_numero_documento col='col-md-3' %}{% include 'tienda/venta_campo.html' with field=form.comprador_whatsapp col='col-md-6' %}{% include 'tienda/venta_campo.html' with field=form.comprador_correo col='col-md-6' %}<div class="col-12"><div class="form-check">{{ form.comprador_acepta_whatsapp }}<label class="form-check-label" for="{{ form.comprador_acepta_whatsapp.id_for_label }}">{{ form.comprador_acepta_whatsapp.label }}</label></div></div></div></div>
+<div id="comprador-seleccionado" class="alert alert-info mt-3 d-none" aria-live="polite"><div class="d-flex justify-content-between gap-3 flex-wrap"><strong><i class="fa-solid fa-user-check me-1"></i> Datos cargados automáticamente</strong><span id="comprador-origen" class="badge text-bg-info"></span></div><div class="row g-2 mt-1"><div class="col-md-6"><small class="text-secondary">Nombre</small><div id="comprador-resumen-nombre"></div></div><div class="col-md-3"><small class="text-secondary">Documento</small><div id="comprador-resumen-documento"></div></div><div class="col-md-3"><small class="text-secondary">WhatsApp</small><div id="comprador-resumen-whatsapp"></div></div><div class="col-md-6"><small class="text-secondary">Correo</small><div id="comprador-resumen-correo"></div></div><div class="col-md-6"><small class="text-secondary">Dirección</small><div id="comprador-resumen-direccion"></div></div></div></div>
+<div id="comprador-nuevo" class="border rounded p-3 mt-3"><div class="row g-3">{% include 'tienda/venta_campo.html' with field=form.comprador_nombres col='col-md-6' %}{% include 'tienda/venta_campo.html' with field=form.comprador_tipo_documento col='col-md-3' %}{% include 'tienda/venta_campo.html' with field=form.comprador_numero_documento col='col-md-3' %}{% include 'tienda/venta_campo.html' with field=form.comprador_whatsapp col='col-md-6' %}{% include 'tienda/venta_campo.html' with field=form.comprador_correo col='col-md-6' %}{% include 'tienda/venta_campo.html' with field=form.comprador_direccion col='col-12' %}<div class="col-12"><div class="form-check">{{ form.comprador_acepta_whatsapp }}<label class="form-check-label" for="{{ form.comprador_acepta_whatsapp.id_for_label }}">{{ form.comprador_acepta_whatsapp.label }}</label></div></div></div></div>
 <div class="d-flex justify-content-end gap-2 mt-4"><a href="{% url 'tienda:panel' %}" class="btn btn-outline-light">Cancelar</a><button class="btn btn-success"><i class="fa-solid fa-floppy-disk"></i> Registrar venta</button></div></div></form>
 {{ productos_vista_previa|json_script:"productos-venta-data" }}
+{{ compradores_vista_previa|json_script:"compradores-venta-data" }}
 <script>
 const productosVenta = JSON.parse(document.getElementById('productos-venta-data').textContent);
+const compradoresVenta = JSON.parse(document.getElementById('compradores-venta-data').textContent);
 const campoProducto = document.getElementById('id_producto');
+const campoMoneda = document.getElementById('id_moneda');
 const campoCantidad = document.getElementById('id_cantidad');
 const campoDescuento = document.getElementById('id_descuento_porcentaje');
 const campoModalidad = document.getElementById('id_modalidad');
+const campoEntrega = document.getElementById('id_tipo_entrega');
+const campoCuenta = document.getElementById('id_cuenta');
 const campoCliente = document.getElementById('id_cliente');
 const campoNuevoComprador = document.getElementById('id_registrar_comprador');
 const campoNombreComprador = document.getElementById('id_comprador_nombres');
+const campoTipoDocumentoComprador = document.getElementById('id_comprador_tipo_documento');
+const campoDocumentoComprador = document.getElementById('id_comprador_numero_documento');
+const campoWhatsappComprador = document.getElementById('id_comprador_whatsapp');
+const campoCorreoComprador = document.getElementById('id_comprador_correo');
+const campoDireccionComprador = document.getElementById('id_comprador_direccion');
 
 function numeroSeguro(valor, predeterminado = 0) {
     const texto = String(valor || '').trim();
@@ -55,6 +66,25 @@ function nombreComprador() {
     }
     const opcion = campoCliente.options[campoCliente.selectedIndex];
     return campoCliente.value && opcion ? opcion.text.trim() : 'Consumidor final';
+}
+
+function actualizarDatosComprador() {
+    const datos = compradoresVenta[campoCliente.value];
+    const resumen = document.getElementById('comprador-seleccionado');
+    resumen.classList.toggle('d-none', !datos || campoNuevoComprador.checked);
+    if (!datos || campoNuevoComprador.checked) return;
+    campoNombreComprador.value = datos.nombres || '';
+    campoTipoDocumentoComprador.value = datos.tipo_documento || '';
+    campoDocumentoComprador.value = datos.numero_documento || '';
+    campoWhatsappComprador.value = datos.whatsapp || '';
+    campoCorreoComprador.value = datos.correo || '';
+    campoDireccionComprador.value = datos.direccion || '';
+    document.getElementById('comprador-origen').textContent = datos.origen || '';
+    document.getElementById('comprador-resumen-nombre').textContent = datos.nombres || '—';
+    document.getElementById('comprador-resumen-documento').textContent = `${datos.tipo_documento || ''} ${datos.numero_documento || ''}`.trim() || '—';
+    document.getElementById('comprador-resumen-whatsapp').textContent = datos.whatsapp || '—';
+    document.getElementById('comprador-resumen-correo').textContent = datos.correo || '—';
+    document.getElementById('comprador-resumen-direccion').textContent = datos.direccion || '—';
 }
 
 function actualizarVistaPrevia() {
@@ -85,12 +115,14 @@ function actualizarVistaPrevia() {
 
     const stock = Number.parseInt(producto.stock, 10);
     const vistaStock = document.getElementById('vista-stock');
-    vistaStock.textContent = cantidad > stock ? `Inventario insuficiente: hay ${stock} unidad${stock === 1 ? '' : 'es'} disponible${stock === 1 ? '' : 's'}.` : `Inventario después de la venta: ${stock - cantidad}`;
-    vistaStock.classList.toggle('text-danger', cantidad > stock);
-    vistaStock.classList.toggle('text-secondary', cantidad <= stock);
+    const sobrePedido = campoEntrega.value === 'SOBRE_PEDIDO';
+    vistaStock.textContent = sobrePedido ? 'Venta sobre pedido: el inventario se descontará cuando se marque como entregada.' : (cantidad > stock ? `Inventario insuficiente: hay ${stock} unidad${stock === 1 ? '' : 'es'} disponible${stock === 1 ? '' : 's'}.` : `Inventario después de la venta: ${stock - cantidad}`);
+    vistaStock.classList.toggle('text-danger', !sobrePedido && cantidad > stock);
+    vistaStock.classList.toggle('text-secondary', sobrePedido || cantidad <= stock);
 }
 
-function actualizarVenta(){const credito=campoModalidad.value==='CREDITO';document.getElementById('bloque-credito').classList.toggle('d-none',!credito);document.getElementById('bloque-cuenta').classList.toggle('d-none',credito);const nuevo=campoNuevoComprador.checked;document.getElementById('comprador-nuevo').classList.toggle('d-none',!nuevo);campoCliente.disabled=nuevo;actualizarVistaPrevia();}
-[campoProducto, campoCantidad, campoDescuento, campoCliente, campoNombreComprador].forEach(campo => {campo.addEventListener('change', actualizarVistaPrevia);campo.addEventListener('input', actualizarVistaPrevia);});
-campoModalidad.addEventListener('change',actualizarVenta);campoNuevoComprador.addEventListener('change',actualizarVenta);actualizarVenta();
+function filtrarMoneda(){const moneda=campoMoneda.value;Array.from(campoProducto.options).forEach((o,i)=>{if(!i)return;const p=productosVenta[o.value];o.hidden=p&&p.moneda!==moneda;o.disabled=o.hidden});Array.from(campoCuenta.options).forEach((o,i)=>{if(!i)return;o.hidden=!o.text.includes(`(${moneda})`);o.disabled=o.hidden});if(campoProducto.selectedOptions[0]?.disabled)campoProducto.value='';if(campoCuenta.selectedOptions[0]?.disabled)campoCuenta.value='';}
+function actualizarVenta(){filtrarMoneda();const credito=campoModalidad.value==='CREDITO';document.getElementById('bloque-credito').classList.toggle('d-none',!credito);document.getElementById('bloque-cuenta').classList.toggle('d-none',credito);document.getElementById('bloque-fecha-entrega').classList.toggle('d-none',campoEntrega.value!=='SOBRE_PEDIDO');const nuevo=campoNuevoComprador.checked;document.getElementById('comprador-nuevo').classList.toggle('d-none',!nuevo);campoCliente.disabled=nuevo;actualizarDatosComprador();actualizarVistaPrevia();}
+[campoProducto, campoCantidad, campoDescuento, campoCliente, campoNombreComprador, campoEntrega].forEach(campo => {campo.addEventListener('change', actualizarVistaPrevia);campo.addEventListener('input', actualizarVistaPrevia);});
+campoCliente.addEventListener('change', actualizarDatosComprador);[campoModalidad,campoMoneda,campoEntrega].forEach(c=>c.addEventListener('change',actualizarVenta));campoNuevoComprador.addEventListener('change',actualizarVenta);actualizarVenta();
 </script>{% endblock %}

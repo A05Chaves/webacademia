@@ -99,6 +99,24 @@ class DisciplinaProducto(models.Model):
         return self.nombre
 
 
+class ProveedorTienda(models.Model):
+    codigo = models.CharField(max_length=60, unique=True)
+    nombre = models.CharField(max_length=150, unique=True)
+    contacto = models.CharField(max_length=150, blank=True)
+    telefono = models.CharField(max_length=30, blank=True)
+    correo = models.EmailField(blank=True)
+    activo = models.BooleanField(default=True)
+    creado = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-activo', 'nombre']
+        verbose_name = 'Proveedor de tienda'
+        verbose_name_plural = 'Proveedores de tienda'
+
+    def __str__(self):
+        return f'{self.codigo} - {self.nombre}'
+
+
 class CuentaTienda(models.Model):
     class Tipos(models.TextChoices):
         EFECTIVO = 'EFECTIVO', 'Efectivo'
@@ -284,8 +302,20 @@ class ProductoTienda(models.Model):
     material = models.CharField(max_length=120, blank=True)
     peso = models.DecimalField(
         max_digits=8, decimal_places=3, null=True, blank=True)
+    imagen = models.ImageField(
+        upload_to='tienda/productos/', null=True, blank=True,
+        verbose_name='Foto del producto',
+    )
     url_imagen = models.URLField(blank=True)
     ubicacion = models.CharField(max_length=100, blank=True)
+    proveedor_catalogo = models.ForeignKey(
+        ProveedorTienda,
+        on_delete=models.PROTECT,
+        related_name='productos',
+        null=True,
+        blank=True,
+        verbose_name='Proveedor',
+    )
     proveedor = models.CharField(max_length=150, blank=True)
     codigo_proveedor = models.CharField(max_length=60, blank=True)
     moneda = models.CharField(
@@ -334,6 +364,9 @@ class ProductoTienda(models.Model):
     def save(self, *args, **kwargs):
         self.referencia = self.referencia or None
         self.codigo_barras = self.codigo_barras or None
+        if self.proveedor_catalogo_id:
+            self.proveedor = self.proveedor_catalogo.nombre
+            self.codigo_proveedor = self.proveedor_catalogo.codigo
         if self.activo:
             self.fecha_inactivacion = None
             self.motivo_inactivacion = ''
@@ -360,6 +393,10 @@ class VentaTienda(models.Model):
         PENDIENTE = 'PENDIENTE', 'Pendiente'
         PARCIAL = 'PARCIAL', 'Pago parcial'
         ANULADA = 'ANULADA', 'Anulada'
+
+    class TiposEntrega(models.TextChoices):
+        INMEDIATA = 'INMEDIATA', 'Entrega inmediata'
+        SOBRE_PEDIDO = 'SOBRE_PEDIDO', 'Sobre pedido'
 
     numero = models.CharField(max_length=24, unique=True, blank=True)
     tipo_registro = models.CharField(
@@ -390,6 +427,12 @@ class VentaTienda(models.Model):
         default=1,
         validators=[MinValueValidator(1)],
     )
+    tipo_entrega = models.CharField(
+        max_length=20, choices=TiposEntrega.choices, default=TiposEntrega.INMEDIATA,
+    )
+    fecha_entrega_estimada = models.DateField(null=True, blank=True)
+    entregada = models.BooleanField(default=True)
+    fecha_entrega_real = models.DateTimeField(null=True, blank=True)
     observaciones = models.TextField(blank=True)
     email_enviado_a = models.EmailField(blank=True)
     fecha_envio_correo = models.DateTimeField(null=True, blank=True)
@@ -512,6 +555,97 @@ class CuotaVentaTienda(models.Model):
         return f'{self.venta.numero} - cuota {self.numero}'
 
 
+class CompraProveedorTienda(models.Model):
+    class Modalidades(models.TextChoices):
+        CONTADO = 'CONTADO', 'Contado'
+        CREDITO = 'CREDITO', 'Crédito'
+
+    class Estados(models.TextChoices):
+        PAGADA = 'PAGADA', 'Pagada'
+        PENDIENTE = 'PENDIENTE', 'Pendiente'
+        PARCIAL = 'PARCIAL', 'Pago parcial'
+
+    numero = models.CharField(max_length=24, unique=True, blank=True)
+    proveedor = models.ForeignKey(
+        ProveedorTienda, on_delete=models.PROTECT, related_name='compras',
+        null=True, blank=True,
+    )
+    producto = models.ForeignKey(
+        ProductoTienda, on_delete=models.PROTECT, related_name='compras_proveedor'
+    )
+    cantidad = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    costo_unitario = models.DecimalField(max_digits=14, decimal_places=2)
+    total = models.DecimalField(max_digits=14, decimal_places=2)
+    moneda = models.CharField(max_length=3, choices=Monedas.choices)
+    modalidad = models.CharField(max_length=10, choices=Modalidades.choices)
+    estado = models.CharField(max_length=12, choices=Estados.choices)
+    abono_inicial = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    saldo_pendiente = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    fecha_vencimiento = models.DateField(null=True, blank=True)
+    numero_cuotas = models.PositiveSmallIntegerField(default=1)
+    fecha = models.DateTimeField(default=timezone.now)
+    observaciones = models.TextField(blank=True)
+    registrado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='compras_tienda_registradas',
+    )
+
+    class Meta:
+        ordering = ['-fecha', '-id']
+        verbose_name = 'Compra a proveedor'
+        verbose_name_plural = 'Compras a proveedores'
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if not self.numero:
+            self.numero = f'CP-{self.fecha:%Y%m}-{self.pk:06d}'
+            super().save(update_fields=['numero'])
+
+    @property
+    def esta_vencida(self):
+        return self.saldo_pendiente > 0 and self.fecha_vencimiento and self.fecha_vencimiento < timezone.localdate()
+
+    def actualizar_saldo(self):
+        pagado = self.movimientos.filter(
+            tipo=MovimientoTienda.Tipos.EGRESO
+        ).aggregate(total=models.Sum('valor'))['total'] or Decimal('0')
+        self.saldo_pendiente = max(self.total - pagado, Decimal('0'))
+        self.estado = (
+            self.Estados.PAGADA if self.saldo_pendiente == 0
+            else self.Estados.PARCIAL if pagado else self.Estados.PENDIENTE
+        )
+        self.save(update_fields=['saldo_pendiente', 'estado'])
+
+    def __str__(self):
+        return self.numero or f'Compra {self.pk}'
+
+
+class CuotaCompraTienda(models.Model):
+    class Estados(models.TextChoices):
+        PENDIENTE = 'PENDIENTE', 'Pendiente'
+        PARCIAL = 'PARCIAL', 'Pago parcial'
+        PAGADA = 'PAGADA', 'Pagada'
+
+    compra = models.ForeignKey(
+        CompraProveedorTienda, on_delete=models.CASCADE, related_name='cuotas'
+    )
+    numero = models.PositiveSmallIntegerField()
+    fecha_vencimiento = models.DateField()
+    valor = models.DecimalField(max_digits=14, decimal_places=2)
+    saldo = models.DecimalField(max_digits=14, decimal_places=2)
+    estado = models.CharField(max_length=10, choices=Estados.choices, default=Estados.PENDIENTE)
+
+    class Meta:
+        ordering = ['fecha_vencimiento', 'numero']
+        constraints = [models.UniqueConstraint(
+            fields=['compra', 'numero'], name='numero_cuota_unico_por_compra'
+        )]
+
+    @property
+    def esta_vencida(self):
+        return self.saldo > 0 and self.fecha_vencimiento < timezone.localdate()
+
+
 class MovimientoTienda(models.Model):
     class Tipos(models.TextChoices):
         INGRESO = 'INGRESO', 'Ingreso'
@@ -550,6 +684,10 @@ class MovimientoTienda(models.Model):
         VentaTienda, on_delete=models.PROTECT, related_name='movimientos',
         null=True, blank=True,
     )
+    compra = models.ForeignKey(
+        CompraProveedorTienda, on_delete=models.PROTECT, related_name='movimientos',
+        null=True, blank=True,
+    )
     cantidad = models.PositiveIntegerField(null=True, blank=True)
     costo_unitario = models.DecimalField(
         max_digits=14, decimal_places=2, null=True, blank=True)
@@ -584,6 +722,9 @@ class MovimientoTienda(models.Model):
         if self.venta_id and self.moneda != self.venta.moneda:
             raise ValidationError(
                 {'venta': 'La moneda del abono debe coincidir con la venta.'})
+        if self.compra_id and self.moneda != self.compra.moneda:
+            raise ValidationError(
+                {'compra': 'La moneda del pago debe coincidir con la compra.'})
 
     def save(self, *args, **kwargs):
         if self.cuenta_id:

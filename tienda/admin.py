@@ -2,10 +2,10 @@ from django.contrib import admin
 
 from .models import (
     AjusteInventario, AplicacionAbonoCuota, CategoriaMovimientoTienda,
-    CategoriaProducto, ClienteTienda,
-    CuentaTienda, CuotaVentaTienda, DetalleVentaTienda, DisciplinaProducto,
+    CategoriaProducto, ClienteTienda, CompraProveedorTienda,
+    CuentaTienda, CuotaCompraTienda, CuotaVentaTienda, DetalleVentaTienda, DisciplinaProducto,
     LineaModeloProducto, MarcaProducto, MovimientoTienda, ProductoTienda,
-    SubcategoriaProducto, VentaTienda,
+    ProveedorTienda, SubcategoriaProducto, VentaTienda,
 )
 
 
@@ -55,8 +55,11 @@ admin.site.register(SubcategoriaProducto)
 admin.site.register(MarcaProducto)
 admin.site.register(LineaModeloProducto)
 admin.site.register(DisciplinaProducto)
+admin.site.register(ProveedorTienda)
 admin.site.register(ClienteTienda)
 admin.site.register(VentaTienda)
 admin.site.register(DetalleVentaTienda)
 admin.site.register(CuotaVentaTienda)
+admin.site.register(CompraProveedorTienda)
+admin.site.register(CuotaCompraTienda)
 admin.site.register(AplicacionAbonoCuota)

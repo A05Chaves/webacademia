@@ -6,19 +6,23 @@ from django.utils import timezone
 from django.utils.formats import number_format
 
 from alumnos.models import Alumno
+from config.file_validation import validate_image
 
 from .models import (
     AjusteInventario,
     CategoriaMovimientoTienda,
     CategoriaProducto,
     ClienteTienda,
+    CompraProveedorTienda,
     CuentaTienda,
     CuotaVentaTienda,
+    CuotaCompraTienda,
     Monedas,
     DisciplinaProducto,
     LineaModeloProducto,
     MarcaProducto,
     ProductoTienda,
+    ProveedorTienda,
     SubcategoriaProducto,
     VentaTienda,
 )
@@ -160,6 +164,18 @@ class DisciplinaProductoForm(BootstrapModelForm):
         fields = ['nombre', 'activa']
 
 
+class ProveedorTiendaForm(BootstrapModelForm):
+    class Meta:
+        model = ProveedorTienda
+        fields = ['codigo', 'nombre', 'contacto', 'telefono', 'correo', 'activo']
+
+    def clean_codigo(self):
+        return self.cleaned_data['codigo'].strip().upper()
+
+    def clean_nombre(self):
+        return self.cleaned_data['nombre'].strip().title()
+
+
 class ClienteTiendaForm(BootstrapModelForm):
     class Meta:
         model = ClienteTienda
@@ -171,6 +187,27 @@ class ClienteTiendaForm(BootstrapModelForm):
 
 
 class ProductoTiendaForm(BootstrapModelForm):
+    class ProveedorPorNombreField(forms.ModelChoiceField):
+        def label_from_instance(self, obj):
+            return obj.nombre
+
+    class ProveedorPorCodigoField(forms.ModelChoiceField):
+        def label_from_instance(self, obj):
+            return obj.codigo
+
+    proveedor_catalogo = ProveedorPorNombreField(
+        queryset=ProveedorTienda.objects.none(),
+        required=False,
+        label='Proveedor',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    codigo_proveedor_seleccionado = ProveedorPorCodigoField(
+        queryset=ProveedorTienda.objects.none(),
+        required=False,
+        label='Código del proveedor',
+        help_text='Al seleccionar el proveedor o su código, el otro campo se completa automáticamente.',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
     stock_inicial = forms.IntegerField(
         min_value=0, initial=0, required=False, label='Inventario inicial',
         help_text='Después se modifica mediante compras, ventas o ajustes.',
@@ -182,7 +219,8 @@ class ProductoTiendaForm(BootstrapModelForm):
             'categoria', 'subcategoria', 'codigo_producto', 'nombre', 'referencia',
             'codigo_barras', 'marca', 'linea_modelo', 'descripcion', 'disciplina',
             'publico', 'genero', 'color', 'talla', 'unidad', 'material', 'peso',
-            'url_imagen', 'ubicacion', 'proveedor', 'codigo_proveedor', 'moneda',
+            'imagen', 'url_imagen', 'ubicacion', 'proveedor_catalogo',
+            'codigo_proveedor_seleccionado', 'moneda',
             'costo_unitario', 'precio_venta', 'stock_minimo', 'activo',
             'motivo_inactivacion',
         ]
@@ -194,6 +232,22 @@ class ProductoTiendaForm(BootstrapModelForm):
         self.fields['moneda'].initial = 'COP'
         self.fields['unidad'].required = False
         self.fields['unidad'].initial = 'Unidad'
+        categoria_id = None
+        if self.is_bound:
+            categoria_id = self.data.get(self.add_prefix('categoria'))
+        elif self.instance.pk:
+            categoria_id = self.instance.categoria_id
+        subcategorias = SubcategoriaProducto.objects.none()
+        if str(categoria_id or '').isdigit():
+            subcategorias = SubcategoriaProducto.objects.filter(
+                categoria_id=categoria_id, activa=True
+            )
+            if self.instance.pk and self.instance.subcategoria_id:
+                subcategorias = SubcategoriaProducto.objects.filter(
+                    Q(categoria_id=categoria_id, activa=True)
+                    | Q(pk=self.instance.subcategoria_id)
+                )
+        self.fields['subcategoria'].queryset = subcategorias
         filtros_actuales = {
             'marca': self.instance.marca_id if self.instance.pk else None,
             'linea_modelo': self.instance.linea_modelo_id if self.instance.pk else None,
@@ -210,6 +264,18 @@ class ProductoTiendaForm(BootstrapModelForm):
             if actual:
                 consulta = modelo.objects.filter(Q(activa=True) | Q(pk=actual))
             self.fields[campo].queryset = consulta
+        proveedor_actual = (
+            self.instance.proveedor_catalogo_id if self.instance.pk else None
+        )
+        proveedores = ProveedorTienda.objects.filter(activo=True)
+        if proveedor_actual:
+            proveedores = ProveedorTienda.objects.filter(
+                Q(activo=True) | Q(pk=proveedor_actual)
+            )
+        self.fields['proveedor_catalogo'].queryset = proveedores
+        self.fields['codigo_proveedor_seleccionado'].queryset = proveedores
+        if proveedor_actual:
+            self.fields['codigo_proveedor_seleccionado'].initial = proveedor_actual
         if self.instance and self.instance.pk:
             self.fields.pop('stock_inicial')
 
@@ -218,6 +284,39 @@ class ProductoTiendaForm(BootstrapModelForm):
 
     def clean_unidad(self):
         return self.cleaned_data.get('unidad') or 'Unidad'
+
+    def clean_imagen(self):
+        imagen = self.cleaned_data.get('imagen')
+        if imagen and hasattr(imagen, 'content_type'):
+            validate_image(imagen)
+        return imagen
+
+    def clean(self):
+        cleaned = super().clean()
+        categoria = cleaned.get('categoria')
+        subcategoria = cleaned.get('subcategoria')
+        if subcategoria and subcategoria.categoria_id != getattr(categoria, 'id', None):
+            self.add_error('subcategoria', 'La subcategoría no pertenece a la categoría seleccionada.')
+        por_nombre = cleaned.get('proveedor_catalogo')
+        por_codigo = cleaned.get('codigo_proveedor_seleccionado')
+        if por_nombre and por_codigo and por_nombre.pk != por_codigo.pk:
+            self.add_error(
+                'codigo_proveedor_seleccionado',
+                'El código no corresponde al proveedor seleccionado.',
+            )
+        cleaned['proveedor_seleccionado'] = por_nombre or por_codigo
+        return cleaned
+
+    def save(self, commit=True):
+        producto = super().save(commit=False)
+        proveedor = self.cleaned_data.get('proveedor_seleccionado')
+        producto.proveedor_catalogo = proveedor
+        producto.proveedor = proveedor.nombre if proveedor else ''
+        producto.codigo_proveedor = proveedor.codigo if proveedor else ''
+        if commit:
+            producto.save()
+            self.save_m2m()
+        return producto
 
 
 class OperacionProductoForm(forms.Form):
@@ -249,6 +348,10 @@ class OperacionProductoForm(forms.Form):
 
 
 class VentaTiendaForm(OperacionProductoForm):
+    moneda = forms.ChoiceField(
+        choices=Monedas.choices, initial=Monedas.COP, required=False,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
     modalidad = forms.ChoiceField(
         choices=VentaTienda.Modalidades.choices,
         widget=forms.Select(attrs={'class': 'form-select'}),
@@ -270,6 +373,15 @@ class VentaTiendaForm(OperacionProductoForm):
     numero_cuotas = forms.IntegerField(
         label='Número de cuotas', min_value=1, max_value=60, initial=1, required=False,
         widget=forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 60}),
+    )
+    tipo_entrega = forms.ChoiceField(
+        label='Entrega', choices=VentaTienda.TiposEntrega.choices,
+        initial=VentaTienda.TiposEntrega.INMEDIATA, required=False,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    fecha_entrega_estimada = forms.DateField(
+        required=False, label='Fecha estimada de entrega',
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
     )
     registrar_comprador = forms.BooleanField(
         required=False, label='Registrar un comprador nuevo en esta venta',
@@ -295,6 +407,10 @@ class VentaTiendaForm(OperacionProductoForm):
         required=False, label='Correo electrónico',
         widget=forms.EmailInput(attrs={'class': 'form-control'}),
     )
+    comprador_direccion = forms.CharField(
+        required=False, max_length=200, label='Dirección',
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+    )
     comprador_acepta_whatsapp = forms.BooleanField(
         required=False, label='Autoriza comprobantes y recordatorios por WhatsApp',
         widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
@@ -304,7 +420,7 @@ class VentaTiendaForm(OperacionProductoForm):
         super().__init__(*args, **kwargs)
         self.fields['cliente'].actualizar_opciones()
         self.fields['producto'].queryset = ProductoTienda.objects.filter(
-            activo=True, stock__gt=0, precio_venta__gt=0
+            activo=True, precio_venta__gt=0
         )
         self.fields['cuenta'].required = False
         self.fields['modalidad'].required = False
@@ -319,6 +435,20 @@ class VentaTiendaForm(OperacionProductoForm):
         cuenta = cleaned.get('cuenta')
         producto = cleaned.get('producto')
         vencimiento = cleaned.get('fecha_vencimiento')
+        moneda = cleaned.get('moneda') or getattr(producto, 'moneda', Monedas.COP)
+        cleaned['moneda'] = moneda
+        tipo_entrega = cleaned.get('tipo_entrega') or VentaTienda.TiposEntrega.INMEDIATA
+        cleaned['tipo_entrega'] = tipo_entrega
+        fecha_entrega = cleaned.get('fecha_entrega_estimada')
+        if producto and moneda and producto.moneda != moneda:
+            self.add_error('producto', f'Seleccione un producto configurado en {moneda}.')
+        if tipo_entrega == VentaTienda.TiposEntrega.SOBRE_PEDIDO:
+            if not fecha_entrega:
+                self.add_error('fecha_entrega_estimada', 'Indique la fecha estimada de entrega.')
+            elif fecha_entrega < timezone.localdate():
+                self.add_error('fecha_entrega_estimada', 'La entrega no puede quedar en una fecha pasada.')
+        else:
+            cleaned['fecha_entrega_estimada'] = None
         if modalidad == VentaTienda.Modalidades.CREDITO:
             if not cliente and not registrar_comprador:
                 self.add_error('cliente', 'Seleccione un comprador o regístrelo dentro de esta venta.')
@@ -470,10 +600,94 @@ class CompraTiendaForm(OperacionProductoForm):
         widget=forms.NumberInput(attrs={'class': 'form-control', 'min': '0.01', 'step': '0.01'}),
         help_text='Costo real pagado por unidad en esta compra.',
     )
+    modalidad = forms.ChoiceField(
+        choices=CompraProveedorTienda.Modalidades.choices,
+        initial=CompraProveedorTienda.Modalidades.CONTADO, required=False,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    abono_inicial = forms.DecimalField(
+        label='Abono inicial', required=False, initial=0, min_value=0,
+        max_digits=14, decimal_places=2,
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'min': 0, 'step': '0.01'}),
+    )
+    fecha_vencimiento = forms.DateField(
+        label='Vencimiento de la primera cuota', required=False,
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+    )
+    numero_cuotas = forms.IntegerField(
+        label='Número de cuotas', required=False, initial=1, min_value=1, max_value=60,
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 60}),
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['producto'].queryset = ProductoTienda.objects.filter(activo=True)
+        self.fields['cuenta'].required = False
+
+    def clean(self):
+        cleaned = super().clean()
+        producto = cleaned.get('producto')
+        cantidad = cleaned.get('cantidad')
+        costo = cleaned.get('costo_unitario')
+        modalidad = cleaned.get('modalidad') or CompraProveedorTienda.Modalidades.CONTADO
+        cleaned['modalidad'] = modalidad
+        abono = cleaned.get('abono_inicial') or Decimal('0')
+        total = (costo * cantidad) if costo and cantidad else Decimal('0')
+        cleaned['total_compra'] = total
+        cuenta = cleaned.get('cuenta')
+        if abono > total:
+            self.add_error('abono_inicial', 'El abono no puede superar el total de la compra.')
+        if modalidad == CompraProveedorTienda.Modalidades.CONTADO:
+            if not cuenta:
+                self.add_error('cuenta', 'Seleccione la cuenta desde la que se pagó la compra.')
+            cleaned['abono_inicial'] = total
+            cleaned['numero_cuotas'] = 1
+            cleaned['fecha_vencimiento'] = None
+        else:
+            if not cleaned.get('fecha_vencimiento'):
+                self.add_error('fecha_vencimiento', 'Indique el vencimiento de la primera cuota.')
+            elif cleaned['fecha_vencimiento'] < timezone.localdate():
+                self.add_error('fecha_vencimiento', 'La fecha no puede estar vencida.')
+            if not cleaned.get('numero_cuotas'):
+                cleaned['numero_cuotas'] = 1
+            if abono > 0 and not cuenta:
+                self.add_error('cuenta', 'Seleccione la cuenta desde la que se hizo el abono.')
+        if producto and cleaned.get('cuenta') and producto.moneda != cleaned['cuenta'].moneda:
+            self.add_error('cuenta', f'Seleccione una cuenta en {producto.moneda}.')
+        return cleaned
+
+
+class AbonoCompraForm(forms.Form):
+    cuota = forms.ModelChoiceField(
+        queryset=CuotaCompraTienda.objects.none(), label='Cuota que desea pagar',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    cuenta = forms.ModelChoiceField(
+        queryset=CuentaTienda.objects.none(), widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    valor = forms.DecimalField(
+        min_value=Decimal('0.01'), max_digits=14, decimal_places=2,
+        help_text='Puede pagar la cuota completa o hacer un abono diferente.',
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'min': '0.01', 'step': '0.01'}),
+    )
+    observaciones = forms.CharField(
+        required=False, widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+    )
+
+    def __init__(self, *args, compra=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.compra = compra
+        if compra:
+            self.fields['cuota'].queryset = compra.cuotas.filter(saldo__gt=0)
+            self.fields['cuenta'].queryset = CuentaTienda.objects.filter(
+                activa=True, moneda=compra.moneda
+            )
+
+    def clean_valor(self):
+        valor = self.cleaned_data['valor']
+        if self.compra and valor > self.compra.saldo_pendiente:
+            raise forms.ValidationError('El pago supera el saldo pendiente de la compra.')
+        return valor
 
 
 class GastoTiendaForm(forms.Form):

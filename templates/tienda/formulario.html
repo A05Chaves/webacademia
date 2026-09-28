@@ -99,4 +99,39 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 {% endif %}
 
+{% if form.proveedor_catalogo and form.codigo_proveedor_seleccionado %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const proveedor = document.getElementById('{{ form.proveedor_catalogo.id_for_label }}');
+    const codigo = document.getElementById('{{ form.codigo_proveedor_seleccionado.id_for_label }}');
+    if (!proveedor || !codigo) return;
+    proveedor.addEventListener('change', () => { codigo.value = proveedor.value; });
+    codigo.addEventListener('change', () => { proveedor.value = codigo.value; });
+    if (proveedor.value && !codigo.value) codigo.value = proveedor.value;
+    if (codigo.value && !proveedor.value) proveedor.value = codigo.value;
+});
+</script>
+{% endif %}
+
+{% if form.categoria and form.subcategoria %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const categoria = document.getElementById('{{ form.categoria.id_for_label }}');
+    const subcategoria = document.getElementById('{{ form.subcategoria.id_for_label }}');
+    if (!categoria || !subcategoria) return;
+    const url = '{% url "tienda:subcategorias_por_categoria" %}';
+    async function actualizarSubcategorias(conservar = false) {
+        const actual = conservar ? subcategoria.value : '';
+        subcategoria.innerHTML = '<option value="">---------</option>';
+        if (!categoria.value) return;
+        const respuesta = await fetch(`${url}?categoria=${encodeURIComponent(categoria.value)}&actual=${encodeURIComponent(actual)}`);
+        const datos = await respuesta.json();
+        datos.resultados.forEach(item => subcategoria.add(new Option(item.nombre, item.id, false, String(item.id) === String(actual))));
+    }
+    categoria.addEventListener('change', () => actualizarSubcategorias(false));
+    actualizarSubcategorias(true);
+});
+</script>
+{% endif %}
+
 {% endblock %}

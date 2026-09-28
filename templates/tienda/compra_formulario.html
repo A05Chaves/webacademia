@@ -1,0 +1,20 @@
+{% extends 'gestion/base.html' %}{% block content %}
+<div class="page-heading"><div class="page-heading-main"><h2 class="page-heading-title"><i class="fa-solid fa-boxes-stacked"></i><span>Registrar compra</span></h2><p class="page-heading-subtitle text-secondary">Registra inventario comprado de contado o a crédito.</p></div><div class="page-heading-actions"><a href="{% url 'tienda:panel' %}" class="btn btn-outline-light">Volver</a></div></div>
+<form method="post" class="card bg-dark text-light border-secondary"><div class="card-body p-4">{% csrf_token %}
+{% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+<div class="row g-3">
+{% include 'tienda/venta_campo.html' with field=form.producto col='col-md-8' %}{% include 'tienda/venta_campo.html' with field=form.cantidad col='col-md-4' %}
+{% include 'tienda/venta_campo.html' with field=form.costo_unitario col='col-md-4' %}{% include 'tienda/venta_campo.html' with field=form.modalidad col='col-md-4' %}<div id="campo-cuenta" class="col-md-4">{% include 'tienda/venta_campo.html' with field=form.cuenta col='' %}</div>
+</div>
+<div class="alert alert-info mt-3 mb-0"><div class="d-flex justify-content-between"><span>Total de la compra</span><strong id="total-compra">$ 0,00</strong></div><div class="d-flex justify-content-between"><span>Abono registrado</span><strong id="abono-compra">$ 0,00</strong></div><div class="d-flex justify-content-between border-top mt-2 pt-2"><span>Saldo pendiente</span><strong id="saldo-compra">$ 0,00</strong></div></div>
+<div id="condiciones-credito"><h5 class="border-bottom pb-2 mt-4 mb-3">Condiciones del crédito</h5><div class="row g-3">{% include 'tienda/venta_campo.html' with field=form.abono_inicial col='col-md-4' %}{% include 'tienda/venta_campo.html' with field=form.numero_cuotas col='col-md-4' %}{% include 'tienda/venta_campo.html' with field=form.fecha_vencimiento col='col-md-4' %}</div></div>
+<div class="row g-3 mt-1">{% include 'tienda/venta_campo.html' with field=form.observaciones col='col-12' %}</div>
+<div class="d-flex justify-content-end gap-2 mt-4"><a href="{% url 'tienda:panel' %}" class="btn btn-outline-light">Cancelar</a><button class="btn btn-warning"><i class="fa-solid fa-floppy-disk"></i> Registrar compra</button></div>
+</div></form>
+{{ productos_compra|json_script:'productos-compra-data' }}
+<script>
+const productosCompra=JSON.parse(document.getElementById('productos-compra-data').textContent), producto=document.getElementById('id_producto'), cantidad=document.getElementById('id_cantidad'), costo=document.getElementById('id_costo_unitario'), modalidad=document.getElementById('id_modalidad'), abono=document.getElementById('id_abono_inicial'), cuenta=document.getElementById('id_cuenta');
+function numero(v){const t=String(v||'').replace(/\./g,'').replace(',','.');return Number.parseFloat(t)||0} function dinero(v,m){return new Intl.NumberFormat('es-CO',{style:'currency',currency:m||'COP'}).format(v)}
+function actualizar(){const p=productosCompra[producto.value], credito=modalidad.value==='CREDITO', total=numero(cantidad.value)*numero(costo.value), pagado=credito?Math.min(numero(abono.value),total):total;document.getElementById('condiciones-credito').classList.toggle('d-none',!credito);abono.disabled=!credito;document.getElementById('total-compra').textContent=dinero(total,p?.moneda);document.getElementById('abono-compra').textContent=dinero(pagado,p?.moneda);document.getElementById('saldo-compra').textContent=dinero(total-pagado,p?.moneda);Array.from(cuenta.options).forEach((o,i)=>{if(!i)return;o.hidden=Boolean(p)&&!o.text.includes(`(${p.moneda})`);o.disabled=o.hidden});}
+producto.addEventListener('change',()=>{const p=productosCompra[producto.value];if(p&&!costo.value)costo.value=p.costo;actualizar()});[cantidad,costo,modalidad,abono].forEach(e=>{e.addEventListener('input',actualizar);e.addEventListener('change',actualizar)});actualizar();
+</script>{% endblock %}
