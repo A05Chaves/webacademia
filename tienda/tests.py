@@ -1002,6 +1002,8 @@ class TiendaTests(TestCase):
         self.assertEqual(pagina.status_code, 200)
         self.assertContains(pagina, self.producto.nombre)
         self.assertContains(pagina, '80.000,00')
+        self.assertContains(pagina, 'Ingresa lo que deseas encontrar')
+        self.assertNotContains(pagina, 'Producto, SKU, marca o disciplina')
 
         respuesta = self.client.post(
             reverse('tienda:agregar_carrito', args=[self.producto.id]),
@@ -1011,6 +1013,18 @@ class TiendaTests(TestCase):
         carrito = self.client.get(reverse('tienda:carrito'))
         self.assertContains(carrito, self.producto.nombre_variante)
         self.assertContains(carrito, '160.000,00')
+
+    def test_sugerencias_catalogo_muestran_coincidencias_mientras_se_escribe(self):
+        self.client.logout()
+        respuesta = self.client.get(
+            reverse('tienda:sugerencias_catalogo'), {'q': 'camis'},
+        )
+        self.assertEqual(respuesta.status_code, 200)
+        resultados = respuesta.json()['resultados']
+        self.assertEqual(len(resultados), 1)
+        self.assertEqual(resultados[0]['id'], self.producto.id)
+        self.assertIn('Camiseta academia', resultados[0]['nombre'])
+        self.assertEqual(resultados[0]['precio'], '80.000,00')
 
     def test_carrito_no_mezcla_productos_cop_y_usd(self):
         producto_usd = ProductoTienda.objects.create(

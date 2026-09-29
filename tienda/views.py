@@ -124,6 +124,29 @@ def catalogo(request):
     })
 
 
+def sugerencias_catalogo(request):
+    busqueda = request.GET.get('q', '').strip()
+    if len(busqueda) < 2:
+        return JsonResponse({'resultados': []})
+    productos = ProductoTienda.objects.filter(
+        activo=True, precio_venta__gt=0,
+    ).filter(Q(stock__gt=0) | Q(disponible_sobre_pedido=True)).filter(
+        Q(nombre__icontains=busqueda) | Q(referencia__icontains=busqueda)
+        | Q(categoria__nombre__icontains=busqueda)
+        | Q(subcategoria__nombre__icontains=busqueda)
+        | Q(marca__nombre__icontains=busqueda)
+        | Q(disciplina__nombre__icontains=busqueda)
+    ).select_related('categoria', 'subcategoria', 'marca').distinct()[:8]
+    return JsonResponse({'resultados': [{
+        'id': producto.id,
+        'nombre': producto.nombre_variante,
+        'categoria': producto.categoria.nombre if producto.categoria else 'Producto',
+        'precio': _valor_tienda(producto.precio_venta),
+        'moneda': producto.moneda,
+        'imagen': producto.imagen.url if producto.imagen else producto.url_imagen,
+    } for producto in productos]})
+
+
 @require_POST
 def agregar_carrito(request, producto_id):
     producto = get_object_or_404(
