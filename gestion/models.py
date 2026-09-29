@@ -30,6 +30,24 @@ class ConfiguracionHome(models.Model):
             'con prioridad 5 se mostrará antes de un video con prioridad 10.'
         ),
     )
+    publicidad_tienda_activa = models.BooleanField(
+        default=False, verbose_name='Mostrar publicidad de la tienda'
+    )
+    publicidad_tienda_titulo = models.CharField(
+        max_length=120, default='Tienda Bross Fight Sports'
+    )
+    publicidad_tienda_texto = models.CharField(
+        max_length=240, blank=True,
+        default='Conoce nuestras prendas, equipos y productos deportivos.'
+    )
+    publicidad_tienda_imagen = models.ImageField(
+        upload_to='tienda/publicidad/', blank=True, null=True,
+        verbose_name='Imagen publicitaria de la tienda',
+    )
+    orden_publicidad_tienda = models.PositiveIntegerField(
+        default=8, verbose_name='Prioridad de la publicidad de tienda',
+        help_text='Los números menores aparecen primero en el carrusel.',
+    )
 
     playlist_youtube_url = models.URLField(
         verbose_name='URL playlist YouTube',

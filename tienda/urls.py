@@ -6,8 +6,17 @@ from . import views
 app_name = 'tienda'
 
 urlpatterns = [
+    path('catalogo/', views.catalogo, name='catalogo'),
+    path('catalogo/agregar/<int:producto_id>/', views.agregar_carrito, name='agregar_carrito'),
+    path('catalogo/carrito/', views.carrito, name='carrito'),
+    path('catalogo/carrito/actualizar/', views.actualizar_carrito, name='actualizar_carrito'),
+    path('catalogo/finalizar/', views.finalizar_pedido, name='finalizar_pedido'),
+    path('catalogo/pedido/<int:pedido_id>/confirmado/', views.pedido_confirmado, name='pedido_confirmado'),
     path('', views.panel, name='panel'),
     path('configuracion/', views.configuracion, name='configuracion'),
+    path('pedidos/', views.pedidos_publicos, name='pedidos'),
+    path('pedidos/<int:pedido_id>/decidir/', views.decidir_pedido, name='decidir_pedido'),
+    path('pedidos/<int:pedido_id>/estado/', views.actualizar_estado_pedido, name='actualizar_estado_pedido'),
     path('cuentas/nueva/', views.cuenta, name='crear_cuenta'),
     path('cuentas/<int:cuenta_id>/editar/', views.cuenta, name='editar_cuenta'),
     path('cuentas/<int:cuenta_id>/estado/', views.cambiar_estado_cuenta, name='cambiar_estado_cuenta'),

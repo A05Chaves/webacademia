@@ -1912,6 +1912,11 @@ class ConfiguracionHomeForm(forms.ModelForm):
             'video_promo_url',
             'video_promo_archivo',
             'orden_video_promocional',
+            'publicidad_tienda_activa',
+            'publicidad_tienda_titulo',
+            'publicidad_tienda_texto',
+            'publicidad_tienda_imagen',
+            'orden_publicidad_tienda',
             'playlist_youtube_url',
             'activo',
         ]
@@ -1928,6 +1933,15 @@ class ConfiguracionHomeForm(forms.ModelForm):
             'orden_video_promocional': forms.NumberInput(attrs={
                 'class': 'form-control',
                 'min': 0,
+            }),
+            'publicidad_tienda_activa': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'publicidad_tienda_titulo': forms.TextInput(attrs={'class': 'form-control'}),
+            'publicidad_tienda_texto': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'publicidad_tienda_imagen': forms.ClearableFileInput(attrs={
+                'class': 'form-control', 'accept': 'image/*',
+            }),
+            'orden_publicidad_tienda': forms.NumberInput(attrs={
+                'class': 'form-control', 'min': 0,
             }),
             'playlist_youtube_url': forms.URLInput(attrs={
                 'class': 'form-control',

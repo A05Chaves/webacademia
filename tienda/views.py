@@ -6,6 +6,7 @@ from io import BytesIO
 from urllib.parse import quote
 
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from gestion.decorators import administrador_required as staff_member_required
 from django.conf import settings
 from django.core.mail import EmailMessage
@@ -60,14 +61,190 @@ from .models import (
     ProveedorTienda,
     SubcategoriaProducto,
     VentaTienda,
+    PedidoTienda,
+    DetallePedidoTienda,
 )
+from .forms import PedidoTiendaForm
 
 
 MARCA_TIENDA = 'Bross Fight Sports'
+CARRITO_SESION = 'carrito_tienda_publica'
 
 
 def _valor_tienda(valor):
     return number_format(valor, decimal_pos=2, force_grouping=True)
+
+
+def _carrito_actual(request):
+    cantidades = request.session.get(CARRITO_SESION, {})
+    ids = [int(pk) for pk in cantidades if str(pk).isdigit()]
+    productos = ProductoTienda.objects.filter(
+        pk__in=ids, activo=True, precio_venta__gt=0,
+    ).select_related('categoria', 'subcategoria', 'marca')
+    items, moneda, subtotal = [], None, Decimal('0')
+    for producto in productos:
+        cantidad = max(int(cantidades.get(str(producto.pk), 0)), 0)
+        if not cantidad:
+            continue
+        total = producto.precio_venta * cantidad
+        items.append({'producto': producto, 'cantidad': cantidad, 'total': total})
+        moneda = moneda or producto.moneda
+        subtotal += total
+    return items, moneda, subtotal
+
+
+def catalogo(request):
+    productos = ProductoTienda.objects.filter(
+        activo=True, precio_venta__gt=0,
+    ).filter(Q(stock__gt=0) | Q(disponible_sobre_pedido=True)).select_related(
+        'categoria', 'subcategoria', 'marca', 'linea_modelo', 'disciplina'
+    )
+    categoria = request.GET.get('categoria', '')
+    subcategoria = request.GET.get('subcategoria', '')
+    moneda = request.GET.get('moneda', '')
+    busqueda = request.GET.get('q', '').strip()
+    if categoria.isdigit():
+        productos = productos.filter(categoria_id=categoria)
+    if subcategoria.isdigit():
+        productos = productos.filter(subcategoria_id=subcategoria)
+    if moneda in dict(Monedas.choices):
+        productos = productos.filter(moneda=moneda)
+    if busqueda:
+        productos = productos.filter(
+            Q(nombre__icontains=busqueda) | Q(referencia__icontains=busqueda)
+            | Q(marca__nombre__icontains=busqueda) | Q(disciplina__nombre__icontains=busqueda)
+        )
+    carrito, _, _ = _carrito_actual(request)
+    return render(request, 'tienda/catalogo.html', {
+        'productos': productos.order_by('categoria__nombre', 'nombre', 'color', 'talla'),
+        'categorias_catalogo': CategoriaProducto.objects.filter(activa=True).prefetch_related('subcategorias'),
+        'categoria_filtro': categoria, 'subcategoria_filtro': subcategoria,
+        'moneda_filtro': moneda, 'busqueda': busqueda,
+        'cantidad_carrito': sum(item['cantidad'] for item in carrito),
+    })
+
+
+@require_POST
+def agregar_carrito(request, producto_id):
+    producto = get_object_or_404(
+        ProductoTienda.objects.filter(Q(stock__gt=0) | Q(disponible_sobre_pedido=True)),
+        pk=producto_id, activo=True, precio_venta__gt=0,
+    )
+    try:
+        cantidad = max(1, int(request.POST.get('cantidad', 1)))
+    except (TypeError, ValueError):
+        cantidad = 1
+    carrito = request.session.get(CARRITO_SESION, {})
+    productos_existentes = ProductoTienda.objects.filter(pk__in=carrito.keys())
+    if productos_existentes.exclude(moneda=producto.moneda).exists():
+        messages.error(request, 'No se pueden mezclar productos en COP y USD en el mismo pedido.')
+        return redirect('tienda:catalogo')
+    nueva_cantidad = int(carrito.get(str(producto.pk), 0)) + cantidad
+    if not producto.disponible_sobre_pedido and nueva_cantidad > producto.stock:
+        messages.error(request, f'Solo hay {producto.stock} unidades disponibles de {producto.nombre_variante}.')
+        return redirect('tienda:catalogo')
+    carrito[str(producto.pk)] = nueva_cantidad
+    request.session[CARRITO_SESION] = carrito
+    request.session.modified = True
+    messages.success(request, f'{producto.nombre_variante} fue agregado al carrito.')
+    return redirect('tienda:catalogo')
+
+
+def carrito(request):
+    items, moneda, subtotal = _carrito_actual(request)
+    return render(request, 'tienda/carrito.html', {
+        'items': items, 'moneda': moneda, 'subtotal': subtotal,
+    })
+
+
+@require_POST
+def actualizar_carrito(request):
+    carrito = request.session.get(CARRITO_SESION, {})
+    for clave in list(carrito):
+        try:
+            cantidad = int(request.POST.get(f'cantidad_{clave}', carrito[clave]))
+        except (TypeError, ValueError):
+            continue
+        producto = ProductoTienda.objects.filter(pk=clave, activo=True).first()
+        if cantidad <= 0 or not producto:
+            carrito.pop(clave, None)
+        elif producto.disponible_sobre_pedido or cantidad <= producto.stock:
+            carrito[clave] = cantidad
+        else:
+            messages.error(request, f'{producto.nombre_variante} solo tiene {producto.stock} unidades.')
+    request.session[CARRITO_SESION] = carrito
+    request.session.modified = True
+    return redirect('tienda:carrito')
+
+
+def finalizar_pedido(request):
+    items, moneda, subtotal = _carrito_actual(request)
+    if not items:
+        messages.info(request, 'El carrito está vacío.')
+        return redirect('tienda:catalogo')
+    alumno = None
+    if request.user.is_authenticated:
+        alumno = Alumno.objects.filter(user=request.user).select_related('user').first()
+    form = PedidoTiendaForm(
+        request.POST or None, request.FILES or None, moneda=moneda, alumno=alumno
+    )
+    if request.method == 'POST' and form.is_valid():
+        with transaction.atomic():
+            productos_bloqueados = {
+                producto.pk: producto for producto in ProductoTienda.objects.select_for_update().filter(
+                    pk__in=[item['producto'].pk for item in items], activo=True
+                )
+            }
+            error = None
+            for item in items:
+                producto = productos_bloqueados.get(item['producto'].pk)
+                if not producto or (
+                    not producto.disponible_sobre_pedido and item['cantidad'] > producto.stock
+                ):
+                    error = f'Cambió la disponibilidad de {item["producto"].nombre_variante}. Revisa el carrito.'
+                    break
+            if error:
+                messages.error(request, error)
+            else:
+                pedido = form.save(commit=False)
+                pedido.moneda = moneda
+                pedido.subtotal = subtotal
+                pedido.costo_envio = Decimal('0')
+                pedido.total = subtotal
+                pedido.save()
+                for item in items:
+                    producto = productos_bloqueados[item['producto'].pk]
+                    DetallePedidoTienda.objects.create(
+                        pedido=pedido, producto=producto, descripcion=producto.nombre_variante,
+                        cantidad=item['cantidad'], precio_unitario=producto.precio_venta,
+                        total=producto.precio_venta * item['cantidad'],
+                        sobre_pedido=item['cantidad'] > producto.stock,
+                    )
+                request.session.pop(CARRITO_SESION, None)
+                destinatarios = list(get_user_model().objects.filter(
+                    is_staff=True, is_active=True
+                ).exclude(email='').values_list('email', flat=True).distinct())
+                if destinatarios:
+                    EmailMessage(
+                        subject=f'Nuevo pedido de tienda {pedido.numero}',
+                        body=(
+                            f'{pedido.nombres} registró un pedido por '
+                            f'{_valor_tienda(pedido.total)} {pedido.moneda}. '
+                            'El comprobante está pendiente de validación en la tienda.'
+                        ),
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        to=destinatarios,
+                    ).send(fail_silently=True)
+                messages.success(request, f'Pedido {pedido.numero} recibido. El pago quedó pendiente de validación.')
+                return redirect('tienda:pedido_confirmado', pedido_id=pedido.id)
+    return render(request, 'tienda/finalizar_pedido.html', {
+        'form': form, 'items': items, 'moneda': moneda, 'subtotal': subtotal,
+    })
+
+
+def pedido_confirmado(request, pedido_id):
+    pedido = get_object_or_404(PedidoTienda.objects.prefetch_related('detalles'), pk=pedido_id)
+    return render(request, 'tienda/pedido_confirmado.html', {'pedido': pedido})
 
 
 def _render_formulario(request, form, titulo, icono, texto_boton, clase_boton='btn-success', volver_url='tienda:panel'):
@@ -292,6 +469,9 @@ def panel(request):
     entregas_pendientes = VentaTienda.objects.filter(
         tipo_entrega=VentaTienda.TiposEntrega.SOBRE_PEDIDO, entregada=False,
     ).select_related('cliente').order_by('fecha_entrega_estimada')[:8]
+    pedidos_por_revisar = PedidoTienda.objects.filter(
+        estado=PedidoTienda.Estados.PAGO_REVISION
+    ).count()
 
     nombres_meses = ('Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic')
     hoy = timezone.localdate()
@@ -334,6 +514,7 @@ def panel(request):
         'movimientos': movimientos, 'creditos': creditos,
         'compras_pendientes': compras_pendientes,
         'entregas_pendientes': entregas_pendientes,
+        'pedidos_por_revisar': pedidos_por_revisar,
         'labels_flujo': labels,
         'entradas_cop': series[Monedas.COP],
         'entradas_usd': series[Monedas.USD],
@@ -376,6 +557,120 @@ def configuracion(request):
         'categorias_contables': CategoriaMovimientoTienda.objects.all(),
         'clientes': ClienteTienda.objects.all()[:30],
     })
+
+
+@staff_member_required
+def pedidos_publicos(request):
+    estado = request.GET.get('estado', '')
+    busqueda = request.GET.get('q', '').strip()
+    pedidos = PedidoTienda.objects.select_related('cuenta_pago', 'venta').prefetch_related(
+        'detalles__producto'
+    )
+    if estado in dict(PedidoTienda.Estados.choices):
+        pedidos = pedidos.filter(estado=estado)
+    if busqueda:
+        pedidos = pedidos.filter(
+            Q(numero__icontains=busqueda) | Q(nombres__icontains=busqueda)
+            | Q(numero_documento__icontains=busqueda) | Q(referencia_pago__icontains=busqueda)
+        )
+    return render(request, 'tienda/pedidos.html', {
+        'pedidos': pedidos, 'estados_pedido': PedidoTienda.Estados.choices,
+        'estado_filtro': estado, 'busqueda': busqueda,
+        'pendientes': PedidoTienda.objects.filter(estado=PedidoTienda.Estados.PAGO_REVISION).count(),
+    })
+
+
+@staff_member_required
+@require_POST
+def decidir_pedido(request, pedido_id):
+    decision = request.POST.get('decision')
+    with transaction.atomic():
+        pedido = get_object_or_404(
+            PedidoTienda.objects.select_for_update().prefetch_related('detalles__producto'),
+            pk=pedido_id,
+        )
+        if pedido.estado != PedidoTienda.Estados.PAGO_REVISION:
+            messages.info(request, 'Este pedido ya fue revisado.')
+            return redirect('tienda:pedidos')
+        if decision == 'rechazar':
+            pedido.estado = PedidoTienda.Estados.RECHAZADO
+            pedido.observaciones_administrativas = request.POST.get('observaciones', '').strip()
+            pedido.save(update_fields=['estado', 'observaciones_administrativas', 'actualizado'])
+            messages.warning(request, f'El pago del pedido {pedido.numero} fue rechazado.')
+            return redirect('tienda:pedidos')
+        if decision != 'aprobar':
+            messages.error(request, 'Seleccione una decisión válida.')
+            return redirect('tienda:pedidos')
+
+        detalles = list(pedido.detalles.all())
+        productos = {
+            producto.pk: producto for producto in ProductoTienda.objects.select_for_update().filter(
+                pk__in=[detalle.producto_id for detalle in detalles]
+            )
+        }
+        sobre_pedido = any(
+            detalle.cantidad > productos[detalle.producto_id].stock for detalle in detalles
+        )
+        cliente, _ = ClienteTienda.objects.get_or_create(
+            numero_documento=pedido.numero_documento,
+            defaults={
+                'nombres': pedido.nombres, 'tipo_documento': pedido.tipo_documento,
+                'telefono_whatsapp': pedido.telefono, 'correo': pedido.correo,
+                'direccion': pedido.direccion,
+            },
+        )
+        venta = VentaTienda.objects.create(
+            cliente=cliente, modalidad=VentaTienda.Modalidades.CONTADO,
+            estado=VentaTienda.Estados.PAGADA, moneda=pedido.moneda,
+            subtotal=pedido.subtotal, descuento=0, total=pedido.total,
+            saldo_pendiente=0,
+            tipo_entrega=(VentaTienda.TiposEntrega.SOBRE_PEDIDO if sobre_pedido else VentaTienda.TiposEntrega.INMEDIATA),
+            entregada=not sobre_pedido,
+            fecha_entrega_real=None if sobre_pedido else timezone.now(),
+            observaciones=f'Pedido público {pedido.numero}. {pedido.observaciones_cliente}'.strip(),
+            registrado_por=request.user,
+        )
+        for detalle in detalles:
+            producto = productos[detalle.producto_id]
+            DetalleVentaTienda.objects.create(
+                venta=venta, producto=producto, descripcion=detalle.descripcion,
+                cantidad=detalle.cantidad, precio_unitario=detalle.precio_unitario,
+                costo_unitario=producto.costo_unitario, descuento=0, total=detalle.total,
+            )
+            if not sobre_pedido:
+                producto.stock -= detalle.cantidad
+                producto.save(update_fields=['stock', 'actualizado'])
+        MovimientoTienda.objects.create(
+            cuenta=pedido.cuenta_pago, tipo=MovimientoTienda.Tipos.INGRESO,
+            origen=MovimientoTienda.Origenes.VENTA, concepto=f'Pedido público {pedido.numero}',
+            valor=pedido.total, moneda=pedido.moneda, venta=venta,
+            observaciones=f'Referencia: {pedido.referencia_pago}', registrado_por=request.user,
+        )
+        pedido.estado = PedidoTienda.Estados.APROBADO
+        pedido.venta = venta
+        pedido.observaciones_administrativas = request.POST.get('observaciones', '').strip()
+        pedido.save(update_fields=['estado', 'venta', 'observaciones_administrativas', 'actualizado'])
+    messages.success(request, f'Pedido {pedido.numero} aprobado y convertido en la venta {venta.numero}.')
+    return redirect('tienda:pedidos')
+
+
+@staff_member_required
+@require_POST
+def actualizar_estado_pedido(request, pedido_id):
+    pedido = get_object_or_404(PedidoTienda, pk=pedido_id)
+    estado = request.POST.get('estado')
+    permitidos = {
+        PedidoTienda.Estados.PREPARANDO, PedidoTienda.Estados.LISTO,
+        PedidoTienda.Estados.ENVIADO, PedidoTienda.Estados.ENTREGADO,
+        PedidoTienda.Estados.CANCELADO,
+    }
+    if estado not in permitidos or not pedido.venta_id:
+        messages.error(request, 'No es posible aplicar ese estado al pedido.')
+    else:
+        pedido.estado = estado
+        pedido.save(update_fields=['estado', 'actualizado'])
+        messages.success(request, f'Pedido {pedido.numero}: {pedido.get_estado_display()}.')
+    return redirect('tienda:pedidos')
 
 
 @staff_member_required

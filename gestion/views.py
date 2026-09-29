@@ -489,9 +489,15 @@ def home_publica(request):
             'objeto': config_home,
             'orden': config_home.orden_video_promocional,
         })
+    if config_home and config_home.publicidad_tienda_activa:
+        elementos_carrusel_home.append({
+            'tipo': 'TIENDA',
+            'objeto': config_home,
+            'orden': config_home.orden_publicidad_tienda,
+        })
     elementos_carrusel_home.sort(key=lambda item: (
         item['orden'],
-        0 if item['tipo'] == 'VIDEO_PROMOCIONAL'
+        0 if item['tipo'] in ('VIDEO_PROMOCIONAL', 'TIENDA')
         else (1 if item['objeto'].destacada else 2),
     ))
 

@@ -329,6 +329,10 @@ class ProductoTienda(models.Model):
     stock = models.PositiveIntegerField(default=0)
     stock_minimo = models.PositiveIntegerField(default=0)
     activo = models.BooleanField(default=True)
+    disponible_sobre_pedido = models.BooleanField(
+        default=False,
+        help_text='Permite ofrecerlo en el catálogo aunque no tenga existencias.',
+    )
     fecha_inactivacion = models.DateField(null=True, blank=True)
     motivo_inactivacion = models.CharField(max_length=200, blank=True)
     creado = models.DateTimeField(auto_now_add=True)
@@ -644,6 +648,80 @@ class CuotaCompraTienda(models.Model):
     @property
     def esta_vencida(self):
         return self.saldo > 0 and self.fecha_vencimiento < timezone.localdate()
+
+
+class PedidoTienda(models.Model):
+    class Estados(models.TextChoices):
+        PAGO_REVISION = 'PAGO_REVISION', 'Pago en revisión'
+        APROBADO = 'APROBADO', 'Aprobado'
+        PREPARANDO = 'PREPARANDO', 'Preparando'
+        LISTO = 'LISTO', 'Listo para entregar'
+        ENVIADO = 'ENVIADO', 'Enviado'
+        ENTREGADO = 'ENTREGADO', 'Entregado'
+        RECHAZADO = 'RECHAZADO', 'Pago rechazado'
+        CANCELADO = 'CANCELADO', 'Cancelado'
+
+    class Entregas(models.TextChoices):
+        ACADEMIA = 'ACADEMIA', 'Recoger en la academia'
+        DOMICILIO = 'DOMICILIO', 'Entrega a domicilio'
+        ENVIO = 'ENVIO', 'Envío a otra ciudad'
+
+    numero = models.CharField(max_length=24, unique=True, blank=True)
+    nombres = models.CharField(max_length=150)
+    tipo_documento = models.CharField(
+        max_length=10, choices=ClienteTienda.TiposDocumento.choices
+    )
+    numero_documento = models.CharField(max_length=30)
+    telefono = models.CharField(max_length=20)
+    correo = models.EmailField(blank=True)
+    direccion = models.CharField(max_length=220, blank=True)
+    modalidad_entrega = models.CharField(max_length=12, choices=Entregas.choices)
+    moneda = models.CharField(max_length=3, choices=Monedas.choices)
+    subtotal = models.DecimalField(max_digits=14, decimal_places=2)
+    costo_envio = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    total = models.DecimalField(max_digits=14, decimal_places=2)
+    cuenta_pago = models.ForeignKey(
+        CuentaTienda, on_delete=models.PROTECT, related_name='pedidos_publicos'
+    )
+    referencia_pago = models.CharField(max_length=100)
+    soporte_pago = models.FileField(upload_to='tienda/pedidos/%Y/%m/')
+    estado = models.CharField(
+        max_length=20, choices=Estados.choices, default=Estados.PAGO_REVISION
+    )
+    observaciones_cliente = models.TextField(blank=True)
+    observaciones_administrativas = models.TextField(blank=True)
+    venta = models.OneToOneField(
+        VentaTienda, on_delete=models.SET_NULL, related_name='pedido_publico',
+        null=True, blank=True,
+    )
+    creado = models.DateTimeField(auto_now_add=True)
+    actualizado = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-creado', '-id']
+        verbose_name = 'Pedido público de tienda'
+        verbose_name_plural = 'Pedidos públicos de tienda'
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if not self.numero:
+            self.numero = f'PT-{self.creado:%Y%m}-{self.pk:06d}'
+            super().save(update_fields=['numero'])
+
+    def __str__(self):
+        return self.numero or f'Pedido {self.pk}'
+
+
+class DetallePedidoTienda(models.Model):
+    pedido = models.ForeignKey(PedidoTienda, on_delete=models.CASCADE, related_name='detalles')
+    producto = models.ForeignKey(
+        ProductoTienda, on_delete=models.PROTECT, related_name='detalles_pedido_publico'
+    )
+    descripcion = models.CharField(max_length=220)
+    cantidad = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    precio_unitario = models.DecimalField(max_digits=14, decimal_places=2)
+    total = models.DecimalField(max_digits=14, decimal_places=2)
+    sobre_pedido = models.BooleanField(default=False)
 
 
 class MovimientoTienda(models.Model):

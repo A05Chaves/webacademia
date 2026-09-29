@@ -18,9 +18,9 @@ from finanzas.models import MovimientoFinanciero
 from .forms import ProductoTiendaForm, VentaTiendaForm
 from .models import (
     AjusteInventario, AplicacionAbonoCuota, CategoriaMovimientoTienda,
-    CategoriaProducto, ClienteTienda, CompraProveedorTienda, DisciplinaProducto,
+    CategoriaProducto, ClienteTienda, CompraProveedorTienda, DetallePedidoTienda, DisciplinaProducto,
     CuentaTienda, CuotaCompraTienda, CuotaVentaTienda, DetalleVentaTienda, MovimientoTienda,
-    LineaModeloProducto, MarcaProducto, ProductoTienda, VentaTienda,
+    LineaModeloProducto, MarcaProducto, PedidoTienda, ProductoTienda, VentaTienda,
     ProveedorTienda,
 )
 
@@ -995,3 +995,69 @@ class TiendaTests(TestCase):
         self.assertEqual(response.json()['resultados'], [
             {'id': subcategoria.id, 'nombre': 'Kimonos'},
         ])
+
+    def test_catalogo_es_publico_y_permite_agregar_al_carrito(self):
+        self.client.logout()
+        pagina = self.client.get(reverse('tienda:catalogo'))
+        self.assertEqual(pagina.status_code, 200)
+        self.assertContains(pagina, self.producto.nombre)
+
+        respuesta = self.client.post(
+            reverse('tienda:agregar_carrito', args=[self.producto.id]),
+            {'cantidad': 2},
+        )
+        self.assertRedirects(respuesta, reverse('tienda:catalogo'))
+        carrito = self.client.get(reverse('tienda:carrito'))
+        self.assertContains(carrito, self.producto.nombre_variante)
+        self.assertContains(carrito, '160000')
+
+    def test_carrito_no_mezcla_productos_cop_y_usd(self):
+        producto_usd = ProductoTienda.objects.create(
+            nombre='Producto dólares', moneda='USD', precio_venta=20,
+            costo_unitario=10, stock=3,
+        )
+        self.client.post(reverse('tienda:agregar_carrito', args=[self.producto.id]), {'cantidad': 1})
+        respuesta = self.client.post(
+            reverse('tienda:agregar_carrito', args=[producto_usd.id]),
+            {'cantidad': 1}, follow=True,
+        )
+        self.assertContains(respuesta, 'No se pueden mezclar productos en COP y USD')
+        self.assertNotIn(str(producto_usd.id), self.client.session['carrito_tienda_publica'])
+
+    def test_pedido_publico_no_descuenta_inventario_hasta_aprobar_pago(self):
+        self.client.logout()
+        self.client.post(
+            reverse('tienda:agregar_carrito', args=[self.producto.id]),
+            {'cantidad': 2},
+        )
+        respuesta = self.client.post(reverse('tienda:finalizar_pedido'), {
+            'nombres': 'Comprador Catálogo', 'tipo_documento': 'CC',
+            'numero_documento': '100.200.300', 'telefono': '3001234567',
+            'correo': 'catalogo@example.com', 'modalidad_entrega': 'ACADEMIA',
+            'direccion': '', 'cuenta_pago': self.cuenta.id,
+            'referencia_pago': 'PAGO-CAT-1',
+            'soporte_pago': SimpleUploadedFile('pago.pdf', b'%PDF-1.4 prueba', content_type='application/pdf'),
+            'observaciones_cliente': '',
+        })
+        pedido = PedidoTienda.objects.get()
+        self.assertRedirects(
+            respuesta, reverse('tienda:pedido_confirmado', args=[pedido.id])
+        )
+        self.assertEqual(pedido.numero_documento, '100200300')
+        self.producto.refresh_from_db()
+        self.assertEqual(self.producto.stock, 10)
+        self.assertFalse(MovimientoTienda.objects.exists())
+
+        self.client.force_login(self.admin)
+        aprobacion = self.client.post(
+            reverse('tienda:decidir_pedido', args=[pedido.id]),
+            {'decision': 'aprobar'},
+        )
+        self.assertRedirects(aprobacion, reverse('tienda:pedidos'))
+        pedido.refresh_from_db()
+        self.producto.refresh_from_db()
+        self.assertEqual(pedido.estado, PedidoTienda.Estados.APROBADO)
+        self.assertEqual(self.producto.stock, 8)
+        self.assertIsNotNone(pedido.venta_id)
+        self.assertEqual(MovimientoTienda.objects.get().valor, Decimal('160000'))
+        self.assertEqual(DetallePedidoTienda.objects.get().cantidad, 2)

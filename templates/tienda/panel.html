@@ -17,6 +17,7 @@
 
 <div class="d-flex flex-wrap gap-2 mb-4">
   <a href="{% url 'tienda:registrar_venta' %}" class="btn btn-success"><i class="fa-solid fa-cart-shopping"></i> Nueva venta</a>
+  <a href="{% url 'tienda:pedidos' %}" class="btn btn-outline-info"><i class="fa-solid fa-bag-shopping"></i> Pedidos del catálogo{% if pedidos_por_revisar %} <span class="badge bg-danger">{{ pedidos_por_revisar }}</span>{% endif %}</a>
   <a href="{% url 'tienda:registrar_cartera_inicial' %}" class="btn btn-outline-warning"><i class="fa-solid fa-file-circle-plus"></i> Cartera anterior</a>
   <a href="{% url 'tienda:registrar_compra' %}" class="btn btn-warning"><i class="fa-solid fa-boxes-stacked"></i> Registrar compra</a>
   <a href="{% url 'tienda:compras_credito' %}" class="btn btn-outline-warning"><i class="fa-solid fa-file-invoice-dollar"></i> Cuentas por pagar</a>

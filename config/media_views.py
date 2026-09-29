@@ -10,7 +10,7 @@ from registros_legales.models import RegistroLegalEstudiante
 
 PUBLIC_PREFIXES = (
     'qr_pagos/', 'videos_home/', 'promociones/', 'eventos/', 'academias/logos/',
-    'tienda/productos/',
+    'tienda/productos/', 'tienda/publicidad/',
 )
 PRIVATE_EVENT_PREFIXES = ('eventos/participantes/',)
 

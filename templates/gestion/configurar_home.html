@@ -104,6 +104,15 @@
                 </div>
             </div>
 
+            <div class="border border-warning rounded p-3 mb-4">
+                <h3 class="h5 text-warning"><i class="fa-solid fa-store"></i> Publicidad de la tienda</h3>
+                <div class="form-check mb-3">{{ form.publicidad_tienda_activa }}<label class="form-check-label" for="{{ form.publicidad_tienda_activa.id_for_label }}">{{ form.publicidad_tienda_activa.label }}</label></div>
+                <div class="mb-3"><label class="form-label">Título</label>{{ form.publicidad_tienda_titulo }}<div class="text-danger">{{ form.publicidad_tienda_titulo.errors }}</div></div>
+                <div class="mb-3"><label class="form-label">Texto</label>{{ form.publicidad_tienda_texto }}<div class="text-danger">{{ form.publicidad_tienda_texto.errors }}</div></div>
+                <div class="mb-3"><label class="form-label">Imagen</label>{{ form.publicidad_tienda_imagen }}{% if config_home.publicidad_tienda_imagen %}<img src="{{ config_home.publicidad_tienda_imagen.url }}" class="img-fluid rounded mt-2" style="max-height:180px" alt="Publicidad actual de la tienda">{% endif %}<div class="text-danger">{{ form.publicidad_tienda_imagen.errors }}</div></div>
+                <div><label class="form-label">{{ form.orden_publicidad_tienda.label }}</label>{{ form.orden_publicidad_tienda }}<div class="form-text text-info">{{ form.orden_publicidad_tienda.help_text }}</div></div>
+            </div>
+
             <div class="form-check mb-4">
                 {{ form.activo }}
                 <label class="form-check-label">

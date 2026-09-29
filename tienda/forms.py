@@ -18,6 +18,7 @@ from .models import (
     CuotaVentaTienda,
     CuotaCompraTienda,
     Monedas,
+    PedidoTienda,
     DisciplinaProducto,
     LineaModeloProducto,
     MarcaProducto,
@@ -222,6 +223,7 @@ class ProductoTiendaForm(BootstrapModelForm):
             'imagen', 'url_imagen', 'ubicacion', 'proveedor_catalogo',
             'codigo_proveedor_seleccionado', 'moneda',
             'costo_unitario', 'precio_venta', 'stock_minimo', 'activo',
+            'disponible_sobre_pedido',
             'motivo_inactivacion',
         ]
         widgets = {'descripcion': forms.Textarea(attrs={'rows': 3})}
@@ -688,6 +690,58 @@ class AbonoCompraForm(forms.Form):
         if self.compra and valor > self.compra.saldo_pendiente:
             raise forms.ValidationError('El pago supera el saldo pendiente de la compra.')
         return valor
+
+
+class PedidoTiendaForm(forms.ModelForm):
+    class Meta:
+        model = PedidoTienda
+        fields = [
+            'nombres', 'tipo_documento', 'numero_documento', 'telefono',
+            'correo', 'modalidad_entrega', 'direccion', 'cuenta_pago',
+            'referencia_pago', 'soporte_pago', 'observaciones_cliente',
+        ]
+        widgets = {
+            'nombres': forms.TextInput(attrs={'class': 'form-control'}),
+            'tipo_documento': forms.Select(attrs={'class': 'form-select'}),
+            'numero_documento': forms.TextInput(attrs={'class': 'form-control', 'inputmode': 'numeric'}),
+            'telefono': forms.TextInput(attrs={'class': 'form-control', 'inputmode': 'tel'}),
+            'correo': forms.EmailInput(attrs={'class': 'form-control'}),
+            'modalidad_entrega': forms.Select(attrs={'class': 'form-select'}),
+            'direccion': forms.TextInput(attrs={'class': 'form-control'}),
+            'cuenta_pago': forms.Select(attrs={'class': 'form-select'}),
+            'referencia_pago': forms.TextInput(attrs={'class': 'form-control'}),
+            'soporte_pago': forms.ClearableFileInput(attrs={
+                'class': 'form-control', 'accept': '.pdf,.jpg,.jpeg,.png,.webp',
+            }),
+            'observaciones_cliente': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+        }
+
+    def __init__(self, *args, moneda=None, alumno=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.moneda = moneda
+        self.fields['cuenta_pago'].queryset = CuentaTienda.objects.filter(
+            activa=True, moneda=moneda
+        ) if moneda else CuentaTienda.objects.none()
+        if alumno and not self.is_bound:
+            self.initial.update({
+                'nombres': str(alumno),
+                'numero_documento': alumno.documento,
+                'telefono': alumno.user.telefono or alumno.telefono_acudiente or '',
+                'correo': alumno.user.email or '',
+                'direccion': alumno.direccion or '',
+            })
+
+    def clean_numero_documento(self):
+        return ''.join(filter(str.isdigit, self.cleaned_data['numero_documento']))
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get('modalidad_entrega') != PedidoTienda.Entregas.ACADEMIA and not cleaned.get('direccion'):
+            self.add_error('direccion', 'Indique la dirección para realizar la entrega o el envío.')
+        cuenta = cleaned.get('cuenta_pago')
+        if cuenta and self.moneda and cuenta.moneda != self.moneda:
+            self.add_error('cuenta_pago', f'Seleccione una cuenta en {self.moneda}.')
+        return cleaned
 
 
 class GastoTiendaForm(forms.Form):
