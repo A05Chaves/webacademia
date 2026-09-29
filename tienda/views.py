@@ -177,6 +177,19 @@ def actualizar_carrito(request):
     return redirect('tienda:carrito')
 
 
+@require_POST
+def eliminar_del_carrito(request, producto_id):
+    carrito = request.session.get(CARRITO_SESION, {})
+    producto = ProductoTienda.objects.filter(pk=producto_id).first()
+    eliminado = carrito.pop(str(producto_id), None)
+    request.session[CARRITO_SESION] = carrito
+    request.session.modified = True
+    if eliminado is not None:
+        nombre = producto.nombre_variante if producto else 'El producto'
+        messages.success(request, f'{nombre} fue eliminado del carrito.')
+    return redirect('tienda:carrito')
+
+
 def finalizar_pedido(request):
     items, moneda, subtotal = _carrito_actual(request)
     if not items:

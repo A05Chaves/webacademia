@@ -1024,6 +1024,24 @@ class TiendaTests(TestCase):
         self.assertContains(respuesta, 'No se pueden mezclar productos en COP y USD')
         self.assertNotIn(str(producto_usd.id), self.client.session['carrito_tienda_publica'])
 
+    def test_eliminar_producto_del_carrito_conserva_los_demas(self):
+        segundo = ProductoTienda.objects.create(
+            nombre='Guantes catálogo', moneda='COP', precio_venta=60000,
+            costo_unitario=30000, stock=5,
+        )
+        self.client.post(reverse('tienda:agregar_carrito', args=[self.producto.id]), {'cantidad': 1})
+        self.client.post(reverse('tienda:agregar_carrito', args=[segundo.id]), {'cantidad': 2})
+
+        respuesta = self.client.post(
+            reverse('tienda:eliminar_del_carrito', args=[self.producto.id]),
+            follow=True,
+        )
+
+        self.assertContains(respuesta, 'fue eliminado del carrito')
+        carrito = self.client.session['carrito_tienda_publica']
+        self.assertNotIn(str(self.producto.id), carrito)
+        self.assertEqual(carrito[str(segundo.id)], 2)
+
     def test_pedido_publico_no_descuenta_inventario_hasta_aprobar_pago(self):
         self.client.logout()
         self.client.post(
