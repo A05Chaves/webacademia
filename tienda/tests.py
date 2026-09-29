@@ -1001,6 +1001,7 @@ class TiendaTests(TestCase):
         pagina = self.client.get(reverse('tienda:catalogo'))
         self.assertEqual(pagina.status_code, 200)
         self.assertContains(pagina, self.producto.nombre)
+        self.assertContains(pagina, '80.000,00')
 
         respuesta = self.client.post(
             reverse('tienda:agregar_carrito', args=[self.producto.id]),
@@ -1009,7 +1010,7 @@ class TiendaTests(TestCase):
         self.assertRedirects(respuesta, reverse('tienda:catalogo'))
         carrito = self.client.get(reverse('tienda:carrito'))
         self.assertContains(carrito, self.producto.nombre_variante)
-        self.assertContains(carrito, '160000')
+        self.assertContains(carrito, '160.000,00')
 
     def test_carrito_no_mezcla_productos_cop_y_usd(self):
         producto_usd = ProductoTienda.objects.create(
