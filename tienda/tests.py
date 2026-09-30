@@ -1026,6 +1026,34 @@ class TiendaTests(TestCase):
         self.assertIn('Camiseta academia', resultados[0]['nombre'])
         self.assertEqual(resultados[0]['precio'], '80.000,00')
 
+    def test_producto_sin_inventario_permanece_visible_como_agotado(self):
+        self.producto.stock = 0
+        self.producto.disponible_sobre_pedido = False
+        self.producto.save(update_fields=['stock', 'disponible_sobre_pedido'])
+
+        pagina = self.client.get(reverse('tienda:catalogo'))
+
+        self.assertEqual(pagina.status_code, 200)
+        self.assertContains(pagina, self.producto.nombre)
+        self.assertContains(pagina, 'AGOTADO')
+        self.assertNotContains(
+            pagina,
+            reverse('tienda:agregar_carrito', args=[self.producto.id]),
+        )
+
+    def test_producto_sobre_pedido_sin_inventario_conserva_la_compra(self):
+        self.producto.stock = 0
+        self.producto.disponible_sobre_pedido = True
+        self.producto.save(update_fields=['stock', 'disponible_sobre_pedido'])
+
+        pagina = self.client.get(reverse('tienda:catalogo'))
+
+        self.assertContains(pagina, 'Disponible sobre pedido')
+        self.assertContains(
+            pagina,
+            reverse('tienda:agregar_carrito', args=[self.producto.id]),
+        )
+
     def test_carrito_no_mezcla_productos_cop_y_usd(self):
         producto_usd = ProductoTienda.objects.create(
             nombre='Producto dólares', moneda='USD', precio_venta=20,

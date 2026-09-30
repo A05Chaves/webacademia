@@ -96,7 +96,7 @@ def _carrito_actual(request):
 def catalogo(request):
     productos = ProductoTienda.objects.filter(
         activo=True, precio_venta__gt=0,
-    ).filter(Q(stock__gt=0) | Q(disponible_sobre_pedido=True)).select_related(
+    ).select_related(
         'categoria', 'subcategoria', 'marca', 'linea_modelo', 'disciplina'
     )
     categoria = request.GET.get('categoria', '')
@@ -130,7 +130,7 @@ def sugerencias_catalogo(request):
         return JsonResponse({'resultados': []})
     productos = ProductoTienda.objects.filter(
         activo=True, precio_venta__gt=0,
-    ).filter(Q(stock__gt=0) | Q(disponible_sobre_pedido=True)).filter(
+    ).filter(
         Q(nombre__icontains=busqueda) | Q(referencia__icontains=busqueda)
         | Q(categoria__nombre__icontains=busqueda)
         | Q(subcategoria__nombre__icontains=busqueda)
