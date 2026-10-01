@@ -18,7 +18,8 @@ from finanzas.models import MovimientoFinanciero
 from .forms import ProductoTiendaForm, VentaTiendaForm
 from .models import (
     AjusteInventario, AplicacionAbonoCuota, CategoriaMovimientoTienda,
-    CategoriaProducto, ClienteTienda, CompraProveedorTienda, DetallePedidoTienda, DisciplinaProducto,
+    CategoriaProducto, ClienteTienda, CompraProveedorTienda,
+    DetalleCompraProveedorTienda, DetallePedidoTienda, DisciplinaProducto,
     CuentaTienda, CuotaCompraTienda, CuotaVentaTienda, DetalleVentaTienda, MovimientoTienda,
     LineaModeloProducto, MarcaProducto, PedidoTienda, ProductoTienda, VentaTienda,
     ProveedorTienda,
@@ -437,6 +438,40 @@ class TiendaTests(TestCase):
         ajuste = AjusteInventario.objects.get()
         self.assertEqual(ajuste.stock_anterior, 10)
         self.assertEqual(ajuste.stock_nuevo, 15)
+        self.assertEqual(DetalleCompraProveedorTienda.objects.count(), 1)
+
+    def test_una_factura_de_compra_permite_varios_productos(self):
+        proveedor = ProveedorTienda.objects.create(
+            nombre='Proveedor factura múltiple', codigo='PROV-MULTI'
+        )
+        self.producto.proveedor_catalogo = proveedor
+        self.producto.save(update_fields=['proveedor_catalogo'])
+        segundo = ProductoTienda.objects.create(
+            nombre='Guantes de prueba', precio_venta=120000,
+            costo_unitario=60000, stock=3, proveedor_catalogo=proveedor,
+        )
+
+        response = self.client.post(reverse('tienda:registrar_compra'), {
+            'producto': [str(self.producto.id), str(segundo.id)],
+            'cantidad': ['2', '3'],
+            'costo_unitario': ['45000', '50000'],
+            'proveedor': proveedor.id,
+            'cuenta': self.cuenta.id,
+            'modalidad': 'CONTADO',
+            'observaciones': 'Factura con dos productos',
+        })
+
+        self.assertRedirects(response, reverse('tienda:panel'))
+        compra = CompraProveedorTienda.objects.get()
+        self.assertEqual(compra.proveedor, proveedor)
+        self.assertEqual(compra.detalles.count(), 2)
+        self.assertEqual(compra.total, Decimal('240000'))
+        self.assertEqual(MovimientoTienda.objects.get().valor, Decimal('240000'))
+        self.assertEqual(AjusteInventario.objects.count(), 2)
+        self.producto.refresh_from_db()
+        segundo.refresh_from_db()
+        self.assertEqual(self.producto.stock, 12)
+        self.assertEqual(segundo.stock, 6)
 
     def test_gasto_general_no_modifica_inventario(self):
         response = self.client.post(reverse('tienda:registrar_gasto'), {

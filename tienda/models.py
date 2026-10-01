@@ -624,6 +624,26 @@ class CompraProveedorTienda(models.Model):
         return self.numero or f'Compra {self.pk}'
 
 
+class DetalleCompraProveedorTienda(models.Model):
+    compra = models.ForeignKey(
+        CompraProveedorTienda, on_delete=models.CASCADE, related_name='detalles'
+    )
+    producto = models.ForeignKey(
+        ProductoTienda, on_delete=models.PROTECT, related_name='detalles_compra_proveedor'
+    )
+    cantidad = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    costo_unitario = models.DecimalField(max_digits=14, decimal_places=2)
+    total = models.DecimalField(max_digits=14, decimal_places=2)
+
+    class Meta:
+        ordering = ['id']
+        verbose_name = 'Detalle de compra a proveedor'
+        verbose_name_plural = 'Detalles de compras a proveedores'
+
+    def __str__(self):
+        return f'{self.compra.numero} - {self.producto.nombre_variante}'
+
+
 class CuotaCompraTienda(models.Model):
     class Estados(models.TextChoices):
         PENDIENTE = 'PENDIENTE', 'Pendiente'

@@ -156,6 +156,33 @@
             Movimientos
         </h5>
 
+        <form method="get" class="row g-3 align-items-end border border-secondary rounded p-3 mb-4">
+            <input type="hidden" name="mes" value="{{ mes }}">
+            <input type="hidden" name="anio" value="{{ anio }}">
+            <input type="hidden" name="tipo" value="{{ tipo }}">
+            <input type="hidden" name="naturaleza" value="{{ naturaleza }}">
+            <div class="col-lg-4">
+                <label for="movimiento_q" class="form-label">Buscar movimiento</label>
+                <input id="movimiento_q" type="search" name="movimiento_q" value="{{ busqueda_movimiento }}" class="form-control" placeholder="Concepto, estudiante, documento, referencia o evento">
+            </div>
+            <div class="col-md-4 col-lg-2">
+                <label for="movimiento_cuenta" class="form-label">Cuenta</label>
+                <select id="movimiento_cuenta" name="movimiento_cuenta" class="form-select"><option value="">Todas</option>{% for cuenta in cuentas_movimiento %}<option value="{{ cuenta.id }}" {% if cuenta.id|stringformat:'s' == cuenta_movimiento %}selected{% endif %}>{{ cuenta.nombre }}</option>{% endfor %}</select>
+            </div>
+            <div class="col-md-4 col-lg-2">
+                <label for="movimiento_categoria" class="form-label">Categoría</label>
+                <select id="movimiento_categoria" name="movimiento_categoria" class="form-select"><option value="">Todas</option>{% for categoria in categorias_movimiento %}<option value="{{ categoria.id }}" {% if categoria.id|stringformat:'s' == categoria_movimiento %}selected{% endif %}>{{ categoria.nombre }}</option>{% endfor %}</select>
+            </div>
+            <div class="col-md-4 col-lg-2">
+                <label for="movimiento_origen" class="form-label">Origen</label>
+                <select id="movimiento_origen" name="movimiento_origen" class="form-select"><option value="">Todos</option><option value="PAGO" {% if origen_movimiento == 'PAGO' %}selected{% endif %}>Pago reportado</option><option value="MANUAL" {% if origen_movimiento == 'MANUAL' %}selected{% endif %}>Registro manual</option></select>
+            </div>
+            <div class="col-lg-2 d-flex gap-2">
+                <button type="submit" class="btn btn-primary flex-grow-1"><i class="fa-solid fa-magnifying-glass"></i> Buscar</button>
+                <a href="{% url 'gestion:detalle_financiero' %}?mes={{ mes }}&anio={{ anio }}{% if tipo %}&tipo={{ tipo }}{% endif %}{% if naturaleza %}&naturaleza={{ naturaleza }}{% endif %}" class="btn btn-outline-secondary" title="Limpiar filtro de movimientos"><i class="fa-solid fa-eraser"></i></a>
+            </div>
+        </form>
+
         <div class="table-responsive">
             <table class="table table-dark table-hover table-dark-custom">
                 <thead>
@@ -187,7 +214,7 @@
                         </td>
 
                         <td>{{ movimiento.cuenta }}</td>
-                        <td>{{ movimiento.concepto }}{% if movimiento.soporte %}<br><a href="{{ movimiento.soporte.url }}" target="_blank" class="small text-info"><i class="fa-solid fa-paperclip"></i> Ver soporte</a>{% endif %}</td>
+                        <td>{{ movimiento.concepto }}{% if movimiento.pago.comprobante %}<br><a href="{% url 'serve_media' movimiento.pago.comprobante.name %}" target="_blank" rel="noopener" class="small text-info"><i class="fa-solid fa-file-invoice"></i> Ver comprobante de pago</a>{% endif %}{% if movimiento.soporte %}<br><a href="{% url 'serve_media' movimiento.soporte.name %}" target="_blank" rel="noopener" class="small text-info"><i class="fa-solid fa-paperclip"></i> Ver soporte</a>{% endif %}</td>
                         <td>{% if movimiento.categoria %}{{ movimiento.categoria.nombre }}<br><small>{{ movimiento.categoria.get_naturaleza_display }}</small>{% else %}<small class="text-secondary">Operacional automática</small>{% endif %}</td>
                         <td>{% if movimiento.evento %}<strong>{{ movimiento.evento.nombre }}</strong><br><small>{{ movimiento.evento.get_tipo_display }}</small>{% else %}—{% endif %}</td>
                         <td>${{ movimiento.valor|floatformat:0 }}</td>

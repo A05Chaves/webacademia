@@ -2,7 +2,8 @@ from django.contrib import admin
 
 from .models import (
     AjusteInventario, AplicacionAbonoCuota, CategoriaMovimientoTienda,
-    CategoriaProducto, ClienteTienda, CompraProveedorTienda, DetallePedidoTienda,
+    CategoriaProducto, ClienteTienda, CompraProveedorTienda,
+    DetalleCompraProveedorTienda, DetallePedidoTienda,
     CuentaTienda, CuotaCompraTienda, CuotaVentaTienda, DetalleVentaTienda, DisciplinaProducto,
     LineaModeloProducto, MarcaProducto, MovimientoTienda, ProductoTienda,
     PedidoTienda, ProveedorTienda, SubcategoriaProducto, VentaTienda,
@@ -61,6 +62,7 @@ admin.site.register(VentaTienda)
 admin.site.register(DetalleVentaTienda)
 admin.site.register(CuotaVentaTienda)
 admin.site.register(CompraProveedorTienda)
+admin.site.register(DetalleCompraProveedorTienda)
 admin.site.register(CuotaCompraTienda)
 admin.site.register(PedidoTienda)
 admin.site.register(DetallePedidoTienda)

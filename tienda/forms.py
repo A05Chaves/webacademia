@@ -597,6 +597,15 @@ class CarteraInicialTiendaForm(forms.Form):
 
 
 class CompraTiendaForm(OperacionProductoForm):
+    proveedor = forms.ModelChoiceField(
+        queryset=ProveedorTienda.objects.none(), required=False,
+        label='Proveedor de la factura',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        help_text=(
+            'Proveedor de la factura. Si todos los productos tienen el mismo proveedor, '
+            'se completa automáticamente.'
+        ),
+    )
     costo_unitario = forms.DecimalField(
         min_value=Decimal('0.01'), max_digits=14, decimal_places=2,
         widget=forms.NumberInput(attrs={'class': 'form-control', 'min': '0.01', 'step': '0.01'}),
@@ -624,18 +633,78 @@ class CompraTiendaForm(OperacionProductoForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['producto'].queryset = ProductoTienda.objects.filter(activo=True)
+        self.fields['proveedor'].queryset = ProveedorTienda.objects.filter(activo=True)
         self.fields['cuenta'].required = False
 
     def clean(self):
         cleaned = super().clean()
-        producto = cleaned.get('producto')
-        cantidad = cleaned.get('cantidad')
-        costo = cleaned.get('costo_unitario')
+        ids = self.data.getlist('producto') if self.is_bound else []
+        cantidades = self.data.getlist('cantidad') if self.is_bound else []
+        costos = self.data.getlist('costo_unitario') if self.is_bound else []
+        lineas = []
+        if not ids or not (len(ids) == len(cantidades) == len(costos)):
+            self.add_error(
+                None,
+                'Agregue al menos un producto y complete todos los renglones de la compra.',
+            )
+        else:
+            productos = {
+                str(producto.pk): producto
+                for producto in self.fields['producto'].queryset.filter(pk__in=ids)
+            }
+            usados = set()
+            campo_cantidad = forms.IntegerField(min_value=1)
+            campo_costo = forms.DecimalField(
+                min_value=Decimal('0.01'), max_digits=14, decimal_places=2
+            )
+            for indice, (producto_id, cantidad_raw, costo_raw) in enumerate(
+                zip(ids, cantidades, costos), start=1
+            ):
+                producto = productos.get(producto_id)
+                if not producto:
+                    self.add_error(None, f'El producto del renglón {indice} no está disponible.')
+                    continue
+                if producto.pk in usados:
+                    self.add_error(None, f'{producto.nombre_variante} está repetido en la compra.')
+                    continue
+                usados.add(producto.pk)
+                try:
+                    cantidad = campo_cantidad.clean(cantidad_raw)
+                    costo = campo_costo.clean(costo_raw)
+                except forms.ValidationError:
+                    self.add_error(
+                        None, f'Revise la cantidad y el costo del renglón {indice}.'
+                    )
+                    continue
+                lineas.append({
+                    'producto': producto,
+                    'cantidad': cantidad,
+                    'costo_unitario': costo,
+                    'total': costo * cantidad,
+                })
+        monedas = {linea['producto'].moneda for linea in lineas}
+        if len(monedas) > 1:
+            self.add_error(None, 'Una misma factura no puede mezclar productos en COP y USD.')
+        producto = lineas[0]['producto'] if lineas else cleaned.get('producto')
         modalidad = cleaned.get('modalidad') or CompraProveedorTienda.Modalidades.CONTADO
         cleaned['modalidad'] = modalidad
         abono = cleaned.get('abono_inicial') or Decimal('0')
-        total = (costo * cantidad) if costo and cantidad else Decimal('0')
+        total = sum((linea['total'] for linea in lineas), Decimal('0'))
+        cleaned['lineas_compra'] = lineas
         cleaned['total_compra'] = total
+        if lineas:
+            cleaned['producto'] = lineas[0]['producto']
+            cleaned['cantidad'] = lineas[0]['cantidad']
+            cleaned['costo_unitario'] = lineas[0]['costo_unitario']
+        if not cleaned.get('proveedor') and lineas:
+            proveedores_lineas = [
+                linea['producto'].proveedor_catalogo_id for linea in lineas
+            ]
+            proveedores = set(proveedores_lineas)
+            if all(proveedores_lineas) and len(proveedores) == 1:
+                cleaned['proveedor'] = ProveedorTienda.objects.filter(
+                    pk=proveedores.pop()
+                ).first()
         cuenta = cleaned.get('cuenta')
         if abono > total:
             self.add_error('abono_inicial', 'El abono no puede superar el total de la compra.')
@@ -654,8 +723,9 @@ class CompraTiendaForm(OperacionProductoForm):
                 cleaned['numero_cuotas'] = 1
             if abono > 0 and not cuenta:
                 self.add_error('cuenta', 'Seleccione la cuenta desde la que se hizo el abono.')
-        if producto and cleaned.get('cuenta') and producto.moneda != cleaned['cuenta'].moneda:
-            self.add_error('cuenta', f'Seleccione una cuenta en {producto.moneda}.')
+        moneda = next(iter(monedas), getattr(producto, 'moneda', None))
+        if moneda and cleaned.get('cuenta') and moneda != cleaned['cuenta'].moneda:
+            self.add_error('cuenta', f'Seleccione una cuenta en {moneda}.')
         return cleaned
 
 

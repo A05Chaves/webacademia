@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from gestion.forms import GastoForm, PagoProgramadoForm, TransferenciaForm
-from pagos.models import Evento
+from pagos.models import Evento, MetodoPagoQR, Pago
 
 from .models import CategoriaFinanciera, CuentaFinanciera, MovimientoFinanciero, PagoProgramado
 
@@ -111,6 +111,63 @@ class VistasContablesTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['mes'], timezone.localdate().month)
         self.assertEqual(response.context['anio'], timezone.localdate().year)
+
+    def test_movimientos_se_pueden_filtrar_sin_alterar_totales_del_periodo(self):
+        otra_cuenta = CuentaFinanciera.objects.create(
+            nombre='Segunda cuenta', tipo=CuentaFinanciera.Tipos.BANCO,
+        )
+        categoria = CategoriaFinanciera.objects.create(
+            nombre='Mensualidades filtro', tipo=CategoriaFinanciera.Tipos.INGRESO,
+        )
+        MovimientoFinanciero.objects.create(
+            cuenta=self.cuenta, categoria=categoria,
+            tipo=MovimientoFinanciero.Tipos.INGRESO,
+            concepto='Mensualidad de Camila', valor=90000,
+        )
+        MovimientoFinanciero.objects.create(
+            cuenta=otra_cuenta, tipo=MovimientoFinanciero.Tipos.INGRESO,
+            concepto='Ingreso diferente', valor=30000,
+        )
+
+        response = self.client.get(reverse('gestion:detalle_financiero'), {
+            'movimiento_q': 'Camila',
+            'movimiento_cuenta': self.cuenta.id,
+            'movimiento_categoria': categoria.id,
+            'movimiento_origen': 'MANUAL',
+        })
+
+        self.assertEqual(list(response.context['movimientos']), [
+            MovimientoFinanciero.objects.get(concepto='Mensualidad de Camila')
+        ])
+        self.assertEqual(response.context['total_ingresos'], 120000)
+        self.assertContains(response, 'Mensualidad de Camila')
+        self.assertNotContains(response, 'Ingreso diferente')
+
+    def test_detalle_financiero_enlaza_comprobante_original_del_pago(self):
+        metodo = MetodoPagoQR.objects.create(
+            nombre='Cuenta comprobante', titular='Galeras BJJ',
+            imagen_qr=SimpleUploadedFile('qr.png', b'qr', content_type='image/png'),
+            cuenta_financiera=self.cuenta,
+        )
+        pago = Pago.objects.create(
+            metodo_qr=metodo, valor=80000,
+            tipo=Pago.Tipos.OTRO,
+            comprobante=SimpleUploadedFile(
+                'pago-detalle.pdf', b'%PDF-1.4 prueba', content_type='application/pdf'
+            ),
+            estado=Pago.Estados.APROBADO,
+        )
+        MovimientoFinanciero.objects.create(
+            cuenta=self.cuenta, tipo=MovimientoFinanciero.Tipos.INGRESO,
+            concepto='Pago con soporte', valor=pago.valor, pago=pago,
+        )
+
+        response = self.client.get(reverse('gestion:detalle_financiero'))
+
+        self.assertContains(response, 'Ver comprobante de pago')
+        self.assertContains(
+            response, reverse('serve_media', args=[pago.comprobante.name])
+        )
 
     def test_dashboard_discrimina_ingresos_y_gastos_por_evento(self):
         evento = Evento.objects.create(

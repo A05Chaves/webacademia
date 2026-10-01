@@ -2138,21 +2138,21 @@ def detalle_financiero(request):
     tipo = request.GET.get('tipo', '')
     naturaleza = request.GET.get('naturaleza', '')
 
-    movimientos = MovimientoFinanciero.objects.filter(
+    movimientos_periodo = MovimientoFinanciero.objects.filter(
         fecha__month=mes,
         fecha__year=anio
     ).select_related('cuenta', 'categoria', 'pago', 'evento')
 
     if tipo in ['INGRESO', 'EGRESO']:
-        movimientos = movimientos.filter(tipo=tipo)
+        movimientos_periodo = movimientos_periodo.filter(tipo=tipo)
     if naturaleza == CategoriaFinanciera.Naturalezas.NO_OPERACIONAL:
-        movimientos = movimientos.filter(categoria__naturaleza=naturaleza)
+        movimientos_periodo = movimientos_periodo.filter(categoria__naturaleza=naturaleza)
     elif naturaleza == CategoriaFinanciera.Naturalezas.OPERACIONAL:
-        movimientos = movimientos.exclude(
+        movimientos_periodo = movimientos_periodo.exclude(
             categoria__naturaleza=CategoriaFinanciera.Naturalezas.NO_OPERACIONAL
         )
 
-    movimientos_operativos = movimientos.exclude(
+    movimientos_operativos = movimientos_periodo.exclude(
         concepto__startswith='Transferencia '
     )
 
@@ -2169,6 +2169,32 @@ def detalle_financiero(request):
     )['total'] or 0
 
     saldo_mes = total_ingresos - total_egresos
+
+    busqueda_movimiento = request.GET.get('movimiento_q', '').strip()
+    cuenta_movimiento = request.GET.get('movimiento_cuenta', '')
+    categoria_movimiento = request.GET.get('movimiento_categoria', '')
+    origen_movimiento = request.GET.get('movimiento_origen', '')
+    movimientos = movimientos_periodo
+    if busqueda_movimiento:
+        movimientos = movimientos.filter(
+            Q(concepto__icontains=busqueda_movimiento)
+            | Q(observaciones__icontains=busqueda_movimiento)
+            | Q(evento__nombre__icontains=busqueda_movimiento)
+            | Q(pago__referencia_pago__icontains=busqueda_movimiento)
+            | Q(pago__pagador_nombre__icontains=busqueda_movimiento)
+            | Q(pago__pagador_documento__icontains=busqueda_movimiento)
+            | Q(pago__alumno__documento__icontains=busqueda_movimiento)
+            | Q(pago__alumno__user__first_name__icontains=busqueda_movimiento)
+            | Q(pago__alumno__user__last_name__icontains=busqueda_movimiento)
+        ).distinct()
+    if cuenta_movimiento.isdigit():
+        movimientos = movimientos.filter(cuenta_id=cuenta_movimiento)
+    if categoria_movimiento.isdigit():
+        movimientos = movimientos.filter(categoria_id=categoria_movimiento)
+    if origen_movimiento == 'PAGO':
+        movimientos = movimientos.filter(pago__isnull=False)
+    elif origen_movimiento == 'MANUAL':
+        movimientos = movimientos.filter(pago__isnull=True)
 
     ingresos_por_mes = []
     egresos_por_mes = []
@@ -2227,6 +2253,12 @@ def detalle_financiero(request):
         'anio': anio,
         'tipo': tipo,
         'naturaleza': naturaleza,
+        'busqueda_movimiento': busqueda_movimiento,
+        'cuenta_movimiento': cuenta_movimiento,
+        'categoria_movimiento': categoria_movimiento,
+        'origen_movimiento': origen_movimiento,
+        'cuentas_movimiento': CuentaFinanciera.objects.order_by('nombre'),
+        'categorias_movimiento': CategoriaFinanciera.objects.order_by('nombre'),
 
         'total_ingresos': total_ingresos,
         'total_egresos': total_egresos,

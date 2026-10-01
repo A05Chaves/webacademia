@@ -51,6 +51,7 @@ from .models import (
     CuentaTienda,
     CuotaVentaTienda,
     CuotaCompraTienda,
+    DetalleCompraProveedorTienda,
     DetalleVentaTienda,
     DisciplinaProducto,
     Monedas,
@@ -501,7 +502,9 @@ def panel(request):
     ).select_related('cliente')[:8]
     compras_pendientes = CompraProveedorTienda.objects.filter(
         saldo_pendiente__gt=0
-    ).select_related('proveedor', 'producto').order_by('fecha_vencimiento')[:8]
+    ).select_related('proveedor', 'producto').prefetch_related(
+        'detalles__producto'
+    ).order_by('fecha_vencimiento')[:8]
     entregas_pendientes = VentaTienda.objects.filter(
         tipo_entrega=VentaTienda.TiposEntrega.SOBRE_PEDIDO, entregada=False,
     ).select_related('cliente').order_by('fecha_entrega_estimada')[:8]
@@ -1058,12 +1061,20 @@ def registrar_compra(request):
     form = CompraTiendaForm(request.POST or None)
     if request.method == 'POST' and form.is_valid():
         with transaction.atomic():
-            item = ProductoTienda.objects.select_for_update().get(id=form.cleaned_data['producto'].id, activo=True)
-            cantidad, costo_nuevo = form.cleaned_data['cantidad'], form.cleaned_data['costo_unitario']
+            lineas = form.cleaned_data['lineas_compra']
+            productos_bloqueados = {
+                producto.pk: producto
+                for producto in ProductoTienda.objects.select_for_update().filter(
+                    pk__in=[linea['producto'].pk for linea in lineas], activo=True
+                )
+            }
+            primera_linea = lineas[0]
+            item = productos_bloqueados[primera_linea['producto'].pk]
+            cantidad, costo_nuevo = primera_linea['cantidad'], primera_linea['costo_unitario']
             total = form.cleaned_data['total_compra']
             abono = form.cleaned_data['abono_inicial']
             compra = CompraProveedorTienda.objects.create(
-                proveedor=item.proveedor_catalogo, producto=item, cantidad=cantidad,
+                proveedor=form.cleaned_data.get('proveedor'), producto=item, cantidad=cantidad,
                 costo_unitario=costo_nuevo, total=total, moneda=item.moneda,
                 modalidad=form.cleaned_data['modalidad'],
                 estado=(CompraProveedorTienda.Estados.PAGADA if abono == total else
@@ -1078,34 +1089,81 @@ def registrar_compra(request):
                 MovimientoTienda.objects.create(
                     cuenta=cuenta_tienda, tipo=MovimientoTienda.Tipos.EGRESO,
                     origen=MovimientoTienda.Origenes.COMPRA, concepto=f'Pago compra {compra.numero}',
-                    valor=abono, moneda=cuenta_tienda.moneda, producto=item, compra=compra,
-                    cantidad=cantidad, costo_unitario=costo_nuevo,
+                    valor=abono, moneda=cuenta_tienda.moneda,
+                    producto=item if len(lineas) == 1 else None, compra=compra,
+                    cantidad=cantidad if len(lineas) == 1 else None,
+                    costo_unitario=costo_nuevo if len(lineas) == 1 else None,
                     observaciones=form.cleaned_data['observaciones'], registrado_por=request.user,
                 )
             _crear_cuotas_compra(compra)
-            stock_anterior = item.stock
-            unidades_totales = stock_anterior + cantidad
-            item.costo_unitario = (
-                (item.costo_unitario * stock_anterior + costo_nuevo * cantidad) / unidades_totales
-            ).quantize(Decimal('0.01'))
-            item.stock = unidades_totales
-            item.save(update_fields=['stock', 'costo_unitario', 'actualizado'])
-            AjusteInventario.objects.create(
-                producto=item, tipo=AjusteInventario.Tipos.ENTRADA, cantidad=cantidad,
-                stock_anterior=stock_anterior, stock_nuevo=item.stock, costo_unitario=costo_nuevo,
-                motivo='Entrada automática por compra.', registrado_por=request.user,
-            )
-        messages.success(request, f'Compra {compra.numero} registrada por {_valor_tienda(total)} {item.moneda}. Saldo pendiente: {_valor_tienda(compra.saldo_pendiente)} {item.moneda}.')
+            for linea in lineas:
+                producto = productos_bloqueados[linea['producto'].pk]
+                cantidad_linea = linea['cantidad']
+                costo_linea = linea['costo_unitario']
+                DetalleCompraProveedorTienda.objects.create(
+                    compra=compra, producto=producto, cantidad=cantidad_linea,
+                    costo_unitario=costo_linea, total=linea['total'],
+                )
+                stock_anterior = producto.stock
+                unidades_totales = stock_anterior + cantidad_linea
+                producto.costo_unitario = (
+                    (producto.costo_unitario * stock_anterior + costo_linea * cantidad_linea)
+                    / unidades_totales
+                ).quantize(Decimal('0.01'))
+                producto.stock = unidades_totales
+                producto.save(update_fields=['stock', 'costo_unitario', 'actualizado'])
+                AjusteInventario.objects.create(
+                    producto=producto, tipo=AjusteInventario.Tipos.ENTRADA,
+                    cantidad=cantidad_linea, stock_anterior=stock_anterior,
+                    stock_nuevo=producto.stock, costo_unitario=costo_linea,
+                    motivo=f'Entrada automática por compra {compra.numero}.',
+                    registrado_por=request.user,
+                )
+        messages.success(
+            request,
+            f'Compra {compra.numero} con {len(lineas)} producto(s) registrada por '
+            f'{_valor_tienda(total)} {item.moneda}. Saldo pendiente: '
+            f'{_valor_tienda(compra.saldo_pendiente)} {item.moneda}.',
+        )
         return redirect('tienda:panel')
-    productos = {str(p.pk): {'costo': str(p.costo_unitario), 'moneda': p.moneda} for p in form.fields['producto'].queryset}
-    return render(request, 'tienda/compra_formulario.html', {'form': form, 'productos_compra': productos})
+    productos_qs = list(
+        form.fields['producto'].queryset.select_related('proveedor_catalogo')
+    )
+    productos = {
+        str(p.pk): {
+            'costo': str(p.costo_unitario), 'moneda': p.moneda,
+            'proveedor': p.proveedor_catalogo_id,
+            'proveedor_nombre': (
+                p.proveedor_catalogo.nombre if p.proveedor_catalogo else ''
+            ),
+        } for p in productos_qs
+    }
+    if request.method == 'POST':
+        ids = request.POST.getlist('producto')
+        cantidades = request.POST.getlist('cantidad')
+        costos = request.POST.getlist('costo_unitario')
+        lineas_formulario = [
+            {
+                'producto_id': int(producto_id) if producto_id.isdigit() else None,
+                'cantidad': cantidades[indice] if indice < len(cantidades) else '',
+                'costo': costos[indice] if indice < len(costos) else '',
+            }
+            for indice, producto_id in enumerate(ids or [''])
+        ]
+    else:
+        lineas_formulario = [{'producto_id': None, 'cantidad': 1, 'costo': ''}]
+    return render(request, 'tienda/compra_formulario.html', {
+        'form': form, 'productos_compra': productos,
+        'productos_disponibles': productos_qs,
+        'lineas_formulario': lineas_formulario,
+    })
 
 
 @staff_member_required
 def compras_credito(request):
     compras = CompraProveedorTienda.objects.filter(saldo_pendiente__gt=0).select_related(
         'proveedor', 'producto'
-    ).prefetch_related('cuotas').order_by('fecha_vencimiento')
+    ).prefetch_related('cuotas', 'detalles__producto').order_by('fecha_vencimiento')
     return render(request, 'tienda/compras_credito.html', {'compras': compras})
 
 
@@ -1121,7 +1179,9 @@ def registrar_abono_compra(request, compra_id):
             movimiento = MovimientoTienda.objects.create(
                 cuenta=form.cleaned_data['cuenta'], tipo=MovimientoTienda.Tipos.EGRESO,
                 origen=MovimientoTienda.Origenes.COMPRA, concepto=f'Abono compra {compra.numero}',
-                valor=valor, moneda=compra.moneda, producto=compra.producto, compra=compra,
+                valor=valor, moneda=compra.moneda,
+                producto=(compra.producto if compra.detalles.count() == 1 else None),
+                compra=compra,
                 observaciones=form.cleaned_data['observaciones'], registrado_por=request.user,
             )
             restante = valor
