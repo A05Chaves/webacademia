@@ -1606,6 +1606,8 @@ class CalendarioAsistenciaTests(TestCase):
         self.assertContains(response, 'Clase confirmada')
         self.assertContains(response, 'data-voz="Clase confirmada"')
         self.assertContains(response, 'fa-circle-check')
+        self.assertContains(response, 'avatar-mobile-link')
+        self.assertContains(response, 'Mi avatar, 10 monedas')
         self.assertContains(response, 'Ganaste 10 monedas')
         self.assertContains(response, 'moneda-recompensa')
         billetera = BilleteraMonedas.objects.get(usuario=self.usuario)
