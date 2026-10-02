@@ -11,7 +11,7 @@ from gestion.decorators import administrador_required as staff_member_required
 from django.conf import settings
 from django.core.mail import EmailMessage
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import Prefetch, Q, Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -1165,7 +1165,16 @@ def registrar_compra(request):
 def compras_credito(request):
     compras = CompraProveedorTienda.objects.filter(saldo_pendiente__gt=0).select_related(
         'proveedor', 'producto'
-    ).prefetch_related('cuotas', 'detalles__producto').order_by('fecha_vencimiento')
+    ).prefetch_related(
+        Prefetch(
+            'cuotas',
+            queryset=CuotaCompraTienda.objects.filter(saldo__gt=0).order_by(
+                'fecha_vencimiento', 'numero'
+            ),
+            to_attr='cuotas_pendientes',
+        ),
+        'detalles__producto',
+    ).order_by('fecha_vencimiento')
     return render(request, 'tienda/compras_credito.html', {'compras': compras})
 
 
@@ -1202,7 +1211,25 @@ def registrar_abono_compra(request, compra_id):
             compra.actualizar_saldo()
         messages.success(request, f'Pago de {_valor_tienda(movimiento.valor)} {compra.moneda} registrado. Saldo: {_valor_tienda(compra.saldo_pendiente)} {compra.moneda}.')
         return redirect('tienda:compras_credito')
-    return _render_formulario(request, form, f'Pagar compra {compra.numero}', 'fa-money-check-dollar', 'Registrar pago', volver_url='tienda:compras_credito')
+    cuotas_pendientes = list(
+        compra.cuotas.filter(saldo__gt=0).order_by('fecha_vencimiento', 'numero')
+    )
+    cuotas_pago = {
+        str(cuota.pk): {
+            'numero': cuota.numero,
+            'saldo': str(cuota.saldo),
+            'valor_original': str(cuota.valor),
+            'vencimiento': cuota.fecha_vencimiento.isoformat(),
+        }
+        for cuota in cuotas_pendientes
+    }
+    return render(request, 'tienda/abono_compra_formulario.html', {
+        'form': form,
+        'compra': compra,
+        'cuotas_pendientes': cuotas_pendientes,
+        'cuotas_pago': cuotas_pago,
+        'total_pagado': compra.total - compra.saldo_pendiente,
+    })
 
 
 @staff_member_required

@@ -1,0 +1,163 @@
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+<div class="page-heading">
+    <div class="page-heading-main">
+        <h2 class="page-heading-title">
+            <i class="fa-solid fa-money-check-dollar"></i>
+            <span>Pagar compra {{ compra.numero }}</span>
+        </h2>
+        <p class="page-heading-subtitle text-secondary">
+            Selecciona una cuota o paga todo el saldo pendiente.
+        </p>
+    </div>
+    <div class="page-heading-actions">
+        <a href="{% url 'tienda:compras_credito' %}" class="btn btn-outline-light page-heading-action">
+            <i class="fa-solid fa-arrow-left"></i><span>Volver</span>
+        </a>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-xl-9">
+        <div class="row g-3 mb-3">
+            <div class="col-sm-4">
+                <div class="card bg-dark text-light border-secondary h-100">
+                    <div class="card-body">
+                        <div class="text-secondary small">Total de la compra</div>
+                        <div class="fs-4 fw-bold">{{ compra.total|floatformat:2 }} {{ compra.moneda }}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-4">
+                <div class="card bg-dark text-light border-secondary h-100">
+                    <div class="card-body">
+                        <div class="text-secondary small">Total pagado</div>
+                        <div class="fs-4 fw-bold text-success">{{ total_pagado|floatformat:2 }} {{ compra.moneda }}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-4">
+                <div class="card bg-dark text-light border-warning h-100">
+                    <div class="card-body">
+                        <div class="text-secondary small">Saldo total pendiente</div>
+                        <div class="fs-4 fw-bold text-warning" id="saldo-total-texto">{{ compra.saldo_pendiente|floatformat:2 }} {{ compra.moneda }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card bg-dark text-light border-secondary">
+            <div class="card-body p-4">
+                <form method="post" id="form-pago-compra">
+                    {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>
+                    {% endif %}
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="{{ form.cuota.id_for_label }}">{{ form.cuota.label }}</label>
+                            {{ form.cuota }}
+                            {% for error in form.cuota.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="{{ form.cuenta.id_for_label }}">{{ form.cuenta.label }}</label>
+                            {{ form.cuenta }}
+                            {% for error in form.cuenta.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+
+                        <div class="col-12">
+                            <div class="alert alert-info mb-0" role="status">
+                                <div class="row align-items-center g-3">
+                                    <div class="col-md">
+                                        <div class="small">Valor sugerido para <strong id="cuota-seleccionada-texto">la cuota</strong></div>
+                                        <div class="fs-4 fw-bold" id="valor-sugerido-texto">--</div>
+                                        <div class="small" id="vencimiento-cuota-texto"></div>
+                                    </div>
+                                    <div class="col-md-auto d-flex flex-wrap gap-2">
+                                        <button type="button" class="btn btn-outline-info" id="usar-cuota">
+                                            Usar valor de la cuota
+                                        </button>
+                                        <button type="button" class="btn btn-outline-warning" id="pagar-total">
+                                            Pagar saldo total
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label" for="{{ form.valor.id_for_label }}">{{ form.valor.label }}</label>
+                            {{ form.valor }}
+                            <div class="form-text text-secondary">{{ form.valor.help_text }}</div>
+                            {% for error in form.valor.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="{{ form.observaciones.id_for_label }}">{{ form.observaciones.label }}</label>
+                            {{ form.observaciones }}
+                            {% for error in form.observaciones.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                        <a href="{% url 'tienda:compras_credito' %}" class="btn btn-outline-light">Cancelar</a>
+                        <button type="submit" class="btn btn-success">
+                            <i class="fa-solid fa-floppy-disk"></i> Registrar pago
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{ cuotas_pago|json_script:'cuotas-pago-datos' }}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const cuotas = JSON.parse(document.getElementById('cuotas-pago-datos').textContent);
+    const selector = document.getElementById('{{ form.cuota.id_for_label }}');
+    const valor = document.getElementById('{{ form.valor.id_for_label }}');
+    const sugerido = document.getElementById('valor-sugerido-texto');
+    const cuotaTexto = document.getElementById('cuota-seleccionada-texto');
+    const vencimientoTexto = document.getElementById('vencimiento-cuota-texto');
+    const saldoTotal = '{{ compra.saldo_pendiente|stringformat:"f" }}';
+    const moneda = '{{ compra.moneda|escapejs }}';
+
+    function dinero(numero) {
+        return new Intl.NumberFormat('es-CO', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        }).format(Number(numero)) + ' ' + moneda;
+    }
+
+    function fechaLegible(fechaIso) {
+        const partes = fechaIso.split('-').map(Number);
+        return new Intl.DateTimeFormat('es-CO', {
+            day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
+        }).format(new Date(Date.UTC(partes[0], partes[1] - 1, partes[2])));
+    }
+
+    function asignarValor(numero) {
+        valor.value = typeof formatearValorMonetario === 'function'
+            ? formatearValorMonetario(String(numero).replace('.', ','), false)
+            : numero;
+        valor.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    function actualizarCuota(cambiarValor = true) {
+        const cuota = cuotas[selector.value];
+        if (!cuota) return;
+        cuotaTexto.textContent = `la cuota ${cuota.numero}`;
+        sugerido.textContent = dinero(cuota.saldo);
+        vencimientoTexto.textContent = `Vence: ${fechaLegible(cuota.vencimiento)}`;
+        if (cambiarValor) asignarValor(cuota.saldo);
+    }
+
+    selector.addEventListener('change', () => actualizarCuota(true));
+    document.getElementById('usar-cuota').addEventListener('click', () => actualizarCuota(true));
+    document.getElementById('pagar-total').addEventListener('click', () => asignarValor(saldoTotal));
+    actualizarCuota(false);
+});
+</script>
+{% endblock %}

@@ -750,10 +750,21 @@ class AbonoCompraForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.compra = compra
         if compra:
-            self.fields['cuota'].queryset = compra.cuotas.filter(saldo__gt=0)
+            cuotas_pendientes = compra.cuotas.filter(saldo__gt=0).order_by(
+                'fecha_vencimiento', 'numero'
+            )
+            self.fields['cuota'].queryset = cuotas_pendientes
+            self.fields['cuota'].label_from_instance = (
+                lambda cuota: f'Cuota {cuota.numero}'
+            )
             self.fields['cuenta'].queryset = CuentaTienda.objects.filter(
                 activa=True, moneda=compra.moneda
             )
+            if not self.is_bound:
+                primera_cuota = cuotas_pendientes.first()
+                if primera_cuota:
+                    self.initial['cuota'] = primera_cuota
+                    self.initial['valor'] = primera_cuota.saldo
 
     def clean_valor(self):
         valor = self.cleaned_data['valor']

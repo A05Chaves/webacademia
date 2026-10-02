@@ -669,6 +669,9 @@ class CuotaCompraTienda(models.Model):
     def esta_vencida(self):
         return self.saldo > 0 and self.fecha_vencimiento < timezone.localdate()
 
+    def __str__(self):
+        return f'Cuota {self.numero}'
+
 
 class PedidoTienda(models.Model):
     class Estados(models.TextChoices):

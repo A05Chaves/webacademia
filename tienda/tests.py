@@ -445,6 +445,9 @@ class TiendaTests(TestCase):
 
         costo = response.context['productos_compra'][str(self.producto.id)]['costo']
         self.assertEqual(costo, '40000,00')
+        self.assertContains(response, 'Revisar compra')
+        self.assertContains(response, 'Confirmar compra')
+        self.assertContains(response, 'Confirmar y guardar')
 
     def test_una_factura_de_compra_permite_varios_productos(self):
         proveedor = ProveedorTienda.objects.create(
@@ -1001,6 +1004,79 @@ class TiendaTests(TestCase):
         self.assertEqual(MovimientoTienda.objects.get().valor, Decimal('50000'))
         self.producto.refresh_from_db()
         self.assertEqual(self.producto.stock, 14)
+
+    def test_abonos_compra_muestran_y_recalculan_solo_cuotas_pendientes(self):
+        compra = CompraProveedorTienda.objects.create(
+            producto=self.producto,
+            cantidad=3,
+            costo_unitario=Decimal('50000'),
+            total=Decimal('150000'),
+            moneda='COP',
+            modalidad=CompraProveedorTienda.Modalidades.CREDITO,
+            estado=CompraProveedorTienda.Estados.PENDIENTE,
+            saldo_pendiente=Decimal('150000'),
+            numero_cuotas=3,
+            fecha_vencimiento=timezone.localdate() + timedelta(days=10),
+        )
+        cuotas = [
+            CuotaCompraTienda.objects.create(
+                compra=compra,
+                numero=numero,
+                fecha_vencimiento=timezone.localdate() + timedelta(days=10 * numero),
+                valor=Decimal('50000'),
+                saldo=Decimal('50000'),
+            )
+            for numero in range(1, 4)
+        ]
+
+        formulario = self.client.get(
+            reverse('tienda:registrar_abono_compra', args=[compra.id])
+        )
+        self.assertEqual(formulario.status_code, 200)
+        self.assertContains(formulario, '>Cuota 1<', html=False)
+        self.assertContains(formulario, '>Cuota 2<', html=False)
+        self.assertNotContains(formulario, 'CuotaCompraTienda object')
+        self.assertEqual(formulario.context['form']['cuota'].value(), cuotas[0].id)
+        self.assertEqual(formulario.context['form']['valor'].value(), Decimal('50000'))
+        self.assertContains(formulario, 'Pagar saldo total')
+
+        self.client.post(reverse('tienda:registrar_abono_compra', args=[compra.id]), {
+            'cuota': cuotas[0].id,
+            'cuenta': self.cuenta.id,
+            'valor': '20000',
+            'observaciones': 'Abono parcial',
+        })
+        cuotas[0].refresh_from_db()
+        self.assertEqual(cuotas[0].saldo, Decimal('30000'))
+        self.assertEqual(cuotas[0].estado, CuotaCompraTienda.Estados.PARCIAL)
+
+        formulario = self.client.get(
+            reverse('tienda:registrar_abono_compra', args=[compra.id])
+        )
+        self.assertEqual(formulario.context['form']['cuota'].value(), cuotas[0].id)
+        self.assertEqual(formulario.context['form']['valor'].value(), Decimal('30000'))
+
+        self.client.post(reverse('tienda:registrar_abono_compra', args=[compra.id]), {
+            'cuota': cuotas[0].id,
+            'cuenta': self.cuenta.id,
+            'valor': '30000',
+            'observaciones': 'Completa cuota uno',
+        })
+        cuotas[0].refresh_from_db()
+        self.assertEqual(cuotas[0].saldo, Decimal('0'))
+        self.assertEqual(cuotas[0].estado, CuotaCompraTienda.Estados.PAGADA)
+
+        listado = self.client.get(reverse('tienda:compras_credito'))
+        self.assertNotContains(listado, 'Cuota 1:')
+        self.assertContains(listado, 'Cuota 2:')
+        self.assertContains(listado, 'Cuota 3:')
+        self.assertContains(listado, '2 pendientes')
+
+        formulario = self.client.get(
+            reverse('tienda:registrar_abono_compra', args=[compra.id])
+        )
+        self.assertEqual(formulario.context['form']['cuota'].value(), cuotas[1].id)
+        self.assertEqual(formulario.context['form']['valor'].value(), Decimal('50000'))
 
     def test_venta_sobre_pedido_no_descuenta_hasta_entregar(self):
         response = self.client.post(reverse('tienda:registrar_venta'), {
