@@ -440,6 +440,12 @@ class TiendaTests(TestCase):
         self.assertEqual(ajuste.stock_nuevo, 15)
         self.assertEqual(DetalleCompraProveedorTienda.objects.count(), 1)
 
+    def test_formulario_compra_entrega_costos_con_decimal_localizado(self):
+        response = self.client.get(reverse('tienda:registrar_compra'))
+
+        costo = response.context['productos_compra'][str(self.producto.id)]['costo']
+        self.assertEqual(costo, '40000,00')
+
     def test_una_factura_de_compra_permite_varios_productos(self):
         proveedor = ProveedorTienda.objects.create(
             nombre='Proveedor factura múltiple', codigo='PROV-MULTI'

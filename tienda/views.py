@@ -1131,7 +1131,9 @@ def registrar_compra(request):
     )
     productos = {
         str(p.pk): {
-            'costo': str(p.costo_unitario), 'moneda': p.moneda,
+            # La coma evita que el formateador del navegador confunda los
+            # decimales del Decimal con separadores de miles al enviar.
+            'costo': str(p.costo_unitario).replace('.', ','), 'moneda': p.moneda,
             'proveedor': p.proveedor_catalogo_id,
             'proveedor_nombre': (
                 p.proveedor_catalogo.nombre if p.proveedor_catalogo else ''
