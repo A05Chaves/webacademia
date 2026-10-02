@@ -362,6 +362,50 @@ class TiendaTests(TestCase):
         self.assertEqual(self.cuenta.saldo_actual, 360000)
         self.assertFalse(MovimientoFinanciero.objects.exists())
 
+    def test_venta_permite_fecha_manual_y_la_refleja_en_factura_y_movimiento(self):
+        fecha_manual = timezone.localdate() - timedelta(days=12)
+
+        response = self.client.post(reverse('tienda:registrar_venta'), {
+            'fecha_venta': fecha_manual.isoformat(),
+            'producto': self.producto.id,
+            'cantidad': '1',
+            'cuenta': self.cuenta.id,
+            'observaciones': 'Venta registrada con fecha anterior',
+        })
+
+        venta = VentaTienda.objects.get()
+        movimiento = MovimientoTienda.objects.get(venta=venta)
+        self.assertRedirects(response, reverse('tienda:panel'))
+        self.assertEqual(timezone.localtime(venta.fecha).date(), fecha_manual)
+        self.assertEqual(movimiento.fecha, venta.fecha)
+        self.assertTrue(venta.numero.startswith(f'VT-{fecha_manual:%Y%m}-'))
+
+        factura = self.client.get(
+            reverse('tienda:descargar_comprobante', args=[venta.id])
+        )
+        texto_pdf = ' '.join(
+            pagina.extract_text() or ''
+            for pagina in PdfReader(BytesIO(factura.content)).pages
+        )
+        self.assertIn(f'{fecha_manual:%d/%m/%Y}', texto_pdf)
+
+    def test_venta_sin_fecha_manual_usa_fecha_actual(self):
+        antes = timezone.now()
+
+        response = self.client.post(reverse('tienda:registrar_venta'), {
+            'producto': self.producto.id,
+            'cantidad': '1',
+            'cuenta': self.cuenta.id,
+            'observaciones': '',
+        })
+
+        despues = timezone.now()
+        venta = VentaTienda.objects.get()
+        self.assertRedirects(response, reverse('tienda:panel'))
+        self.assertLessEqual(antes, venta.fecha)
+        self.assertLessEqual(venta.fecha, despues)
+        self.assertEqual(MovimientoTienda.objects.get(venta=venta).fecha, venta.fecha)
+
     def test_venta_rechaza_cantidad_superior_al_inventario(self):
         response = self.client.post(reverse('tienda:registrar_venta'), {
             'producto': self.producto.id,
@@ -658,6 +702,8 @@ class TiendaTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Vista previa de la factura')
+        self.assertContains(response, 'Fecha de la venta')
+        self.assertContains(response, 'Si la deja vacía se usará automáticamente la fecha de hoy')
         self.assertContains(response, 'Total de la venta')
         self.assertEqual(
             response.context['productos_vista_previa'][str(self.producto.id)],

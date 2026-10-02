@@ -350,6 +350,12 @@ class OperacionProductoForm(forms.Form):
 
 
 class VentaTiendaForm(OperacionProductoForm):
+    fecha_venta = forms.DateField(
+        required=False,
+        label='Fecha de la venta',
+        help_text='Opcional. Si la deja vacía se usará automáticamente la fecha de hoy.',
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+    )
     moneda = forms.ChoiceField(
         choices=Monedas.choices, initial=Monedas.COP, required=False,
         widget=forms.Select(attrs={'class': 'form-select'}),

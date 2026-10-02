@@ -3,7 +3,7 @@
 <form method="post" class="card bg-dark text-light border-secondary"><div class="card-body p-4">{% csrf_token %}
 {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
 <h5 class="border-bottom pb-2 mb-3">Producto y valor</h5><div class="row g-3 mb-4">
-{% include 'tienda/venta_campo.html' with field=form.moneda col='col-md-3' %}{% include 'tienda/venta_campo.html' with field=form.producto col='col-md-6' %}{% include 'tienda/venta_campo.html' with field=form.cantidad col='col-md-3' %}{% include 'tienda/venta_campo.html' with field=form.descuento_porcentaje col='col-md-3' %}{% include 'tienda/venta_campo.html' with field=form.modalidad col='col-md-3' %}<div id="bloque-cuenta" class="col-md-3">{% include 'tienda/venta_campo.html' with field=form.cuenta col='' %}</div>{% include 'tienda/venta_campo.html' with field=form.tipo_entrega col='col-md-3' %}<div id="bloque-fecha-entrega" class="col-md-4">{% include 'tienda/venta_campo.html' with field=form.fecha_entrega_estimada col='' %}</div>{% include 'tienda/venta_campo.html' with field=form.observaciones col='col-12' %}
+{% include 'tienda/venta_campo.html' with field=form.fecha_venta col='col-md-3' %}{% include 'tienda/venta_campo.html' with field=form.moneda col='col-md-3' %}{% include 'tienda/venta_campo.html' with field=form.producto col='col-md-6' %}{% include 'tienda/venta_campo.html' with field=form.cantidad col='col-md-3' %}{% include 'tienda/venta_campo.html' with field=form.descuento_porcentaje col='col-md-3' %}{% include 'tienda/venta_campo.html' with field=form.modalidad col='col-md-3' %}<div id="bloque-cuenta" class="col-md-3">{% include 'tienda/venta_campo.html' with field=form.cuenta col='' %}</div>{% include 'tienda/venta_campo.html' with field=form.tipo_entrega col='col-md-3' %}<div id="bloque-fecha-entrega" class="col-md-4">{% include 'tienda/venta_campo.html' with field=form.fecha_entrega_estimada col='' %}</div>{% include 'tienda/venta_campo.html' with field=form.observaciones col='col-12' %}
 </div>
 <section id="vista-previa-venta" class="card bg-black border-info mb-4" aria-live="polite">
 <div class="card-header border-info d-flex justify-content-between align-items-center gap-3"><div><h5 class="mb-0"><i class="fa-solid fa-receipt me-2"></i>Vista previa de la factura</h5><small class="text-secondary">Resumen preliminar antes de registrar la venta</small></div><span id="vista-modalidad" class="badge text-bg-info">Contado</span></div>
@@ -11,7 +11,7 @@
 <div id="vista-sin-producto" class="text-secondary text-center py-3">Selecciona un producto para calcular la venta.</div>
 <div id="vista-con-producto" class="d-none">
 <div class="row g-3 align-items-stretch">
-<div class="col-lg-7"><div class="h-100 border rounded p-3"><div class="d-flex justify-content-between gap-3 mb-2"><span class="text-secondary">Producto</span><strong id="vista-producto" class="text-end"></strong></div><div class="d-flex justify-content-between gap-3 mb-2"><span class="text-secondary">Comprador</span><span id="vista-comprador" class="text-end">Consumidor final</span></div><div class="d-flex justify-content-between gap-3"><span class="text-secondary">Detalle</span><span id="vista-detalle" class="text-end"></span></div><div id="vista-stock" class="small text-secondary text-end mt-2"></div></div></div>
+<div class="col-lg-7"><div class="h-100 border rounded p-3"><div class="d-flex justify-content-between gap-3 mb-2"><span class="text-secondary">Fecha de venta</span><span id="vista-fecha-venta" class="text-end"></span></div><div class="d-flex justify-content-between gap-3 mb-2"><span class="text-secondary">Producto</span><strong id="vista-producto" class="text-end"></strong></div><div class="d-flex justify-content-between gap-3 mb-2"><span class="text-secondary">Comprador</span><span id="vista-comprador" class="text-end">Consumidor final</span></div><div class="d-flex justify-content-between gap-3"><span class="text-secondary">Detalle</span><span id="vista-detalle" class="text-end"></span></div><div id="vista-stock" class="small text-secondary text-end mt-2"></div></div></div>
 <div class="col-lg-5"><div class="h-100 border border-info rounded p-3"><div class="d-flex justify-content-between mb-2"><span>Subtotal</span><strong id="vista-subtotal"></strong></div><div class="d-flex justify-content-between mb-3"><span id="vista-descuento-etiqueta">Descuento (0%)</span><strong id="vista-descuento" class="text-warning"></strong></div><div class="border-top border-info pt-3 d-flex justify-content-between align-items-end gap-3"><span class="fs-5">Total de la venta</span><strong id="vista-total" class="fs-3 text-info text-end"></strong></div><div id="vista-nota-modalidad" class="small text-secondary text-end mt-2"></div></div></div>
 </div></div></div>
 </section>
@@ -25,6 +25,7 @@
 <script>
 const productosVenta = JSON.parse(document.getElementById('productos-venta-data').textContent);
 const compradoresVenta = JSON.parse(document.getElementById('compradores-venta-data').textContent);
+const campoFechaVenta = document.getElementById('id_fecha_venta');
 const campoProducto = document.getElementById('id_producto');
 const campoMoneda = document.getElementById('id_moneda');
 const campoCantidad = document.getElementById('id_cantidad');
@@ -58,6 +59,15 @@ function numeroSeguro(valor, predeterminado = 0) {
 
 function dinero(valor, moneda) {
     return `$ ${new Intl.NumberFormat('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(valor)} ${moneda}`;
+}
+
+function fechaVentaLegible() {
+    const valor = campoFechaVenta.value;
+    if (!valor) return 'Hoy (automática)';
+    const partes = valor.split('-').map(Number);
+    return new Intl.DateTimeFormat('es-CO', {
+        day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
+    }).format(new Date(Date.UTC(partes[0], partes[1] - 1, partes[2])));
 }
 
 function nombreComprador() {
@@ -104,6 +114,7 @@ function actualizarVistaPrevia() {
     const credito = campoModalidad.value === 'CREDITO';
 
     document.getElementById('vista-producto').textContent = producto.nombre;
+    document.getElementById('vista-fecha-venta').textContent = fechaVentaLegible();
     document.getElementById('vista-comprador').textContent = nombreComprador();
     document.getElementById('vista-detalle').textContent = `${cantidad} × ${dinero(precio, producto.moneda)}`;
     document.getElementById('vista-subtotal').textContent = dinero(subtotal, producto.moneda);
@@ -123,6 +134,6 @@ function actualizarVistaPrevia() {
 
 function filtrarMoneda(){const moneda=campoMoneda.value;Array.from(campoProducto.options).forEach((o,i)=>{if(!i)return;const p=productosVenta[o.value];o.hidden=p&&p.moneda!==moneda;o.disabled=o.hidden});Array.from(campoCuenta.options).forEach((o,i)=>{if(!i)return;o.hidden=!o.text.includes(`(${moneda})`);o.disabled=o.hidden});if(campoProducto.selectedOptions[0]?.disabled)campoProducto.value='';if(campoCuenta.selectedOptions[0]?.disabled)campoCuenta.value='';}
 function actualizarVenta(){filtrarMoneda();const credito=campoModalidad.value==='CREDITO';document.getElementById('bloque-credito').classList.toggle('d-none',!credito);document.getElementById('bloque-cuenta').classList.toggle('d-none',credito);document.getElementById('bloque-fecha-entrega').classList.toggle('d-none',campoEntrega.value!=='SOBRE_PEDIDO');const nuevo=campoNuevoComprador.checked;document.getElementById('comprador-nuevo').classList.toggle('d-none',!nuevo);campoCliente.disabled=nuevo;actualizarDatosComprador();actualizarVistaPrevia();}
-[campoProducto, campoCantidad, campoDescuento, campoCliente, campoNombreComprador, campoEntrega].forEach(campo => {campo.addEventListener('change', actualizarVistaPrevia);campo.addEventListener('input', actualizarVistaPrevia);});
+[campoFechaVenta, campoProducto, campoCantidad, campoDescuento, campoCliente, campoNombreComprador, campoEntrega].forEach(campo => {campo.addEventListener('change', actualizarVistaPrevia);campo.addEventListener('input', actualizarVistaPrevia);});
 campoCliente.addEventListener('change', actualizarDatosComprador);[campoModalidad,campoMoneda,campoEntrega].forEach(c=>c.addEventListener('change',actualizarVenta));campoNuevoComprador.addEventListener('change',actualizarVenta);actualizarVenta();
 </script>{% endblock %}

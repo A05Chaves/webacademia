@@ -968,6 +968,13 @@ def registrar_venta(request):
                 descuento = (subtotal * porcentaje / Decimal('100')).quantize(Decimal('0.01'))
                 total = subtotal - descuento
                 modalidad = form.cleaned_data['modalidad']
+                fecha_venta = timezone.now()
+                if form.cleaned_data.get('fecha_venta'):
+                    hora_actual = timezone.localtime(fecha_venta).time().replace(tzinfo=None)
+                    fecha_venta = timezone.make_aware(
+                        datetime.combine(form.cleaned_data['fecha_venta'], hora_actual),
+                        timezone.get_current_timezone(),
+                    )
                 cliente_venta = _cliente_desde_comprador(
                     form.cleaned_data.get('cliente')
                 )
@@ -986,12 +993,13 @@ def registrar_venta(request):
                     estado=VentaTienda.Estados.PAGADA if modalidad == VentaTienda.Modalidades.CONTADO else VentaTienda.Estados.PENDIENTE,
                     moneda=form.cleaned_data['moneda'], subtotal=subtotal, descuento=descuento, total=total,
                     saldo_pendiente=total if modalidad == VentaTienda.Modalidades.CREDITO else 0,
+                    fecha=fecha_venta,
                     fecha_vencimiento=form.cleaned_data.get('fecha_vencimiento'),
                     numero_cuotas=form.cleaned_data.get('numero_cuotas') or 1,
                     tipo_entrega=form.cleaned_data['tipo_entrega'],
                     fecha_entrega_estimada=form.cleaned_data.get('fecha_entrega_estimada'),
                     entregada=not sobre_pedido,
-                    fecha_entrega_real=None if sobre_pedido else timezone.now(),
+                    fecha_entrega_real=None if sobre_pedido else fecha_venta,
                     observaciones=form.cleaned_data['observaciones'], registrado_por=request.user,
                 )
                 DetalleVentaTienda.objects.create(
@@ -1006,6 +1014,7 @@ def registrar_venta(request):
                         origen=MovimientoTienda.Origenes.VENTA, concepto=f'Venta {venta.numero}',
                         valor=total, moneda=item.moneda, producto=item, venta=venta,
                         cantidad=cantidad, costo_unitario=item.costo_unitario,
+                        fecha=fecha_venta,
                         observaciones=form.cleaned_data['observaciones'], registrado_por=request.user,
                     )
                 if not sobre_pedido:
