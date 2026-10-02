@@ -1,5 +1,8 @@
 from django.contrib import admin
-from .models import ConfiguracionHome
+from .models import (
+    BilleteraMonedas, ConfiguracionClases, ConfiguracionHome,
+    MovimientoMonedas,
+)
 # Register your models here.
 
 
@@ -11,3 +14,46 @@ class ConfiguracionHomeAdmin(admin.ModelAdmin):
         'activo',
         'actualizado',
     )
+
+
+@admin.register(ConfiguracionClases)
+class ConfiguracionClasesAdmin(admin.ModelAdmin):
+    list_display = (
+        'minutos_antes_confirmacion', 'minutos_despues_confirmacion',
+        'gamificacion_activa', 'monedas_por_asistencia', 'actualizado',
+    )
+
+
+@admin.register(BilleteraMonedas)
+class BilleteraMonedasAdmin(admin.ModelAdmin):
+    list_display = ('usuario', 'avatar', 'saldo', 'actualizada')
+    search_fields = ('usuario__username', 'usuario__first_name', 'usuario__last_name')
+    readonly_fields = ('usuario', 'avatar', 'saldo', 'creada', 'actualizada')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(MovimientoMonedas)
+class MovimientoMonedasAdmin(admin.ModelAdmin):
+    list_display = (
+        'creado', 'billetera', 'tipo', 'cantidad', 'saldo_resultante', 'asistencia',
+    )
+    list_filter = ('tipo', 'creado')
+    search_fields = (
+        'billetera__usuario__username', 'billetera__usuario__first_name',
+        'billetera__usuario__last_name', 'descripcion',
+    )
+    readonly_fields = (
+        'billetera', 'asistencia', 'tipo', 'cantidad', 'saldo_resultante',
+        'descripcion', 'creado', 'registrado_por',
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

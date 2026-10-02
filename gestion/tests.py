@@ -24,7 +24,9 @@ from config.file_validation import (
     validate_image,
     validate_payment_receipt,
 )
-from gestion.models import ConfiguracionClases, SesionTV
+from gestion.models import (
+    BilleteraMonedas, ConfiguracionClases, MovimientoMonedas, SesionTV,
+)
 from gestion.views import limites_confirmacion_clase
 from registros_legales.models import RegistroLegalEstudiante
 import base64
@@ -1604,6 +1606,28 @@ class CalendarioAsistenciaTests(TestCase):
         self.assertContains(response, 'Clase confirmada')
         self.assertContains(response, 'data-voz="Clase confirmada"')
         self.assertContains(response, 'fa-circle-check')
+        self.assertContains(response, 'Ganaste 10 monedas')
+        self.assertContains(response, 'moneda-recompensa')
+        billetera = BilleteraMonedas.objects.get(usuario=self.usuario)
+        self.assertEqual(billetera.avatar, BilleteraMonedas.Avatares.HUEVO)
+        self.assertEqual(billetera.saldo, 10)
+        self.assertEqual(MovimientoMonedas.objects.count(), 1)
+
+        with patch('gestion.views.timezone.localtime', return_value=momento_clase):
+            repetida = self.client.post(
+                reverse('gestion:confirmar_clase_home'),
+                {'clase_id': self.clase.id},
+                follow=True,
+            )
+        billetera.refresh_from_db()
+        self.assertEqual(billetera.saldo, 10)
+        self.assertEqual(MovimientoMonedas.objects.count(), 1)
+        self.assertNotContains(repetida, 'Ganaste 10 monedas')
+
+        perfil = self.client.get(reverse('gestion:mi_perfil'))
+        self.assertContains(perfil, 'Avatar inicial')
+        self.assertContains(perfil, 'Mis monedas')
+        self.assertContains(perfil, 'Asistencia a Clase técnica')
 
     def test_error_de_confirmacion_muestra_alerta_grande_con_x_roja(self):
         self.client.force_login(self.usuario)
@@ -1619,6 +1643,121 @@ class CalendarioAsistenciaTests(TestCase):
         self.assertContains(response, 'No se confirmó la clase')
         self.assertContains(response, 'fa-circle-xmark')
         self.assertContains(response, 'No tienes un plan iniciado')
+
+    def test_confirmacion_desde_horario_pc_entrega_monedas_y_activa_sonido(self):
+        hoy = date(2026, 7, 15)
+        plan = Plan.objects.create(
+            nombre='Plan confirmación desde PC',
+            precio='100000',
+            duracion_dias=30,
+            clases_mes=8,
+        )
+        Suscripcion.objects.create(
+            alumno=self.alumno,
+            plan=plan,
+            fecha_inicio=hoy - timedelta(days=1),
+            fecha_vencimiento=hoy + timedelta(days=29),
+            estado=Suscripcion.Estados.ACTIVA,
+        )
+        self.client.force_login(self.usuario)
+        momento = timezone.make_aware(datetime(2026, 7, 15, 18, 5))
+
+        with patch('gestion.views.timezone.localtime', return_value=momento):
+            response = self.client.post(
+                reverse('gestion:confirmar_asistencia_kiosko'),
+                {'clase_id': self.clase.id},
+                follow=True,
+            )
+
+        self.assertContains(response, 'Ganaste 10 monedas')
+        self.assertContains(response, 'moneda-recompensa')
+        self.assertContains(response, 'reproducirSonidoMoneda')
+        self.assertEqual(
+            BilleteraMonedas.objects.get(usuario=self.usuario).saldo,
+            10,
+        )
+        self.assertEqual(
+            MovimientoMonedas.objects.get().asistencia.clase,
+            self.clase,
+        )
+
+    def test_confirmar_reactiva_asistencia_cancelada_y_entrega_monedas(self):
+        hoy = date(2026, 7, 15)
+        plan = Plan.objects.create(
+            nombre='Plan para reactivar asistencia',
+            precio='100000',
+            duracion_dias=30,
+            clases_mes=8,
+        )
+        Suscripcion.objects.create(
+            alumno=self.alumno,
+            plan=plan,
+            fecha_inicio=hoy - timedelta(days=1),
+            fecha_vencimiento=hoy + timedelta(days=29),
+            estado=Suscripcion.Estados.ACTIVA,
+        )
+        asistencia = AsistenciaClase.objects.create(
+            alumno=self.alumno,
+            clase=self.clase,
+            fecha_clase=hoy,
+            estado=AsistenciaClase.Estados.CANCELADA,
+        )
+        self.client.force_login(self.usuario)
+        momento = timezone.make_aware(datetime(2026, 7, 15, 18, 5))
+
+        with patch('gestion.views.timezone.localtime', return_value=momento):
+            response = self.client.post(
+                reverse('gestion:confirmar_asistencia_kiosko'),
+                {'clase_id': self.clase.id},
+                follow=True,
+            )
+
+        asistencia.refresh_from_db()
+        self.assertEqual(asistencia.estado, AsistenciaClase.Estados.CONFIRMADA)
+        self.assertEqual(BilleteraMonedas.objects.get(usuario=self.usuario).saldo, 10)
+        self.assertContains(response, 'Clase confirmada correctamente')
+        self.assertContains(response, 'Ganaste 10 monedas')
+
+    def test_asistencia_previa_recibe_recompensa_sin_duplicarse(self):
+        hoy = date(2026, 7, 15)
+        plan = Plan.objects.create(
+            nombre='Plan asistencia previa',
+            precio='100000',
+            duracion_dias=30,
+            clases_mes=8,
+        )
+        Suscripcion.objects.create(
+            alumno=self.alumno,
+            plan=plan,
+            fecha_inicio=hoy - timedelta(days=1),
+            fecha_vencimiento=hoy + timedelta(days=29),
+            estado=Suscripcion.Estados.ACTIVA,
+        )
+        AsistenciaClase.objects.create(
+            alumno=self.alumno,
+            clase=self.clase,
+            fecha_clase=hoy,
+            estado=AsistenciaClase.Estados.CONFIRMADA,
+        )
+        self.client.force_login(self.usuario)
+        momento = timezone.make_aware(datetime(2026, 7, 15, 18, 5))
+
+        with patch('gestion.views.timezone.localtime', return_value=momento):
+            primera = self.client.post(
+                reverse('gestion:confirmar_asistencia_kiosko'),
+                {'clase_id': self.clase.id},
+                follow=True,
+            )
+            segunda = self.client.post(
+                reverse('gestion:confirmar_asistencia_kiosko'),
+                {'clase_id': self.clase.id},
+                follow=True,
+            )
+
+        self.assertContains(primera, 'Ganaste 10 monedas')
+        self.assertNotContains(segunda, 'Ganaste 10 monedas')
+        self.assertEqual(BilleteraMonedas.objects.get(usuario=self.usuario).saldo, 10)
+        self.assertEqual(MovimientoMonedas.objects.count(), 1)
 
     @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
     def test_mensualidad_vencida_confirma_muestra_dias_y_avisa_administradores(self):
@@ -1660,6 +1799,8 @@ class CalendarioAsistenciaTests(TestCase):
             fecha_clase=date(2026, 7, 15),
         ).exists())
         self.assertContains(response, 'mensualidad está vencida hace 5 día(s)')
+        self.assertFalse(MovimientoMonedas.objects.exists())
+        self.assertEqual(BilleteraMonedas.objects.get(usuario=self.usuario).saldo, 0)
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ['admin-alertas@galeras.test'])
         self.assertIn('5 día(s) de vencimiento', mail.outbox[0].body)

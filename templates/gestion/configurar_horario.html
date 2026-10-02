@@ -67,6 +67,21 @@
                             Guardar
                         </button>
                     </div>
+                    <div class="col-md-5">
+                        <label class="form-label" for="{{ form_configuracion.monedas_por_asistencia.id_for_label }}">
+                            Monedas por asistencia
+                        </label>
+                        {{ form_configuracion.monedas_por_asistencia }}
+                        <div class="text-danger">{{ form_configuracion.monedas_por_asistencia.errors }}</div>
+                    </div>
+                    <div class="col-md-5 d-flex align-items-center">
+                        <div class="form-check mt-4">
+                            {{ form_configuracion.gamificacion_activa }}
+                            <label class="form-check-label" for="{{ form_configuracion.gamificacion_activa.id_for_label }}">
+                                Entregar monedas por asistencia
+                            </label>
+                        </div>
+                    </div>
                 </form>
             </div>
         </div>

@@ -101,6 +101,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'cortesias.context_processors.alertas_cortesias',
+                'gestion.context_processors.gamificacion_usuario',
             ],
         },
     },

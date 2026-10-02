@@ -151,6 +151,15 @@ class ConfiguracionClases(models.Model):
         validators=[MaxValueValidator(180)],
         verbose_name='Minutos después de iniciar',
     )
+    gamificacion_activa = models.BooleanField(
+        default=True,
+        verbose_name='Entregar monedas por asistencia',
+    )
+    monedas_por_asistencia = models.PositiveSmallIntegerField(
+        default=10,
+        validators=[MaxValueValidator(1000)],
+        verbose_name='Monedas por asistencia',
+    )
     actualizado = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -167,6 +176,79 @@ class ConfiguracionClases(models.Model):
             f'Confirmación: {self.minutos_antes_confirmacion} min antes / '
             f'{self.minutos_despues_confirmacion} min después'
         )
+
+
+class BilleteraMonedas(models.Model):
+    class Avatares(models.TextChoices):
+        HUEVO = 'HUEVO', 'Huevo inicial'
+
+    usuario = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='billetera_monedas',
+    )
+    saldo = models.PositiveIntegerField(default=0)
+    avatar = models.CharField(
+        max_length=20,
+        choices=Avatares.choices,
+        default=Avatares.HUEVO,
+    )
+    creada = models.DateTimeField(auto_now_add=True)
+    actualizada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Billetera de monedas'
+        verbose_name_plural = 'Billeteras de monedas'
+
+    def __str__(self):
+        return f'{self.usuario} · {self.saldo} monedas'
+
+
+class MovimientoMonedas(models.Model):
+    class Tipos(models.TextChoices):
+        ASISTENCIA = 'ASISTENCIA', 'Premio por asistencia'
+        AJUSTE = 'AJUSTE', 'Ajuste administrativo'
+        DESCUENTO = 'DESCUENTO', 'Descuento de monedas'
+
+    billetera = models.ForeignKey(
+        BilleteraMonedas,
+        on_delete=models.PROTECT,
+        related_name='movimientos',
+    )
+    asistencia = models.OneToOneField(
+        'clases.AsistenciaClase',
+        on_delete=models.PROTECT,
+        related_name='premio_monedas',
+        null=True,
+        blank=True,
+    )
+    tipo = models.CharField(max_length=20, choices=Tipos.choices)
+    cantidad = models.IntegerField()
+    saldo_resultante = models.PositiveIntegerField()
+    descripcion = models.CharField(max_length=220)
+    creado = models.DateTimeField(auto_now_add=True)
+    registrado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='movimientos_monedas_registrados',
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ['-creado', '-id']
+        verbose_name = 'Movimiento de monedas'
+        verbose_name_plural = 'Movimientos de monedas'
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(cantidad=0),
+                name='movimiento_monedas_cantidad_no_cero',
+            ),
+        ]
+
+    def __str__(self):
+        signo = '+' if self.cantidad > 0 else ''
+        return f'{self.billetera.usuario}: {signo}{self.cantidad}'
 
 
 def estado_tv_inicial():

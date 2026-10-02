@@ -1246,11 +1246,23 @@ class CuentaFinancieraForm(forms.ModelForm):
 
 
 class ConfiguracionClasesForm(forms.ModelForm):
+    monedas_por_asistencia = forms.IntegerField(
+        required=False,
+        min_value=0,
+        max_value=1000,
+        label='Monedas por asistencia',
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control', 'min': 0, 'max': 1000,
+        }),
+    )
+
     class Meta:
         model = ConfiguracionClases
         fields = [
             'minutos_antes_confirmacion',
             'minutos_despues_confirmacion',
+            'gamificacion_activa',
+            'monedas_por_asistencia',
         ]
         widgets = {
             'minutos_antes_confirmacion': forms.NumberInput(attrs={
@@ -1259,7 +1271,16 @@ class ConfiguracionClasesForm(forms.ModelForm):
             'minutos_despues_confirmacion': forms.NumberInput(attrs={
                 'class': 'form-control', 'min': 0, 'max': 180,
             }),
+            'gamificacion_activa': forms.CheckboxInput(attrs={
+                'class': 'form-check-input',
+            }),
         }
+
+    def clean_monedas_por_asistencia(self):
+        valor = self.cleaned_data.get('monedas_por_asistencia')
+        if valor is not None:
+            return valor
+        return self.instance.monedas_por_asistencia or 10
 
 
 class GastoForm(forms.ModelForm):

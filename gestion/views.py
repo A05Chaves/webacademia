@@ -90,8 +90,10 @@ from django.contrib.auth import authenticate
 from django.views.decorators.http import require_POST
 from django.templatetags.static import static
 from .models import (
-    ConfiguracionClases, DiaHorario, HoraHorario, SesionTV, estado_tv_inicial,
+    BilleteraMonedas, ConfiguracionClases, DiaHorario, HoraHorario,
+    SesionTV, estado_tv_inicial,
 )
+from .services_gamificacion import premiar_asistencia
 from .forms import DiaHorarioForm, HoraHorarioForm
 
 from .forms import PagoAlumnoForm
@@ -288,10 +290,16 @@ def _confirmar_asistencia_con_plan(alumno, clase, ahora):
             'fecha_confirmacion': ahora,
         },
     )
+    if not creada and asistencia.estado != AsistenciaClase.Estados.CONFIRMADA:
+        asistencia.estado = AsistenciaClase.Estados.CONFIRMADA
+        asistencia.fecha_confirmacion = ahora
+        asistencia.save(update_fields=['estado', 'fecha_confirmacion'])
+        creada = True
     if creada and dias_vencida:
         _notificar_asistencia_con_mensualidad_vencida(
             alumno, clase, dias_vencida
         )
+    premio = premiar_asistencia(asistencia, habilitada=not dias_vencida)
 
     restantes = None
     if not plan.asistencia_ilimitada:
@@ -301,6 +309,8 @@ def _confirmar_asistencia_con_plan(alumno, clase, ahora):
         'creada': creada,
         'dias_vencida': dias_vencida,
         'restantes': restantes,
+        'monedas_ganadas': premio['monedas'],
+        'saldo_monedas': premio['saldo'],
     }
 
 
@@ -329,6 +339,8 @@ def _confirmar_asistencia_instructor(instructor, clase, ahora):
         'creada': creada,
         'dias_vencida': 0,
         'restantes': None,
+        'monedas_ganadas': 0,
+        'saldo_monedas': None,
     }
 
 
@@ -340,7 +352,8 @@ def _mostrar_resultado_confirmacion(request, resultado):
             extra_tags='clase-feedback',
         )
         return False
-    if not resultado['creada']:
+    monedas = resultado.get('monedas_ganadas') or 0
+    if not resultado['creada'] and not monedas:
         messages.info(
             request,
             'Ya habías confirmado asistencia para esta clase.',
@@ -348,7 +361,11 @@ def _mostrar_resultado_confirmacion(request, resultado):
         )
         return True
 
-    mensaje = 'Clase confirmada correctamente.'
+    mensaje = (
+        'Clase confirmada correctamente.'
+        if resultado['creada']
+        else 'La clase ya estaba confirmada correctamente.'
+    )
     if resultado['dias_vencida']:
         mensaje += (
             f' Recordatorio: tu mensualidad está vencida hace '
@@ -356,7 +373,15 @@ def _mostrar_resultado_confirmacion(request, resultado):
         )
     elif resultado['restantes'] is not None:
         mensaje += f' Te quedan {resultado["restantes"]} clases disponibles.'
-    messages.success(request, mensaje, extra_tags='clase-feedback')
+    if monedas:
+        mensaje += (
+            f' Ganaste {monedas} monedas. '
+            f'Saldo: {resultado["saldo_monedas"]} monedas.'
+        )
+    etiquetas = 'clase-feedback'
+    if monedas:
+        etiquetas += f' monedas-feedback monedas-ganadas-{monedas}'
+    messages.success(request, mensaje, extra_tags=etiquetas)
     return True
 
 # CONVIERTE VIDEOS YOUTUBE
@@ -1396,6 +1421,7 @@ def editar_alumno(request, alumno_id):
 @transaction.atomic
 def mi_perfil(request):
     alumno = getattr(request.user, 'perfil_alumno', None)
+    billetera, _ = BilleteraMonedas.objects.get_or_create(usuario=request.user)
     usuario_form = MiPerfilUsuarioForm(
         request.POST or None,
         instance=request.user,
@@ -1424,6 +1450,10 @@ def mi_perfil(request):
         'usuario_form': usuario_form,
         'alumno_form': alumno_form,
         'alumno': alumno,
+        'billetera': billetera,
+        'movimientos_monedas': billetera.movimientos.select_related(
+            'asistencia__clase'
+        )[:8],
     })
 
 

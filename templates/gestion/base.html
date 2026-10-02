@@ -297,6 +297,76 @@
         .payment-feedback-card h2 { font-size: clamp(1.6rem, 4vw, 2.2rem); }
         .payment-feedback-card p { font-size: 1.08rem; line-height: 1.55; }
 
+        .avatar-huevo {
+            background:
+                radial-gradient(circle at 34% 27%, rgba(255,255,255,.95) 0 7%, transparent 8%),
+                linear-gradient(145deg, #fff8dc 0%, #f3dba0 65%, #c99b42 100%);
+            border: 3px solid #d5aa53;
+            border-radius: 52% 52% 46% 46% / 62% 62% 40% 40%;
+            box-shadow: inset -10px -12px 18px rgba(116,69,16,.18), 0 8px 20px rgba(0,0,0,.24);
+            display: inline-block;
+            height: 82px;
+            position: relative;
+            width: 64px;
+        }
+
+        .avatar-huevo::before,
+        .avatar-huevo::after {
+            background: #523819;
+            border-radius: 50%;
+            content: '';
+            height: 6px;
+            position: absolute;
+            top: 39px;
+            width: 6px;
+        }
+
+        .avatar-huevo::before { left: 18px; }
+        .avatar-huevo::after { right: 18px; }
+        .avatar-huevo.avatar-huevo-sm { height: 28px; width: 22px; border-width: 1px; box-shadow: none; }
+        .avatar-huevo.avatar-huevo-sm::before,
+        .avatar-huevo.avatar-huevo-sm::after { height: 2px; top: 14px; width: 2px; }
+        .avatar-huevo.avatar-huevo-sm::before { left: 6px; }
+        .avatar-huevo.avatar-huevo-sm::after { right: 6px; }
+
+        .monedas-nav {
+            align-items: center;
+            background: rgba(255,193,7,.14);
+            border: 1px solid #ffc107;
+            border-radius: 999px;
+            color: #ffc107;
+            display: inline-flex;
+            font-weight: 800;
+            gap: 7px;
+            min-height: 40px;
+            padding: 4px 11px 4px 8px;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+        .moneda-recompensa {
+            animation: moneda-emerge 1.05s cubic-bezier(.2,.85,.3,1) both;
+            background: radial-gradient(circle at 35% 30%, #fff6a8, #ffc107 48%, #b87400 100%);
+            border: 5px solid #ffe46b;
+            border-radius: 50%;
+            box-shadow: 0 0 0 6px rgba(255,193,7,.16), 0 12px 30px rgba(255,193,7,.38);
+            color: #4a2c00;
+            display: inline-flex;
+            font-size: 1.45rem;
+            font-weight: 900;
+            height: 92px;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 18px;
+            width: 92px;
+        }
+
+        @keyframes moneda-emerge {
+            0% { opacity: 0; transform: translateY(55px) scale(.35) rotateY(0); }
+            55% { opacity: 1; transform: translateY(-18px) scale(1.14) rotateY(220deg); }
+            100% { opacity: 1; transform: translateY(0) scale(1) rotateY(360deg); }
+        }
+
         .badge-activo {
             background: #198754;
             padding: 6px 10px;
@@ -621,6 +691,13 @@
 
                 {% if user.is_authenticated %}
 
+                    <a class="monedas-nav" href="{% url 'gestion:mi_perfil' %}"
+                       aria-label="{{ billetera_monedas_usuario.saldo }} monedas"
+                       title="Mis monedas">
+                        <span class="avatar-huevo avatar-huevo-sm" aria-hidden="true"></span>
+                        <span><i class="fa-solid fa-coins"></i> {{ billetera_monedas_usuario.saldo }}</span>
+                    </a>
+
                     <a class="btn btn-outline-light btn-sm menu-btn"
                        href="{% url 'gestion:mi_perfil' %}"
                        aria-label="Mi perfil" data-nav-tooltip title="Mi perfil">
@@ -683,6 +760,11 @@
                      {% if 'clase-feedback' in message.tags %}data-clase-feedback data-voz="{% if 'success' in message.tags %}Clase confirmada{% elif 'error' in message.tags %}No fue posible confirmar la clase{% endif %}"{% endif %}
                      aria-labelledby="tituloFeedback{{ forloop.counter }}">
                     <div class="payment-feedback-card {% if 'success' in message.tags or 'info' in message.tags %}success{% elif 'error' in message.tags %}error{% elif 'warning' in message.tags %}warning{% endif %}">
+                        {% if 'monedas-feedback' in message.tags %}
+                            <div class="d-block">
+                                <div class="moneda-recompensa" data-monedas-tags="{{ message.tags }}">+0</div>
+                            </div>
+                        {% endif %}
                         <div class="payment-feedback-icon" aria-hidden="true">
                             {% if 'success' in message.tags or 'info' in message.tags %}
                                 <i class="fa-solid fa-circle-check"></i>
@@ -1040,6 +1122,39 @@
             voz.rate = 0.92;
             window.speechSynthesis.cancel();
             window.speechSynthesis.speak(voz);
+        }
+        const monedaRecompensa = document.querySelector('.moneda-recompensa[data-monedas-tags]');
+        if (monedaRecompensa) {
+            const coincidencia = monedaRecompensa.dataset.monedasTags.match(/monedas-ganadas-(\d+)/);
+            monedaRecompensa.textContent = `+${coincidencia ? coincidencia[1] : '0'}`;
+            let sonidoMonedaReproducido = false;
+            async function reproducirSonidoMoneda() {
+                if (sonidoMonedaReproducido) return;
+                const AudioContexto = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContexto) return;
+                const audio = new AudioContexto();
+                if (audio.state === 'suspended') await audio.resume();
+                if (audio.state !== 'running') throw new Error('Audio suspendido por el navegador');
+                const inicio = audio.currentTime;
+                [880, 1320].forEach((frecuencia, indice) => {
+                    const oscilador = audio.createOscillator();
+                    const ganancia = audio.createGain();
+                    oscilador.type = 'sine';
+                    oscilador.frequency.value = frecuencia;
+                    ganancia.gain.setValueAtTime(0.0001, inicio + indice * .09);
+                    ganancia.gain.exponentialRampToValueAtTime(.18, inicio + indice * .09 + .01);
+                    ganancia.gain.exponentialRampToValueAtTime(.0001, inicio + indice * .09 + .15);
+                    oscilador.connect(ganancia).connect(audio.destination);
+                    oscilador.start(inicio + indice * .09);
+                    oscilador.stop(inicio + indice * .09 + .16);
+                });
+                sonidoMonedaReproducido = true;
+                window.setTimeout(() => audio.close(), 500);
+            }
+            reproducirSonidoMoneda().catch(() => {});
+            const reintentarSonido = () => reproducirSonidoMoneda().catch(() => {});
+            document.addEventListener('pointerdown', reintentarSonido, {once: true, capture: true});
+            document.addEventListener('keydown', reintentarSonido, {once: true, capture: true});
         }
         new MutationObserver(function (cambios) {
             cambios.forEach(function (cambio) {
