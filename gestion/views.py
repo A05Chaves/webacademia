@@ -2434,7 +2434,11 @@ def aprobar_registro_legal(request, registro_id):
         id=registro_id
     )
 
-    if registro.estado == 'APROBADO':
+    alumno_existente = Alumno.objects.filter(
+        documento=registro.documento
+    ).first()
+
+    if registro.estado == 'APROBADO' and alumno_existente:
         messages.warning(
             request,
             'Este registro ya fue aprobado.'
@@ -2445,26 +2449,57 @@ def aprobar_registro_legal(request, registro_id):
             registro_id=registro.id
         )
 
-    alumno, _, error = crear_alumno_desde_registro(
-        registro
-    )
-
-    if error:
-
-        messages.error(
-            request,
-            error
+    if registro.estado == 'APROBADO':
+        logger.warning(
+            'Registro legal aprobado sin ficha de alumno. registro_id=%s '
+            'documento=%s',
+            registro.id,
+            registro.documento,
         )
 
+    try:
+        # La ficha y el cambio de estado deben confirmarse juntos. De esta
+        # manera nunca queda un registro aprobado sin su alumno asociado.
+        with transaction.atomic():
+            alumno, _, error = crear_alumno_desde_registro(registro)
+
+            if error:
+                messages.error(request, error)
+                return redirect(
+                    'gestion:detalle_registro_legal',
+                    registro_id=registro.id
+                )
+
+            registro.estado = RegistroLegalEstudiante.Estados.APROBADO
+            registro.save(update_fields=['estado', 'actualizado'])
+    except Exception:
+        logger.exception(
+            'No se pudo aprobar el registro legal %s.',
+            registro.id,
+        )
+        messages.error(
+            request,
+            'No fue posible crear el estudiante. No se guardó ningún cambio; '
+            'puedes intentar aprobarlo nuevamente.'
+        )
         return redirect(
             'gestion:detalle_registro_legal',
             registro_id=registro.id
         )
 
-    registro.estado = 'APROBADO'
-    registro.save()
-
-    enviar_correo_bienvenida_alumno(registro)
+    try:
+        enviar_correo_bienvenida_alumno(registro)
+    except Exception:
+        logger.exception(
+            'El alumno del registro %s fue creado, pero falló el correo de '
+            'bienvenida.',
+            registro.id,
+        )
+        messages.warning(
+            request,
+            'El estudiante fue creado correctamente, pero no se pudo enviar '
+            'el correo de bienvenida.'
+        )
 
     messages.success(
         request,

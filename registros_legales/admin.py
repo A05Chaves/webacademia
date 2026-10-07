@@ -32,6 +32,10 @@ class RegistroLegalEstudianteAdmin(admin.ModelAdmin):
     )
 
     readonly_fields = (
+        # Aprobar desde el campo de estado solo cambia el registro legal y no
+        # crea la ficha del alumno. La aprobación debe hacerse desde el flujo
+        # de revisión de la aplicación.
+        'estado',
         'texto_consentimiento',
         'firma_base64',
         'fecha_firma',

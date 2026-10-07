@@ -16,6 +16,7 @@ from planes.models import Plan
 from alumnos.models import Alumno
 from instructores.models import Instructor
 from .forms import RegistroLegalEstudianteForm
+from .admin import RegistroLegalEstudianteAdmin
 from .models import RegistroLegalEstudiante
 from .services import crear_alumno_desde_registro
 
@@ -222,6 +223,48 @@ class RegistroLegalObligatorioTests(TestCase):
         self.assertTrue(alumno.user.check_password('ClaveRegistro789!'))
         self.assertFalse(alumno.user.debe_cambiar_password)
 
+    def test_usuario_con_formato_de_correo_tambien_crea_ficha_de_alumno(self):
+        data = self.datos_validos()
+        data['usuario_solicitado'] = 'registro@example.com'
+        form = RegistroLegalEstudianteForm(
+            data=data, files={'foto': self.foto_valida()}
+        )
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+
+        alumno, _, error = crear_alumno_desde_registro(form.save())
+
+        self.assertIsNone(error)
+        self.assertEqual(alumno.user.username, 'registro@example.com')
+        self.assertTrue(
+            Alumno.objects.filter(
+                documento='1000000001',
+                user__username='registro@example.com',
+            ).exists()
+        )
+
+    def test_fallo_al_crear_ficha_no_deja_usuario_huerfano(self):
+        form = RegistroLegalEstudianteForm(
+            data=self.datos_validos(), files={'foto': self.foto_valida()}
+        )
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+        registro = form.save()
+
+        with patch(
+            'registros_legales.services.Alumno.objects.create',
+            side_effect=RuntimeError('fallo simulado'),
+        ):
+            with self.assertRaises(RuntimeError):
+                crear_alumno_desde_registro(registro)
+
+        self.assertFalse(
+            get_user_model().objects.filter(
+                username='estudiante_prueba'
+            ).exists()
+        )
+        self.assertFalse(
+            Alumno.objects.filter(documento='1000000001').exists()
+        )
+
     @patch('gestion.views.enviar_correo_bienvenida_alumno')
     def test_aprobacion_administrativa_activa_usuario_elegido(self, enviar_correo):
         form = RegistroLegalEstudianteForm(
@@ -248,6 +291,48 @@ class RegistroLegalObligatorioTests(TestCase):
         registro.refresh_from_db()
         self.assertEqual(registro.estado, RegistroLegalEstudiante.Estados.APROBADO)
         enviar_correo.assert_called_once_with(registro)
+
+    @patch('gestion.views.enviar_correo_bienvenida_alumno')
+    def test_aprobacion_repara_estado_aprobado_sin_ficha(self, enviar_correo):
+        form = RegistroLegalEstudianteForm(
+            data=self.datos_validos(), files={'foto': self.foto_valida()}
+        )
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+        registro = form.save()
+        registro.estado = RegistroLegalEstudiante.Estados.APROBADO
+        registro.save(update_fields=['estado'])
+        usuario_huerfano = get_user_model().objects.create(
+            username=registro.usuario_solicitado,
+            password=registro.password_hash,
+            first_name=registro.nombres,
+            last_name=registro.apellidos,
+            email=registro.correo,
+            telefono=registro.celular,
+            debe_cambiar_password=False,
+        )
+        administrador = get_user_model().objects.create_user(
+            username='admin_reparacion', password='AdminClave789!', is_staff=True
+        )
+        self.client.force_login(administrador)
+
+        response = self.client.post(
+            reverse('gestion:aprobar_registro_legal', args=[registro.id])
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('gestion:detalle_registro_legal', args=[registro.id]),
+        )
+        self.assertTrue(
+            Alumno.objects.filter(
+                documento=registro.documento,
+                user=usuario_huerfano,
+            ).exists()
+        )
+        enviar_correo.assert_called_once()
+
+    def test_panel_django_no_permite_cambiar_estado_directamente(self):
+        self.assertIn('estado', RegistroLegalEstudianteAdmin.readonly_fields)
 
     def test_detalle_muestra_fecha_de_nacimiento_legible(self):
         form = RegistroLegalEstudianteForm(
