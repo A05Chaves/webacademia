@@ -1,195 +1,31 @@
 {% extends 'gestion/base.html' %}
-
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
+<style>
+.students-heading{background:linear-gradient(135deg,rgba(13,202,240,.12),transparent 58%);border:1px solid var(--border-color);border-radius:18px;margin-bottom:22px;padding:20px 22px}.students-heading .page-heading{padding:0}.students-summary{display:grid;gap:14px;grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:22px}.student-stat{align-items:center;background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;display:grid;gap:13px;grid-template-columns:44px minmax(0,1fr);padding:16px}.student-stat-icon{align-items:center;background:rgba(13,202,240,.11);border-radius:12px;color:#48cbe6;display:flex;height:44px;justify-content:center;width:44px}.student-stat-value{font-size:1.45rem;font-weight:800;line-height:1}.student-stat-label{color:var(--text-secondary);font-size:.8rem;margin-top:5px}.student-stat.professors .student-stat-icon{background:rgba(111,66,193,.14);color:#a98be0}.student-stat.active .student-stat-icon{background:rgba(25,135,84,.14);color:#42b883}.student-stat.expired .student-stat-icon{background:rgba(220,53,69,.13);color:#e05b68}.students-search{border-radius:18px!important;margin-bottom:24px}.students-search .card-body{padding:20px!important}.students-search-row{align-items:end;display:grid;gap:13px;grid-template-columns:minmax(0,1fr) auto}.students-search .input-group-text{background:rgba(13,202,240,.1);border-color:var(--border-color);color:#48cbe6}.teacher-only-section{border-radius:18px!important;margin-bottom:25px}.teacher-only-section .card-header,.students-table-card .card-header{align-items:center;background:transparent;border-color:var(--border-color);display:flex;justify-content:space-between;padding:17px 20px}.teacher-grid{display:grid;gap:12px;grid-template-columns:repeat(3,minmax(0,1fr));padding:18px}.teacher-card{align-items:center;background:rgba(13,202,240,.055);border:1px solid rgba(13,202,240,.18);border-radius:14px;display:grid;gap:12px;grid-template-columns:42px minmax(0,1fr);padding:14px}.teacher-card-icon{align-items:center;background:rgba(13,202,240,.13);border-radius:50%;color:#48cbe6;display:flex;height:42px;justify-content:center;width:42px}.teacher-card strong{display:block;line-height:1.2}.teacher-card small{color:var(--text-secondary)}.students-table-card{border-radius:18px!important}.students-table-card table{min-width:1060px}.students-table-card th{color:var(--text-secondary);font-size:.74rem;letter-spacing:.04em;padding:14px 13px;text-transform:uppercase;white-space:nowrap}.students-table-card td{padding:15px 13px;vertical-align:middle}.student-person{align-items:center;display:flex;gap:11px;min-width:185px}.student-person-icon{align-items:center;background:rgba(108,117,125,.13);border-radius:12px;color:var(--text-secondary);display:flex;flex:0 0 auto;height:39px;justify-content:center;width:39px}.student-row-professor{background:rgba(13,202,240,.035)}.student-row-professor .student-person-icon{background:rgba(13,202,240,.13);color:#48cbe6}.role-pill,.student-state{border-radius:999px;display:inline-flex;font-size:.7rem;font-weight:800;letter-spacing:.025em;padding:6px 9px;white-space:nowrap}.role-pill.student{background:rgba(108,117,125,.16);color:var(--text-secondary)}.role-pill.teacher{background:rgba(13,202,240,.14);color:#48cbe6}.student-state.active{background:rgba(25,135,84,.15);color:#42b883}.student-state.expired{background:rgba(220,53,69,.14);color:#e05b68}.student-state.upcoming{background:rgba(255,193,7,.15);color:#d1a000}.student-state.pending{background:rgba(108,117,125,.17);color:var(--text-secondary)}.subscription-detail{font-size:.82rem;line-height:1.45;min-width:180px}.student-actions{display:flex;flex-wrap:wrap;gap:7px;justify-content:flex-end;min-width:210px}.students-empty{padding:55px 20px!important;text-align:center}.students-empty i{color:var(--text-secondary);font-size:2.2rem;margin-bottom:11px}.students-empty p{color:var(--text-secondary);margin:0}@media(max-width:1199.98px){.teacher-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:767.98px){.students-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.teacher-grid{grid-template-columns:1fr}.students-search-row{grid-template-columns:1fr}.students-search-row .btn{width:100%}}@media(max-width:420px){.students-heading{padding:17px}.students-summary{grid-template-columns:1fr 1fr;gap:9px}.student-stat{grid-template-columns:36px minmax(0,1fr);padding:12px}.student-stat-icon{height:36px;width:36px}.student-stat-value{font-size:1.2rem}}
+</style>
 
-    <h2 class="mb-0">
-        Alumnos
-    </h2>
+<div class="students-heading"><div class="page-heading"><div class="page-heading-main"><h2 class="page-heading-title"><i class="fa-solid fa-users text-info"></i><span>Alumnos y profesores</span></h2><p class="page-heading-subtitle text-secondary">Consulta perfiles, suscripciones, asistencia y estados desde un solo lugar.</p></div><div class="page-heading-actions"><a href="{% url 'registro_publico' %}" class="btn btn-info page-heading-action"><i class="fa-solid fa-user-plus"></i><span>Nuevo alumno</span></a></div></div></div>
 
-    <a href="{% url 'registro_publico' %}"
-        class="btn btn-outline-light btn-sm">
-
-        <i class="fa-solid fa-plus"></i>
-        Nuevo alumno
-
-    </a>
-
-</div>
-
-<form method="get" class="card bg-dark text-light border-secondary mb-4">
-    <div class="card-body">
-        <label for="buscarAlumno" class="form-label">
-            Buscar por nombre, documento o usuario
-        </label>
-        <div class="input-group">
-            <span class="input-group-text"><i class="fa-solid fa-magnifying-glass"></i></span>
-            <input type="search" id="buscarAlumno" name="q" class="form-control"
-                   value="{{ consulta }}" placeholder="Ej: ÁNGEL HERRERA o 1085000000">
-            <button type="submit" class="btn btn-primary">Buscar</button>
-            {% if consulta %}
-                <a href="{% url 'gestion:lista_alumnos' %}"
-                   class="btn btn-outline-light">Limpiar</a>
-            {% endif %}
-        </div>
-        {% if consulta %}
-            <div class="form-text text-secondary mt-2">
-                Resultados encontrados: {{ total_resultados }}
-            </div>
-        {% endif %}
-    </div>
-</form>
-
-{% if profesores_exclusivos %}
-<section class="card bg-dark text-light border-info mb-4">
-    <div class="card-header d-flex justify-content-between align-items-center border-info">
-        <h3 class="h5 mb-0">
-            <i class="fa-solid fa-chalkboard-user me-2"></i>Profesores sin ficha de estudiante
-        </h3>
-        <span class="badge bg-info text-dark">{{ profesores_exclusivos|length }}</span>
-    </div>
-    <div class="table-responsive">
-        <table class="table table-dark table-hover table-dark-custom mb-0">
-            <thead>
-                <tr>
-                    <th>Profesor</th>
-                    <th>Documento</th>
-                    <th>Especialidad</th>
-                    <th>Estado</th>
-                    <th>Acciones</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for profesor in profesores_exclusivos %}
-                <tr class="table-info text-dark align-middle">
-                    <td>
-                        {{ profesor.user.get_full_name|title|default:profesor.user.username }}
-                        <span class="badge bg-primary ms-2">PROFESOR</span>
-                    </td>
-                    <td>{{ profesor.documento }}</td>
-                    <td>{{ profesor.especialidad|default:"Sin especialidad" }}</td>
-                    <td>
-                        {% if profesor.activo %}
-                            <span class="badge bg-success">ACTIVO</span>
-                        {% else %}
-                            <span class="badge bg-secondary">INACTIVO</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <span class="text-secondary">Perfil exclusivo de profesor</span>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+<section class="students-summary" aria-label="Resumen de personas registradas">
+    <article class="student-stat"><span class="student-stat-icon"><i class="fa-solid fa-address-book"></i></span><div><div class="student-stat-value">{{ alumnos|length }}</div><div class="student-stat-label">Fichas registradas</div></div></article>
+    <article class="student-stat active"><span class="student-stat-icon"><i class="fa-solid fa-circle-check"></i></span><div><div class="student-stat-value">{{ total_activos }}</div><div class="student-stat-label">Estudiantes activos</div></div></article>
+    <article class="student-stat professors"><span class="student-stat-icon"><i class="fa-solid fa-chalkboard-user"></i></span><div><div class="student-stat-value">{{ profesores|length }}</div><div class="student-stat-label">Profesores activos</div></div></article>
+    <article class="student-stat expired"><span class="student-stat-icon"><i class="fa-solid fa-calendar-xmark"></i></span><div><div class="student-stat-value">{{ total_vencidos }}</div><div class="student-stat-label">Mensualidades vencidas</div></div></article>
 </section>
-{% endif %}
 
-<div class="d-flex justify-content-between align-items-center mb-2">
-    <h3 class="h5 mb-0"><i class="fa-solid fa-users me-2"></i>Estudiantes y profesores</h3>
-    <span class="badge bg-secondary">{{ alumnos|length }}</span>
-</div>
-<div class="table-responsive">
+<form method="get" class="card students-search"><div class="card-body"><div class="students-search-row"><div><label for="buscarAlumno" class="form-label"><i class="fa-solid fa-magnifying-glass me-1"></i> Buscar persona</label><div class="input-group"><span class="input-group-text"><i class="fa-solid fa-user"></i></span><input type="search" id="buscarAlumno" name="q" class="form-control" value="{{ consulta }}" placeholder="Nombre, documento, usuario o especialidad"></div>{% if consulta %}<div class="form-text mt-2">{{ total_resultados }} resultado{{ total_resultados|pluralize }} para “{{ consulta }}”.</div>{% endif %}</div><div class="d-flex gap-2"><button type="submit" class="btn btn-primary"><i class="fa-solid fa-search me-1"></i> Buscar</button>{% if consulta %}<a href="{% url 'gestion:lista_alumnos' %}" class="btn btn-outline-light"><i class="fa-solid fa-rotate-left"></i></a>{% endif %}</div></div></div></form>
 
-    <table class="table table-dark table-hover table-dark-custom">
+{% if profesores_exclusivos %}<section class="card teacher-only-section border-info"><div class="card-header"><strong><i class="fa-solid fa-chalkboard-user text-info me-2"></i>Profesores sin ficha de estudiante</strong><span class="badge bg-info text-dark">{{ profesores_exclusivos|length }}</span></div><div class="teacher-grid">{% for profesor in profesores_exclusivos %}<article class="teacher-card"><span class="teacher-card-icon"><i class="fa-solid fa-user-tie"></i></span><div><strong>{{ profesor.user.get_full_name|title|default:profesor.user.username }}</strong><small>Perfil exclusivo de profesor · {{ profesor.especialidad|default:"Sin especialidad" }} · Doc. {{ profesor.documento }}</small></div></article>{% endfor %}</div></section>{% endif %}
 
-        <tr>
-            <th>ID</th>
-            <th>Usuario</th>
-            <th>Perfil</th>
-            <th>Documento</th>
-            <th>Disciplina</th>
-            <th>Grado</th>
-            <th>Estado</th>
-
-            <th>Acciones</th>
-            <th>Días restantes</th>
-            <th>Fecha vencimiento</th>
-            <th>Días vencido</th>
-            <th>Mensualidades pendientes</th>
-
-        </tr>
-        {% for alumno in alumnos %}
-        <tr {% if alumno.es_profesor %}class="table-info text-dark align-middle"{% endif %}>
-            <td>{{ alumno.id }}</td>
-            <td>{{ alumno.user.get_full_name|title|default:alumno.user.username }}</td>
-            <td>
-                {% if alumno.es_profesor %}
-                    <span class="badge bg-primary">PROFESOR</span>
-                    {% if alumno.especialidad_profesor %}
-                        <small class="d-block mt-1">{{ alumno.especialidad_profesor }}</small>
-                    {% endif %}
-                {% else %}
-                    <span class="badge bg-secondary">ESTUDIANTE</span>
-                {% endif %}
-            </td>
-            <td>{{ alumno.documento }}</td>
-            <td>{{ alumno.disciplina }}</td>
-            <td>{{ alumno.grado }}</td>
-            <td>
-
-                {% if alumno.estado == 'ACTIVO' %}
-                    <span class="badge-activo">
-                        ACTIVO
-                    </span>
-
-                {% elif alumno.estado == 'VENCIDO' %}
-                    <span class="badge-vencido">
-                        VENCIDO
-                    </span>
-
-                {% elif alumno.estado == 'PROXIMO_VENCER' %}
-                    <span class="badge-proximo">
-                        PRÓXIMO A VENCER
-                    </span>
-                
-                {% elif alumno.estado == 'PENDIENTE' %}
-                    <span class="badge bg-secondary">PENDIENTE</span>
-
-                {% else %}
-                    {{ alumno.estado }}
-                {% endif %}
-
-            </td>
-            <td>
-                <a href="{% url 'gestion:asistencia_alumno' alumno.id %}"
-                    class="btn btn-outline-success btn-sm">
-                    <i class="fa-solid fa-calendar-check"></i> Asistencia
-                </a>
-                |
-                <a href="{% url 'gestion:editar_alumno' alumno.id %}"
-                    class="btn btn-outline-warning btn-sm">
-                    <i class="fa-solid fa-pen"></i> Editar
-                </a>
-                |
-                <a href="{% url 'gestion:eliminar_alumno' alumno.id %}"
-                    class="btn btn-outline-danger btn-sm">
-                    <i class="fa-solid fa-trash"></i> Eliminar
-                </a>
-            </td>
-            <td>
-                {% if alumno.dias_para_vencer is not None %}
-                {{ alumno.dias_para_vencer }} días
-                {% else %}
-                Sin suscripción
-                {% endif %}
-            </td>
-            <td>{{ alumno.fecha_vencimiento_actual|default:"Sin suscripción" }}</td>
-            <td>{{ alumno.dias_vencido }}</td>
-            <td>{{ alumno.mensualidades_pendientes }}</td>
-        </tr>
-        {% empty %}
-        <tr>
-            <td colspan="12" class="text-center py-4">
-                {% if consulta %}
-                    No se encontraron alumnos para “{{ consulta }}”.
-                {% else %}
-                    No hay alumnos registrados.
-                {% endif %}
-            </td>
-        </tr>
-        {% endfor %}
-    </table>
-</div>
+<section class="card students-table-card"><div class="card-header"><strong><i class="fa-solid fa-id-card text-info me-2"></i>Fichas de estudiantes</strong><span class="badge bg-secondary">{{ alumnos|length }}</span></div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Persona</th><th>Perfil</th><th>Documento</th><th>Formación</th><th>Suscripción</th><th class="text-center">Pendientes</th><th class="text-end">Acciones</th></tr></thead><tbody>
+{% for alumno in alumnos %}<tr class="{% if alumno.es_profesor %}student-row-professor{% endif %}">
+    <td>{{ alumno.user.get_full_name|title|default:alumno.user.username }}</td>
+    <td>{% if alumno.es_profesor %}<span class="role-pill teacher"><i class="fa-solid fa-chalkboard-user me-1"></i>PROFESOR</span>{% if alumno.especialidad_profesor %}<small class="d-block text-secondary mt-1">{{ alumno.especialidad_profesor }}</small>{% endif %}{% else %}<span class="role-pill student">ESTUDIANTE</span>{% endif %}</td>
+    <td><strong>{{ alumno.documento }}</strong></td>
+    <td><strong>{{ alumno.disciplina|default:"Sin disciplina" }}</strong><br><small class="text-secondary">Grado: {{ alumno.grado|default:"Sin registrar" }}</small></td>
+    <td><div class="subscription-detail">{% if alumno.estado == 'ACTIVO' %}<span class="student-state active">ACTIVO</span>{% elif alumno.estado == 'VENCIDO' %}<span class="student-state expired">VENCIDO</span>{% elif alumno.estado == 'PROXIMO_VENCER' %}<span class="student-state upcoming">PRÓXIMO A VENCER</span>{% elif alumno.estado == 'PENDIENTE' %}<span class="student-state pending">PENDIENTE</span>{% else %}<span class="student-state pending">{{ alumno.estado }}</span>{% endif %}<div class="mt-2">{% if alumno.fecha_vencimiento_actual %}<i class="fa-regular fa-calendar me-1"></i>{{ alumno.fecha_vencimiento_actual|date:"d M Y" }}{% else %}<span class="text-secondary">Sin suscripción</span>{% endif %}</div>{% if alumno.dias_para_vencer is not None %}<small class="text-secondary">{{ alumno.dias_para_vencer }} días restantes</small>{% elif alumno.dias_vencido %}<small class="text-danger">{{ alumno.dias_vencido }} días vencido</small>{% endif %}</div></td>
+    <td class="text-center"><span class="badge {% if alumno.mensualidades_pendientes %}bg-danger{% else %}bg-secondary{% endif %}">{{ alumno.mensualidades_pendientes }}</span></td>
+    <td><div class="student-actions"><a href="{% url 'gestion:asistencia_alumno' alumno.id %}" class="btn btn-outline-success btn-sm"><i class="fa-solid fa-calendar-check"></i> Asistencia</a><a href="{% url 'gestion:editar_alumno' alumno.id %}" class="btn btn-outline-warning btn-sm"><i class="fa-solid fa-pen"></i> Editar</a><a href="{% url 'gestion:eliminar_alumno' alumno.id %}" class="btn btn-outline-danger btn-sm" title="Eliminar ficha"><i class="fa-solid fa-trash"></i></a></div></td>
+</tr>{% empty %}<tr><td colspan="7" class="students-empty"><i class="fa-regular fa-folder-open"></i><h3 class="h5">{% if consulta %}No encontramos coincidencias{% else %}No hay alumnos registrados{% endif %}</h3><p>{% if consulta %}Prueba con otro nombre, documento o usuario.{% else %}Usa “Nuevo alumno” para agregar el primer registro.{% endif %}</p></td></tr>{% endfor %}
+</tbody></table></div></section>
 {% endblock %}

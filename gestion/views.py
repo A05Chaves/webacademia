@@ -35,6 +35,7 @@ from django.db.models.manager import BaseManager
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 
 from alumnos.models import Alumno
 from cortesias.models import ClaseCortesia
@@ -64,6 +65,7 @@ from .forms import (
     UsuarioAlumnoEditForm,
     AlumnoForm,
     CambioPerfilAlumnoForm,
+    AdministrarPerfilUsuarioForm,
     PlanForm,
     SuscripcionForm,
     PagoForm,
@@ -77,13 +79,15 @@ from django.utils.formats import number_format
 from django.utils.dateparse import parse_date
 from django.utils.text import slugify
 from notificaciones.models import Notificacion
-from instructores.models import Instructor
+from instructores.models import Instructor, SolicitudRegistroProfesor
 
 from datetime import datetime, time
 from clases.models import ClaseProgramada, AsistenciaClase
-from .forms import ClaseProgramadaForm, ConfiguracionClasesForm
+from .forms import (
+    ClaseProgramadaForm, ConfiguracionClasesForm, TipoRecompensaForm,
+)
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count, Q
+from django.db.models import Case, Count, IntegerField, Q, Value, When
 from django.db import IntegrityError, models, transaction
 
 from django.contrib.auth import authenticate
@@ -91,9 +95,11 @@ from django.views.decorators.http import require_POST
 from django.templatetags.static import static
 from .models import (
     BilleteraMonedas, ConfiguracionClases, DiaHorario, HoraHorario,
-    SesionTV, estado_tv_inicial,
+    RecompensaOtorgada, SesionTV, TipoRecompensa, estado_tv_inicial,
 )
-from .services_gamificacion import premiar_asistencia
+from .services_gamificacion import (
+    otorgar_recompensa, premiar_asistencia, progresos_recompensas,
+)
 from .forms import DiaHorarioForm, HoraHorarioForm
 
 from .forms import PagoAlumnoForm
@@ -319,6 +325,29 @@ def _instructor_activo_de_usuario(user):
     return instructor if instructor and instructor.activo else None
 
 
+def _puede_otorgar_recompensas(user):
+    return bool(user.is_authenticated and _instructor_activo_de_usuario(user))
+
+
+def _puede_recompensar_asistencia(user, asistencia):
+    return bool(_instructor_activo_de_usuario(user))
+
+
+def _cargar_progresos_en_asistencias(asistencias):
+    alumno_ids = [item.alumno_id for item in asistencias if item.alumno_id]
+    progresos = progresos_recompensas(alumno_ids)
+    for premios in progresos.values():
+        for premio in premios:
+            premio['imagen_url'] = (
+                f'{settings.MEDIA_URL}{premio["imagen"]}'
+                if premio['imagen'] else ''
+            )
+    for asistencia in asistencias:
+        asistencia.progresos_recompensas = progresos.get(
+            asistencia.alumno_id, []
+        )
+
+
 def _confirmar_asistencia_instructor(instructor, clase, ahora):
     asistencia, creada = AsistenciaClase.objects.get_or_create(
         instructor=instructor,
@@ -334,13 +363,14 @@ def _confirmar_asistencia_instructor(instructor, clase, ahora):
         asistencia.fecha_confirmacion = ahora
         asistencia.save(update_fields=['estado', 'fecha_confirmacion'])
         creada = True
+    premio = premiar_asistencia(asistencia)
     return {
         'asistencia': asistencia,
         'creada': creada,
         'dias_vencida': 0,
         'restantes': None,
-        'monedas_ganadas': 0,
-        'saldo_monedas': None,
+        'monedas_ganadas': premio['monedas'],
+        'saldo_monedas': premio['saldo'],
     }
 
 
@@ -461,6 +491,17 @@ def home_publica(request):
         'alumno__user', 'instructor__user',
         'clase'
     ).order_by('-fecha_confirmacion')[:10]
+    _cargar_progresos_en_asistencias(asistencias_hoy)
+    puede_otorgar_recompensas = _puede_otorgar_recompensas(request.user)
+    for asistencia in asistencias_hoy:
+        asistencia.puede_ser_recompensada = (
+            puede_otorgar_recompensas
+            and _puede_recompensar_asistencia(request.user, asistencia)
+        )
+    recompensas_activas = (
+        list(TipoRecompensa.objects.filter(activa=True))
+        if puede_otorgar_recompensas else []
+    )
 
     config_home = ConfiguracionHome.objects.filter(
         activo=True
@@ -535,6 +576,8 @@ def home_publica(request):
         'clase_confirmable': clase_confirmable,
         'clase_visible': clase_visible,
         'instructor_sesion': instructor_sesion,
+        'puede_otorgar_recompensas': puede_otorgar_recompensas,
+        'recompensas_activas': recompensas_activas,
         'pago_form': pago_form,
         'config_home': config_home,
         'publicaciones_home': publicaciones_home,
@@ -562,13 +605,16 @@ def asistencias_home_actuales(request):
     if not clase:
         return JsonResponse({'clase': None, 'asistencias': []})
 
-    asistencias = AsistenciaClase.objects.filter(
+    asistencias = list(AsistenciaClase.objects.filter(
         clase=clase,
         fecha_clase=ahora.date(),
         estado=AsistenciaClase.Estados.CONFIRMADA,
     ).select_related(
-        'alumno__user', 'instructor__user'
-    ).order_by('-fecha_confirmacion')
+        'alumno__user', 'instructor__user', 'clase'
+    ).order_by('-fecha_confirmacion'))
+    _cargar_progresos_en_asistencias(asistencias)
+    puede_otorgar = _puede_otorgar_recompensas(request.user)
+    recompensas = TipoRecompensa.objects.filter(activa=True) if puede_otorgar else []
     return JsonResponse({
         'clase': {
             'nombre': clase.titulo or clase.get_disciplina_display(),
@@ -582,10 +628,114 @@ def asistencias_home_actuales(request):
                 'hora_confirmacion': timezone.localtime(
                     asistencia.fecha_confirmacion
                 ).strftime('%H:%M:%S'),
+                'asistencia_id': asistencia.id,
+                'es_estudiante': bool(asistencia.alumno_id),
+                'puede_ser_recompensada': (
+                    puede_otorgar
+                    and _puede_recompensar_asistencia(request.user, asistencia)
+                ),
+                'recompensas': [
+                    {
+                        'nombre': progreso['nombre'],
+                        'simbolo': progreso['simbolo'],
+                        'imagen': (
+                            progreso['imagen_url']
+                        ),
+                        'cantidad': progreso['cantidad'],
+                        'meta': progreso['meta'],
+                    }
+                    for progreso in asistencia.progresos_recompensas
+                ],
             }
             for asistencia in asistencias
         ],
+        'puede_otorgar_recompensas': puede_otorgar,
+        'recompensas_disponibles': [
+            {
+                'id': recompensa.id,
+                'nombre': recompensa.nombre,
+                'simbolo': recompensa.simbolo,
+                'valor': recompensa.valor_monedas,
+            }
+            for recompensa in recompensas
+        ],
     })
+
+
+@login_required
+@require_POST
+def recompensar_asistencia(request, asistencia_id):
+    if not _puede_otorgar_recompensas(request.user):
+        raise PermissionDenied
+    asistencia = get_object_or_404(
+        AsistenciaClase.objects.select_related('alumno__user', 'clase'),
+        id=asistencia_id,
+    )
+    instructor = _instructor_activo_de_usuario(request.user)
+    if not instructor:
+        raise PermissionDenied
+    recompensa = get_object_or_404(
+        TipoRecompensa,
+        id=request.POST.get('recompensa'),
+        activa=True,
+    )
+    resultado, error = otorgar_recompensa(
+        asistencia,
+        recompensa,
+        request.user,
+        request.POST.get('motivo', ''),
+    )
+    if error:
+        messages.error(request, error)
+    else:
+        mensaje = (
+            f'{recompensa.simbolo} {recompensa.nombre} entregada a '
+            f'{asistencia.alumno}. Ganó {resultado["monedas"]} monedas.'
+        )
+        if resultado['bono']:
+            mensaje += f' Completó el ciclo y recibió {resultado["bono"]} adicionales.'
+        messages.success(request, mensaje)
+    destino = request.POST.get('next', '')
+    return redirect(destino if destino.startswith('/') else 'gestion:home_publica')
+
+
+@login_required
+def notificacion_recompensa_pendiente(request):
+    if not hasattr(request.user, 'perfil_alumno'):
+        return JsonResponse({'notificacion': None})
+    notificacion = Notificacion.objects.filter(
+        usuario=request.user,
+        tipo=Notificacion.Tipos.RECOMPENSA,
+        estado=Notificacion.Estados.PENDIENTE,
+        canal=Notificacion.Canales.INTERNA,
+    ).order_by('fecha_programada', 'id').first()
+    if not notificacion:
+        return JsonResponse({'notificacion': None})
+    return JsonResponse({'notificacion': {
+        'id': notificacion.id,
+        'titulo': notificacion.titulo,
+        'mensaje': notificacion.mensaje,
+    }})
+
+
+@login_required
+@require_POST
+def confirmar_notificacion_recompensa(request, notificacion_id):
+    notificacion = get_object_or_404(
+        Notificacion,
+        id=notificacion_id,
+        usuario=request.user,
+        tipo=Notificacion.Tipos.RECOMPENSA,
+        canal=Notificacion.Canales.INTERNA,
+    )
+    if notificacion.estado == Notificacion.Estados.PENDIENTE:
+        notificacion.estado = Notificacion.Estados.ENVIADA
+        notificacion.fecha_envio = timezone.now()
+        notificacion.save(update_fields=['estado', 'fecha_envio', 'actualizado'])
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({'confirmada': True})
+    destino = request.POST.get('next', '')
+    return redirect(destino if destino.startswith('/') else 'gestion:home_publica')
 
 
 @administrador_required
@@ -848,6 +998,14 @@ def lista_alumnos(request):
         'estudiantes': estudiantes,
         'profesores': profesores,
         'profesores_exclusivos': profesores_exclusivos,
+        'total_activos': sum(
+            1 for alumno in alumnos
+            if alumno.estado == Alumno.Estados.ACTIVO
+        ),
+        'total_vencidos': sum(
+            1 for alumno in alumnos
+            if alumno.estado == Alumno.Estados.VENCIDO
+        ),
         'total_resultados': len(alumnos) + len(profesores_exclusivos),
         'consulta': consulta,
     })
@@ -881,7 +1039,15 @@ def crear_alumno(request):
 @staff_member_required
 def lista_planes(request):
     planes = Plan.objects.all()
-    return render(request, 'gestion/lista_planes.html', {'planes': planes})
+    resumen_planes = planes.aggregate(
+        total=Count('id'),
+        activos=Count('id', filter=Q(activo=True)),
+        inactivos=Count('id', filter=Q(activo=False)),
+    )
+    return render(request, 'gestion/lista_planes.html', {
+        'planes': planes,
+        'resumen_planes': resumen_planes,
+    })
 
 
 # VISTA PARA CREAR PLANES
@@ -912,6 +1078,19 @@ def lista_suscripciones(request):
     estado_solicitado = request.GET.get('estado')
     estado = estado_solicitado or ('todas' if busqueda else 'activas')
 
+    resumen_suscripciones = Suscripcion.objects.aggregate(
+        total=Count('id'),
+        activas=Count('id', filter=Q(estado=Suscripcion.Estados.ACTIVA)),
+        programadas=Count(
+            'id', filter=Q(estado=Suscripcion.Estados.PROGRAMADA)
+        ),
+        vencidas=Count(
+            'id', filter=Q(estado__in=[
+                Suscripcion.Estados.VENCIDA,
+                Suscripcion.Estados.FINALIZADA,
+            ])
+        ),
+    )
     suscripciones = Suscripcion.objects.select_related(
         'alumno__user', 'plan'
     ).annotate(
@@ -958,6 +1137,7 @@ def lista_suscripciones(request):
         'suscripciones': suscripciones,
         'busqueda': busqueda,
         'estado_filtro': estado,
+        'resumen_suscripciones': resumen_suscripciones,
     })
 
 
@@ -992,6 +1172,7 @@ def lista_pagos(request):
     estado = request.GET.get('estado', '').strip()
     tipo = request.GET.get('tipo', '').strip()
     metodo = request.GET.get('metodo', '').strip()
+    busqueda = request.GET.get('q', '').strip()
 
     if fecha_desde:
         pagos = pagos.filter(fecha_reporte__date__gte=fecha_desde)
@@ -1011,10 +1192,32 @@ def lista_pagos(request):
         pagos = pagos.filter(tipo=tipo)
     if metodo:
         pagos = pagos.filter(metodo_qr_id=metodo)
+    if busqueda:
+        pagos = pagos.filter(
+            Q(alumno__user__first_name__icontains=busqueda)
+            | Q(alumno__user__last_name__icontains=busqueda)
+            | Q(alumno__documento__icontains=busqueda)
+            | Q(alumno__documento_acudiente__icontains=busqueda)
+            | Q(pagador_nombre__icontains=busqueda)
+            | Q(pagador_documento__icontains=busqueda)
+            | Q(referencia_pago__icontains=busqueda)
+            | Q(numero_comprobante__icontains=busqueda)
+            | Q(inscripcion_evento__participante_nombre__icontains=busqueda)
+            | Q(inscripcion_evento__participante_documento__icontains=busqueda)
+        ).distinct()
 
     resumen = pagos.aggregate(
         cantidad=Count('id'),
         total=Sum('valor'),
+        cantidad_aprobados=Count(
+            'id', filter=Q(estado=Pago.Estados.APROBADO)
+        ),
+        cantidad_pendientes=Count(
+            'id', filter=Q(estado=Pago.Estados.PENDIENTE)
+        ),
+        cantidad_rechazados=Count(
+            'id', filter=Q(estado=Pago.Estados.RECHAZADO)
+        ),
         aprobados=Sum('valor', filter=Q(estado=Pago.Estados.APROBADO)),
         pendientes=Sum('valor', filter=Q(estado=Pago.Estados.PENDIENTE)),
         rechazados=Sum('valor', filter=Q(estado=Pago.Estados.RECHAZADO)),
@@ -1025,6 +1228,7 @@ def lista_pagos(request):
         'estados_pago': Pago.Estados.choices,
         'tipos_pago': Pago.Tipos.choices,
         'metodos_pago': MetodoPagoQR.objects.all(),
+        'busqueda_pagos': busqueda or documento,
         'filtros': request.GET,
     })
 
@@ -1373,13 +1577,17 @@ def editar_alumno(request, alumno_id):
                         'activo': perfil_form.cleaned_data['instructor_activo'],
                     },
                 )
-                usuario.rol = User.Roles.INSTRUCTOR
+                # El perfil de profesor es adicional. No debe quitarle el rol
+                # administrativo a quien también administra la academia.
+                if usuario.rol != User.Roles.ADMIN:
+                    usuario.rol = User.Roles.INSTRUCTOR
                 mensaje = 'El estudiante ahora tiene perfil de profesor.'
             else:
                 if instructor:
                     instructor.activo = False
                     instructor.save(update_fields=['activo'])
-                usuario.rol = User.Roles.ALUMNO
+                if usuario.rol != User.Roles.ADMIN:
+                    usuario.rol = User.Roles.ALUMNO
                 mensaje = 'El usuario quedó con perfil de estudiante.'
             usuario.save(update_fields=['rol'])
 
@@ -1422,20 +1630,46 @@ def editar_alumno(request, alumno_id):
 def mi_perfil(request):
     alumno = getattr(request.user, 'perfil_alumno', None)
     billetera, _ = BilleteraMonedas.objects.get_or_create(usuario=request.user)
+    accion = request.POST.get('accion', 'perfil') if request.method == 'POST' else ''
+    datos_perfil = request.POST if accion == 'perfil' else None
+    archivos_perfil = request.FILES if accion == 'perfil' else None
     usuario_form = MiPerfilUsuarioForm(
-        request.POST or None,
+        datos_perfil,
         instance=request.user,
     )
     alumno_form = (
         MiPerfilAlumnoForm(
-            request.POST or None,
-            request.FILES or None,
+            datos_perfil,
+            archivos_perfil,
             instance=alumno,
         )
         if alumno else None
     )
+    credenciales_form = CambioPasswordObligatorioForm(
+        user=request.user,
+        data=request.POST if accion == 'credenciales' else None,
+    )
 
-    if request.method == 'POST':
+    if request.method == 'POST' and accion == 'credenciales':
+        if credenciales_form.is_valid():
+            try:
+                with transaction.atomic():
+                    usuario = credenciales_form.save(commit=False)
+                    usuario.debe_cambiar_password = False
+                    usuario.save()
+            except IntegrityError:
+                credenciales_form.add_error(
+                    'username',
+                    'Este nombre de usuario ya está en uso. Elige otro.'
+                )
+            else:
+                update_session_auth_hash(request, usuario)
+                messages.success(
+                    request,
+                    'Tus datos de acceso fueron actualizados correctamente.'
+                )
+                return redirect('gestion:mi_perfil')
+    elif request.method == 'POST':
         formularios_validos = usuario_form.is_valid()
         if alumno_form is not None:
             formularios_validos = alumno_form.is_valid() and formularios_validos
@@ -1449,6 +1683,7 @@ def mi_perfil(request):
     return render(request, 'gestion/mi_perfil.html', {
         'usuario_form': usuario_form,
         'alumno_form': alumno_form,
+        'credenciales_form': credenciales_form,
         'alumno': alumno,
         'billetera': billetera,
         'movimientos_monedas': billetera.movimientos.select_related(
@@ -1807,20 +2042,58 @@ def confirmar_asistencia(request, clase_id):
 # EDICION DE HORARIOS
 
 @staff_member_required
+@transaction.atomic
 def crear_clase(request):
     if request.method == 'POST':
         form = ClaseProgramadaForm(request.POST)
         if form.is_valid():
-            form.save()
-            messages.success(request, 'Clase creada correctamente.')
-            return redirect('gestion:horario_clases')
+            clase_base = form.save(commit=False)
+            creadas = 0
+            omitidas = 0
+            for dia in form.cleaned_data['dias']:
+                existente = ClaseProgramada.objects.filter(
+                    dia=dia,
+                    hora_inicio=clase_base.hora_inicio,
+                    hora_fin=clase_base.hora_fin,
+                    disciplina=clase_base.disciplina,
+                    titulo=clase_base.titulo,
+                    publico_objetivo=clase_base.publico_objetivo,
+                    instructor=clase_base.instructor,
+                ).exists()
+                if existente:
+                    omitidas += 1
+                    continue
+                ClaseProgramada.objects.create(
+                    dia=dia,
+                    hora_inicio=clase_base.hora_inicio,
+                    hora_fin=clase_base.hora_fin,
+                    disciplina=clase_base.disciplina,
+                    titulo=clase_base.titulo,
+                    publico_objetivo=clase_base.publico_objetivo,
+                    instructor=clase_base.instructor,
+                    cupo_maximo=clase_base.cupo_maximo,
+                    activa=clase_base.activa,
+                )
+                creadas += 1
+            if creadas:
+                messages.success(
+                    request,
+                    f'Se crearon {creadas} clase(s) en los días seleccionados.',
+                )
+            if omitidas:
+                messages.warning(
+                    request,
+                    f'Se omitieron {omitidas} clase(s) idénticas que ya existían.',
+                )
+            return redirect('gestion:configurar_horario')
     else:
         form = ClaseProgramadaForm()
 
-    return render(request, 'gestion/formulario.html', {
+    return render(request, 'gestion/formulario_clase.html', {
         'form': form,
         'titulo': 'Crear clase',
-        'cancelar_url': 'gestion:horario_clases'
+        'es_creacion': True,
+        'cancelar_url': 'gestion:configurar_horario'
     })
 
 
@@ -1837,9 +2110,10 @@ def editar_clase(request, clase_id):
     else:
         form = ClaseProgramadaForm(instance=clase)
 
-    return render(request, 'gestion/formulario.html', {
+    return render(request, 'gestion/formulario_clase.html', {
         'form': form,
         'titulo': 'Editar clase',
+        'es_creacion': False,
         'cancelar_url': 'gestion:configurar_horario'
     })
 
@@ -1932,13 +2206,14 @@ def asistentes_clase(request, clase_id):
     fecha_clase = parse_date(fecha_solicitada) if fecha_solicitada else None
     fecha_clase = fecha_clase or timezone.localdate()
 
-    asistencias = AsistenciaClase.objects.filter(
+    asistencias = list(AsistenciaClase.objects.filter(
         clase=clase,
         fecha_clase=fecha_clase,
         estado=AsistenciaClase.Estados.CONFIRMADA,
     ).select_related(
         'alumno__user', 'instructor__user'
-    ).order_by('fecha_confirmacion')
+    ).order_by('fecha_confirmacion'))
+    _cargar_progresos_en_asistencias(asistencias)
     sesiones = AsistenciaClase.objects.filter(
         clase=clase,
         estado=AsistenciaClase.Estados.CONFIRMADA,
@@ -1949,7 +2224,7 @@ def asistentes_clase(request, clase_id):
     return render(request, 'gestion/asistentes_clase.html', {
         'clase': clase,
         'asistencias': asistencias,
-        'total_asistentes': asistencias.count(),
+        'total_asistentes': len(asistencias),
         'fecha_clase': fecha_clase,
         'sesiones': sesiones,
     })
@@ -2351,7 +2626,24 @@ def registrar_transferencia(request):
 @staff_member_required
 def lista_registros_legales(request):
     consulta = request.GET.get('q', '').strip()
-    registros = RegistroLegalEstudiante.objects.all().order_by('-creado')
+    estado = request.GET.get('estado', '').strip()
+    registros_base = RegistroLegalEstudiante.objects.all()
+    resumen_registros = registros_base.aggregate(
+        total=Count('id'),
+        pendientes=Count(
+            'id',
+            filter=Q(
+                estado=RegistroLegalEstudiante.Estados.PENDIENTE_VALIDACION
+            ),
+        ),
+        aprobados=Count(
+            'id', filter=Q(estado=RegistroLegalEstudiante.Estados.APROBADO)
+        ),
+        rechazados=Count(
+            'id', filter=Q(estado=RegistroLegalEstudiante.Estados.RECHAZADO)
+        ),
+    )
+    registros = registros_base.order_by('-creado')
     if consulta:
         for termino in consulta.split():
             registros = registros.filter(
@@ -2359,10 +2651,15 @@ def lista_registros_legales(request):
                 | Q(apellidos__icontains=termino)
                 | Q(documento__icontains=termino)
             )
+    if estado:
+        registros = registros.filter(estado=estado)
 
     return render(request, 'gestion/lista_registros_legales.html', {
         'registros': registros,
         'consulta': consulta,
+        'estado_filtro': estado,
+        'estados_registro': RegistroLegalEstudiante.Estados.choices,
+        'resumen_registros': resumen_registros,
     })
 
 
@@ -2397,10 +2694,30 @@ def configurar_categorias_financieras(request, categoria_id=None):
             f'Categoría "{guardada.nombre}" guardada correctamente.',
         )
         return redirect('gestion:configurar_categorias_financieras')
+    categorias = CategoriaFinanciera.objects.all()
+    resumen_categorias = categorias.aggregate(
+        total=Count('id'),
+        activas=Count('id', filter=Q(activa=True)),
+        ingresos=Count(
+            'id',
+            filter=Q(tipo__in=[
+                CategoriaFinanciera.Tipos.INGRESO,
+                CategoriaFinanciera.Tipos.AMBOS,
+            ]),
+        ),
+        egresos=Count(
+            'id',
+            filter=Q(tipo__in=[
+                CategoriaFinanciera.Tipos.EGRESO,
+                CategoriaFinanciera.Tipos.AMBOS,
+            ]),
+        ),
+    )
     return render(request, 'gestion/configurar_categorias_financieras.html', {
         'form': form,
         'categoria_edicion': categoria,
-        'categorias': CategoriaFinanciera.objects.all(),
+        'categorias': categorias,
+        'resumen_categorias': resumen_categorias,
     })
 
 # DETALLE DE REGISTRO LEGAL
@@ -2800,7 +3117,9 @@ def promociones_eventos(request):
     if estado_eventos not in {'vigentes', 'historicos', 'todos'}:
         estado_eventos = 'vigentes'
     busqueda_eventos = request.GET.get('q', '').strip()[:100]
-    eventos = Evento.objects.all()
+    promociones = Promocion.objects.select_related('plan').all()
+    eventos_base = Evento.objects.all()
+    eventos = eventos_base
     if estado_eventos == 'vigentes':
         eventos = eventos.filter(activo=True).filter(_evento_operativo_q())
     elif estado_eventos == 'historicos':
@@ -2814,11 +3133,25 @@ def promociones_eventos(request):
             | Q(inscripciones__participante_documento__icontains=busqueda_eventos)
         ).distinct()
     eventos = eventos.prefetch_related('categorias', 'jornadas').order_by('-fecha_inicio')
+    hoy = timezone.localdate()
+    resumen_publicaciones = {
+        'promociones': promociones.count(),
+        'promociones_vigentes': promociones.filter(
+            activa=True,
+            fecha_inicio__lte=hoy,
+            fecha_fin__gte=hoy,
+        ).count(),
+        'eventos': eventos_base.count(),
+        'eventos_vigentes': eventos_base.filter(
+            activo=True,
+        ).filter(_evento_operativo_q()).count(),
+    }
     return render(request, 'gestion/promociones_eventos.html', {
-        'promociones': Promocion.objects.select_related('plan').all(),
+        'promociones': promociones,
         'eventos': eventos,
         'estado_eventos': estado_eventos,
         'busqueda_eventos': busqueda_eventos,
+        'resumen_publicaciones': resumen_publicaciones,
     })
 
 
@@ -3824,6 +4157,192 @@ def configuraciones(request):
 
 
 @administrador_required
+def configurar_perfiles(request):
+    consulta = request.GET.get('q', '').strip()
+    usuarios_base = User.objects.filter(is_superuser=False)
+    resumen_perfiles = usuarios_base.aggregate(
+        total=Count('id'),
+        activos=Count('id', filter=Q(is_active=True)),
+        estudiantes=Count('id', filter=Q(perfil_alumno__isnull=False)),
+        profesores=Count('id', filter=Q(perfil_instructor__isnull=False)),
+    )
+    usuarios = usuarios_base.select_related(
+        'perfil_alumno', 'perfil_instructor'
+    ).order_by('first_name', 'last_name', 'username')
+    if consulta:
+        for termino in consulta.split():
+            usuarios = usuarios.filter(
+                Q(username__icontains=termino)
+                | Q(first_name__icontains=termino)
+                | Q(last_name__icontains=termino)
+                | Q(perfil_alumno__documento__icontains=termino)
+                | Q(perfil_instructor__documento__icontains=termino)
+            )
+    solicitudes = SolicitudRegistroProfesor.objects.all().order_by('-creado')
+    return render(request, 'gestion/configurar_perfiles.html', {
+        'usuarios': usuarios,
+        'solicitudes_profesores': solicitudes,
+        'consulta': consulta,
+        'pendientes_profesores': solicitudes.filter(
+            estado=SolicitudRegistroProfesor.Estados.PENDIENTE
+        ).count(),
+        'resumen_perfiles': resumen_perfiles,
+    })
+
+
+@administrador_required
+@transaction.atomic
+def editar_perfil_usuario(request, usuario_id):
+    usuario = get_object_or_404(User, id=usuario_id, is_superuser=False)
+    form = AdministrarPerfilUsuarioForm(
+        request.POST or None,
+        request.FILES or None,
+        usuario=usuario,
+    )
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        messages.success(
+            request,
+            f'Perfil de {usuario.get_full_name() or usuario.username} actualizado.',
+        )
+        return redirect('gestion:configurar_perfiles')
+    return render(request, 'gestion/editar_perfil_usuario.html', {
+        'form': form,
+        'usuario_editado': usuario,
+        'instructor': getattr(usuario, 'perfil_instructor', None),
+    })
+
+
+@administrador_required
+@require_POST
+def aprobar_solicitud_profesor(request, solicitud_id):
+    solicitud = get_object_or_404(
+        SolicitudRegistroProfesor, id=solicitud_id
+    )
+    if solicitud.estado == SolicitudRegistroProfesor.Estados.APROBADO:
+        messages.warning(request, 'Esta solicitud ya fue aprobada.')
+        return redirect('gestion:configurar_perfiles')
+    if solicitud.estado == SolicitudRegistroProfesor.Estados.RECHAZADO:
+        messages.error(request, 'Una solicitud rechazada no se puede aprobar.')
+        return redirect('gestion:configurar_perfiles')
+
+    try:
+        with transaction.atomic():
+            if User.objects.filter(
+                username__iexact=solicitud.usuario_solicitado
+            ).exists():
+                raise IntegrityError('usuario duplicado')
+            if Instructor.objects.filter(documento=solicitud.documento).exists():
+                raise IntegrityError('documento duplicado')
+            usuario = User.objects.create(
+                username=solicitud.usuario_solicitado,
+                password=solicitud.password_hash,
+                first_name=solicitud.nombres,
+                last_name=solicitud.apellidos,
+                email=solicitud.correo,
+                telefono=solicitud.celular,
+                rol=User.Roles.INSTRUCTOR,
+                is_staff=False,
+                debe_cambiar_password=False,
+            )
+            Instructor.objects.create(
+                user=usuario,
+                documento=solicitud.documento,
+                especialidad=solicitud.especialidad,
+                telefono=solicitud.celular,
+                foto=solicitud.foto,
+                activo=True,
+            )
+            solicitud.estado = SolicitudRegistroProfesor.Estados.APROBADO
+            solicitud.observacion_admin = request.POST.get('observacion', '').strip()
+            solicitud.save(update_fields=[
+                'estado', 'observacion_admin', 'actualizado',
+            ])
+    except IntegrityError:
+        messages.error(
+            request,
+            'No se pudo aprobar: el usuario o el documento ya están registrados.',
+        )
+        return redirect('gestion:configurar_perfiles')
+
+    if solicitud.correo:
+        try:
+            send_mail(
+                subject='Registro de profesor aprobado - Galeras BJJ',
+                message=(
+                    f'Hola {solicitud.nombres},\n\n'
+                    'Tu registro como profesor fue aprobado. Puedes ingresar '
+                    f'con el usuario {solicitud.usuario_solicitado} y la '
+                    'contraseña que elegiste.\n\nhttps://bjj.lu-a.com/'
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[solicitud.correo],
+                fail_silently=False,
+            )
+        except Exception:
+            logger.exception(
+                'Falló el correo de aprobación del profesor %s.', solicitud.id
+            )
+            messages.warning(
+                request,
+                'El profesor fue creado, pero el correo de aviso no se pudo enviar.',
+            )
+    messages.success(request, 'Profesor aprobado y cuenta creada correctamente.')
+    return redirect('gestion:configurar_perfiles')
+
+
+@administrador_required
+@require_POST
+def rechazar_solicitud_profesor(request, solicitud_id):
+    solicitud = get_object_or_404(
+        SolicitudRegistroProfesor,
+        id=solicitud_id,
+        estado=SolicitudRegistroProfesor.Estados.PENDIENTE,
+    )
+    solicitud.estado = SolicitudRegistroProfesor.Estados.RECHAZADO
+    solicitud.observacion_admin = request.POST.get('observacion', '').strip()
+    solicitud.save(update_fields=['estado', 'observacion_admin', 'actualizado'])
+    messages.warning(request, 'Solicitud de profesor rechazada.')
+    return redirect('gestion:configurar_perfiles')
+
+
+@administrador_required
+def configurar_recompensas(request, recompensa_id=None):
+    recompensa = None
+    if recompensa_id is not None:
+        recompensa = get_object_or_404(TipoRecompensa, id=recompensa_id)
+    if request.method == 'POST':
+        form = TipoRecompensaForm(
+            request.POST,
+            request.FILES,
+            instance=recompensa,
+        )
+        if form.is_valid():
+            guardada = form.save()
+            messages.success(
+                request,
+                f'Recompensa "{guardada.nombre}" guardada correctamente.',
+            )
+            return redirect('gestion:configurar_recompensas')
+    else:
+        form = TipoRecompensaForm(instance=recompensa)
+    recompensas = TipoRecompensa.objects.annotate(
+        total_entregadas=Count('entregas')
+    )
+    resumen_recompensas = TipoRecompensa.objects.aggregate(
+        total=Count('id', distinct=True),
+        activas=Count('id', filter=Q(activa=True), distinct=True),
+        entregadas=Count('entregas'),
+    )
+    return render(request, 'gestion/configurar_recompensas.html', {
+        'form': form,
+        'recompensa_editando': recompensa,
+        'recompensas': recompensas,
+        'resumen_recompensas': resumen_recompensas,
+    })
+
+
+@administrador_required
 def configurar_cuentas(request, cuenta_id=None):
     cuenta = None
     if cuenta_id is not None:
@@ -3846,10 +4365,18 @@ def configurar_cuentas(request, cuenta_id=None):
     for cuenta_financiera in cuentas:
         cuenta_financiera.saldo_calculado = cuenta_financiera.saldo_actual
 
+    resumen_cuentas = {
+        'total': len(cuentas),
+        'activas': sum(1 for item in cuentas if item.activa),
+        'saldo_inicial': sum((item.saldo_inicial for item in cuentas), 0),
+        'saldo_actual': sum((item.saldo_calculado for item in cuentas), 0),
+    }
+
     return render(request, 'gestion/configurar_cuentas.html', {
         'form': form,
         'cuentas': cuentas,
         'cuenta_editando': cuenta,
+        'resumen_cuentas': resumen_cuentas,
     })
 
 
@@ -3870,11 +4397,30 @@ def configurar_horario(request):
         )
         return redirect('gestion:configurar_horario')
 
+    orden_dias = Case(
+        *[
+            When(dia=valor, then=Value(indice))
+            for indice, (valor, _etiqueta) in enumerate(
+                ClaseProgramada.DiasSemana.choices,
+                start=1,
+            )
+        ],
+        default=Value(8),
+        output_field=IntegerField(),
+    )
     clases = ClaseProgramada.objects.select_related(
         'instructor'
+    ).annotate(
+        orden_dia=orden_dias,
     ).order_by(
-        'dia',
+        'orden_dia',
         'hora_inicio'
+    )
+    resumen_horario = clases.aggregate(
+        total=Count('id'),
+        activas=Count('id', filter=Q(activa=True)),
+        inactivas=Count('id', filter=Q(activa=False)),
+        dias=Count('dia', distinct=True),
     )
 
     return render(
@@ -3883,6 +4429,7 @@ def configurar_horario(request):
         {
             'clases': clases,
             'form_configuracion': form_configuracion,
+            'resumen_horario': resumen_horario,
         }
     )
 

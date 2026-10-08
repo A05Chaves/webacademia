@@ -1,216 +1,41 @@
 {% extends 'gestion/base.html' %}
 
 {% block content %}
+<style>
+.schedule-heading{background:linear-gradient(135deg,rgba(13,202,240,.13),transparent 60%);border:1px solid var(--border-color);border-radius:18px;margin-bottom:22px;padding:20px 22px}.schedule-heading .page-heading{padding:0}.schedule-summary{display:grid;gap:13px;grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:22px}.schedule-stat{align-items:center;background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;display:flex;gap:13px;padding:16px}.schedule-stat i{align-items:center;background:rgba(108,117,125,.13);border-radius:12px;color:var(--text-secondary);display:flex;height:42px;justify-content:center;width:42px}.schedule-stat strong{display:block;font-size:1.4rem;line-height:1}.schedule-stat small{color:var(--text-secondary)}.schedule-stat.active i{background:rgba(25,135,84,.14);color:#42b883}.schedule-stat.inactive i{background:rgba(220,53,69,.13);color:#e05b68}.schedule-settings{border-radius:18px!important;margin-bottom:22px}.schedule-settings .card-body{padding:22px}.schedule-settings-layout{display:grid;gap:26px;grid-template-columns:minmax(230px,.75fr) minmax(0,1.5fr)}.schedule-settings-intro{border-right:1px solid var(--border-color);padding-right:25px}.schedule-settings-intro-icon{align-items:center;background:rgba(13,202,240,.12);border-radius:14px;color:#48cbe6;display:flex;font-size:1.2rem;height:48px;justify-content:center;margin-bottom:14px;width:48px}.schedule-settings-grid{align-items:end;display:grid;gap:15px;grid-template-columns:repeat(2,minmax(0,1fr))}.schedule-settings-grid .full{grid-column:1/-1}.schedule-gamification{align-items:center;background:rgba(255,193,7,.08);border:1px solid rgba(255,193,7,.2);border-radius:13px;display:flex;gap:10px;min-height:48px;padding:12px 14px}.schedule-save{display:flex;justify-content:flex-end}.schedule-table-card{border-radius:18px!important}.schedule-table-card .card-header{align-items:center;background:transparent;border-color:var(--border-color);display:flex;gap:12px;justify-content:space-between;padding:17px 20px}.schedule-table-card table{min-width:1120px}.schedule-table-card th{padding:0}.schedule-sort{align-items:center;background:transparent;border:0;color:var(--text-secondary);display:flex;font-size:.74rem;font-weight:750;gap:7px;letter-spacing:.035em;padding:14px 12px;text-transform:uppercase;width:100%}.schedule-sort:hover,.schedule-sort.active{color:#48cbe6}.schedule-sort i{font-size:.68rem;opacity:.6}.schedule-table-card td{padding:15px 12px;vertical-align:middle}.schedule-time{font-variant-numeric:tabular-nums;font-weight:750;white-space:nowrap}.schedule-title{min-width:145px}.schedule-instructor{min-width:155px}.schedule-status{border-radius:999px;display:inline-flex;font-size:.72rem;font-weight:800;padding:7px 10px}.schedule-status.active{background:rgba(25,135,84,.15);color:#42b883}.schedule-status.inactive{background:rgba(220,53,69,.13);color:#e05b68}.schedule-actions{display:flex;gap:7px;justify-content:flex-end}.schedule-empty{color:var(--text-secondary);padding:50px!important;text-align:center}@media(max-width:991.98px){.schedule-settings-layout{grid-template-columns:1fr}.schedule-settings-intro{border-bottom:1px solid var(--border-color);border-right:0;padding-bottom:20px;padding-right:0}}@media(max-width:767.98px){.schedule-summary{grid-template-columns:1fr 1fr}.schedule-settings-grid{grid-template-columns:1fr}.schedule-settings-grid .full{grid-column:auto}.schedule-save .btn{width:100%}}@media(max-width:430px){.schedule-heading{padding:17px}.schedule-summary{grid-template-columns:1fr}}
+</style>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="schedule-heading"><div class="page-heading"><div class="page-heading-main"><h2 class="page-heading-title"><i class="fa-solid fa-calendar-days text-info"></i><span>Configuración de horario</span></h2><p class="page-heading-subtitle text-secondary">Organiza las clases semanales y define cómo se confirma la asistencia.</p></div><div class="page-heading-actions"><a href="{% url 'gestion:crear_clase' %}" class="btn btn-success page-heading-action"><i class="fa-solid fa-plus"></i><span>Nueva clase</span></a><a href="{% url 'gestion:configuraciones' %}" class="btn btn-outline-secondary page-heading-action"><i class="fa-solid fa-arrow-left"></i><span>Volver</span></a></div></div></div>
 
-    <h2 class="mb-0">
-        <i class="fa-solid fa-calendar-days"></i>
-        Configuración de horario
-    </h2>
+<section class="schedule-summary" aria-label="Resumen del horario"><article class="schedule-stat"><i class="fa-solid fa-layer-group"></i><div><strong>{{ resumen_horario.total|default:0 }}</strong><small>Clases configuradas</small></div></article><article class="schedule-stat active"><i class="fa-solid fa-circle-check"></i><div><strong>{{ resumen_horario.activas|default:0 }}</strong><small>Activas</small></div></article><article class="schedule-stat inactive"><i class="fa-solid fa-circle-pause"></i><div><strong>{{ resumen_horario.inactivas|default:0 }}</strong><small>Inactivas</small></div></article><article class="schedule-stat"><i class="fa-regular fa-calendar"></i><div><strong>{{ resumen_horario.dias|default:0 }}</strong><small>Días con clases</small></div></article></section>
 
-    <div>
+<section class="card schedule-settings"><div class="card-body"><div class="schedule-settings-layout"><div class="schedule-settings-intro"><span class="schedule-settings-intro-icon"><i class="fa-solid fa-stopwatch"></i></span><h3 class="h5">Asistencia y monedas</h3><p class="text-secondary mb-0">Define la ventana de confirmación y las monedas entregadas a estudiantes y profesores.</p></div><form method="post"><div class="schedule-settings-grid">{% csrf_token %}<div><label class="form-label" for="{{ form_configuracion.minutos_antes_confirmacion.id_for_label }}">Minutos antes</label>{{ form_configuracion.minutos_antes_confirmacion }}{{ form_configuracion.minutos_antes_confirmacion.errors }}</div><div><label class="form-label" for="{{ form_configuracion.minutos_despues_confirmacion.id_for_label }}">Minutos después</label>{{ form_configuracion.minutos_despues_confirmacion }}{{ form_configuracion.minutos_despues_confirmacion.errors }}</div><div><label class="form-label" for="{{ form_configuracion.monedas_por_asistencia.id_for_label }}">Monedas por asistencia</label>{{ form_configuracion.monedas_por_asistencia }}{{ form_configuracion.monedas_por_asistencia.errors }}</div><div><label class="form-label" for="{{ form_configuracion.monedas_por_asistencia_profesor.id_for_label }}">Monedas para profesores</label>{{ form_configuracion.monedas_por_asistencia_profesor }}{{ form_configuracion.monedas_por_asistencia_profesor.errors }}</div><div class="full schedule-gamification">{{ form_configuracion.gamificacion_activa }}<label class="mb-0" for="{{ form_configuracion.gamificacion_activa.id_for_label }}">Entregar monedas automáticamente al confirmar asistencia</label></div><div class="full schedule-save"><button type="submit" class="btn btn-info"><i class="fa-solid fa-floppy-disk me-1"></i>Guardar configuración</button></div></div></form></div></div></section>
 
-        <a href="{% url 'gestion:crear_clase' %}"
-           class="btn btn-success">
+<section class="card schedule-table-card"><div class="card-header"><div><strong><i class="fa-solid fa-table-list text-info me-2"></i>Clases programadas</strong><div class="small text-secondary mt-1">Haz clic en el nombre de cualquier columna para ordenar.</div></div><span class="badge bg-secondary">{{ clases|length }}</span></div><div class="table-responsive"><table id="scheduleTable" class="table table-hover align-middle mb-0"><thead><tr><th><button type="button" class="schedule-sort" data-column="0" data-type="number">Día <i class="fa-solid fa-sort"></i></button></th><th><button type="button" class="schedule-sort" data-column="1" data-type="text">Inicio <i class="fa-solid fa-sort"></i></button></th><th><button type="button" class="schedule-sort" data-column="2" data-type="text">Fin <i class="fa-solid fa-sort"></i></button></th><th><button type="button" class="schedule-sort" data-column="3" data-type="text">Disciplina <i class="fa-solid fa-sort"></i></button></th><th><button type="button" class="schedule-sort" data-column="4" data-type="text">Título <i class="fa-solid fa-sort"></i></button></th><th><button type="button" class="schedule-sort" data-column="5" data-type="text">Público <i class="fa-solid fa-sort"></i></button></th><th><button type="button" class="schedule-sort" data-column="6" data-type="text">Instructor <i class="fa-solid fa-sort"></i></button></th><th><button type="button" class="schedule-sort" data-column="7" data-type="number">Cupo <i class="fa-solid fa-sort"></i></button></th><th><button type="button" class="schedule-sort" data-column="8" data-type="text">Estado <i class="fa-solid fa-sort"></i></button></th><th class="text-end px-3">Acciones</th></tr></thead><tbody>
+    {% for clase in clases %}<tr><td data-sort-value="{{ clase.orden_dia }}"><strong>{{ clase.get_dia_display }}</strong></td><td class="schedule-time" data-sort-value="{{ clase.hora_inicio|time:'H:i' }}">{{ clase.hora_inicio|time:"g:i a" }}</td><td class="schedule-time" data-sort-value="{{ clase.hora_fin|time:'H:i' }}">{{ clase.hora_fin|time:"g:i a" }}</td><td>{{ clase.get_disciplina_display }}</td><td class="schedule-title">{{ clase.titulo|default:"—" }}</td><td>{{ clase.get_publico_objetivo_display }}</td><td class="schedule-instructor">{{ clase.instructor }}</td><td class="text-center" data-sort-value="{{ clase.cupo_maximo }}">{{ clase.cupo_maximo }}</td><td data-sort-value="{% if clase.activa %}Activa{% else %}Inactiva{% endif %}"><span class="schedule-status {% if clase.activa %}active{% else %}inactive{% endif %}">{% if clase.activa %}Activa{% else %}Inactiva{% endif %}</span></td><td><div class="schedule-actions"><a href="{% url 'gestion:editar_clase' clase.id %}" class="btn btn-outline-warning btn-sm" title="Editar"><i class="fa-solid fa-pen"></i></a><a href="{% url 'gestion:asistentes_clase' clase.id %}" class="btn btn-outline-info btn-sm" title="Ver asistencias"><i class="fa-solid fa-users-viewfinder"></i></a><form method="post" action="{% url 'gestion:eliminar_clase' clase.id %}" onsubmit="return confirm('¿Seguro que deseas eliminar esta clase? Esta acción no se puede deshacer.')">{% csrf_token %}<button type="submit" class="btn btn-outline-danger btn-sm" title="Eliminar"><i class="fa-solid fa-trash"></i></button></form></div></td></tr>{% empty %}<tr><td colspan="10" class="schedule-empty"><i class="fa-regular fa-calendar-xmark fa-2x mb-3"></i><div>No hay clases configuradas.</div></td></tr>{% endfor %}
+</tbody></table></div></section>
 
-            <i class="fa-solid fa-plus"></i>
-            Nueva clase
-
-        </a>
-
-        <a href="{% url 'gestion:configuraciones' %}"
-           class="btn btn-outline-light">
-
-            <i class="fa-solid fa-arrow-left"></i>
-            Volver
-
-        </a>
-
-    </div>
-
-</div>
-
-<div class="card bg-dark text-light border-info mb-4">
-    <div class="card-body">
-        <div class="row align-items-center g-4">
-            <div class="col-lg-5">
-                <h5 class="mb-2">
-                    <i class="fa-solid fa-stopwatch me-1"></i>
-                    Ventana para confirmar asistencia
-                </h5>
-                <p class="text-secondary mb-0">
-                    Define cuánto tiempo antes y después del inicio pueden confirmar
-                    los estudiantes desde el home, horario o kiosco.
-                </p>
-            </div>
-            <div class="col-lg-7">
-                <form method="post" class="row g-3 align-items-end">
-                    {% csrf_token %}
-                    <div class="col-md-5">
-                        <label class="form-label" for="{{ form_configuracion.minutos_antes_confirmacion.id_for_label }}">
-                            Minutos antes
-                        </label>
-                        {{ form_configuracion.minutos_antes_confirmacion }}
-                        <div class="text-danger">{{ form_configuracion.minutos_antes_confirmacion.errors }}</div>
-                    </div>
-                    <div class="col-md-5">
-                        <label class="form-label" for="{{ form_configuracion.minutos_despues_confirmacion.id_for_label }}">
-                            Minutos después de iniciar
-                        </label>
-                        {{ form_configuracion.minutos_despues_confirmacion }}
-                        <div class="text-danger">{{ form_configuracion.minutos_despues_confirmacion.errors }}</div>
-                    </div>
-                    <div class="col-md-2 d-grid">
-                        <button type="submit" class="btn btn-info">
-                            <i class="fa-solid fa-floppy-disk"></i>
-                            Guardar
-                        </button>
-                    </div>
-                    <div class="col-md-5">
-                        <label class="form-label" for="{{ form_configuracion.monedas_por_asistencia.id_for_label }}">
-                            Monedas por asistencia
-                        </label>
-                        {{ form_configuracion.monedas_por_asistencia }}
-                        <div class="text-danger">{{ form_configuracion.monedas_por_asistencia.errors }}</div>
-                    </div>
-                    <div class="col-md-5 d-flex align-items-center">
-                        <div class="form-check mt-4">
-                            {{ form_configuracion.gamificacion_activa }}
-                            <label class="form-check-label" for="{{ form_configuracion.gamificacion_activa.id_for_label }}">
-                                Entregar monedas por asistencia
-                            </label>
-                        </div>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="card bg-dark text-light border-secondary">
-
-    <div class="card-body">
-
-        <div class="table-responsive">
-
-            <table class="table table-dark table-hover align-middle">
-
-                <thead>
-
-                    <tr>
-                        <th>Día</th>
-                        <th>Hora Inicio</th>
-                        <th>Hora Fin</th>
-                        <th>Disciplina</th>
-                        <th>Título</th>
-                        <th>Instructor</th>
-                        <th>Cupo</th>
-                        <th>Estado</th>
-                        <th>Acciones</th>
-                    </tr>
-
-                </thead>
-
-                <tbody>
-
-                    {% for clase in clases %}
-
-                    <tr>
-
-                        <td>
-                            {{ clase.get_dia_display }}
-                        </td>
-
-                        <td>
-                            {{ clase.hora_inicio }}
-                        </td>
-
-                        <td>
-                            {{ clase.hora_fin }}
-                        </td>
-
-                        <td>
-                            {{ clase.get_disciplina_display }}
-                        </td>
-
-                        <td>
-                            {{ clase.titulo|default:"-" }}
-                        </td>
-
-                        <td>
-                            {{ clase.instructor }}
-                        </td>
-
-                        <td>
-                            {{ clase.cupo_maximo }}
-                        </td>
-
-                        <td>
-
-                            {% if clase.activa %}
-                                <span class="badge bg-success">
-                                    Activa
-                                </span>
-                            {% else %}
-                                <span class="badge bg-danger">
-                                    Inactiva
-                                </span>
-                            {% endif %}
-
-                        </td>
-
-                        <td>
-
-                            <a href="{% url 'gestion:editar_clase' clase.id %}"
-                               class="btn btn-warning btn-sm">
-
-                                <i class="fa-solid fa-pen"></i>
-
-                            </a>
-
-                            <a href="{% url 'gestion:asistentes_clase' clase.id %}"
-                               class="btn btn-outline-info btn-sm"
-                               title="Ver asistencia por fecha">
-                                <i class="fa-solid fa-users-viewfinder"></i>
-                            </a>
-
-                            <form method="post"
-                                  action="{% url 'gestion:eliminar_clase' clase.id %}"
-                                  class="d-inline"
-                                  onsubmit="return confirm('¿Seguro que deseas eliminar esta clase? Esta acción no se puede deshacer.')">
-                                {% csrf_token %}
-                                <button type="submit" class="btn btn-danger btn-sm">
-                                    <i class="fa-solid fa-trash"></i>
-                                </button>
-                            </form>
-
-                        </td>
-
-                    </tr>
-
-                    {% empty %}
-
-                    <tr>
-
-                        <td colspan="9" class="text-center">
-
-                            No hay clases configuradas.
-
-                        </td>
-
-                    </tr>
-
-                    {% endfor %}
-
-                </tbody>
-
-            </table>
-
-        </div>
-
-    </div>
-
-</div>
-
+<script>
+(function(){
+    const table=document.getElementById('scheduleTable');
+    if(!table)return;
+    const buttons=table.querySelectorAll('.schedule-sort');
+    buttons.forEach((button)=>button.addEventListener('click',()=>{
+        const column=Number(button.dataset.column);
+        const type=button.dataset.type;
+        const direction=button.dataset.direction==='asc'?'desc':'asc';
+        const rows=Array.from(table.tBodies[0].rows).filter((row)=>row.cells.length>1);
+        rows.sort((a,b)=>{
+            let left=a.cells[column].dataset.sortValue||a.cells[column].textContent.trim();
+            let right=b.cells[column].dataset.sortValue||b.cells[column].textContent.trim();
+            let result=type==='number'?Number(left)-Number(right):left.localeCompare(right,'es',{numeric:true,sensitivity:'base'});
+            return direction==='asc'?result:-result;
+        });
+        rows.forEach((row)=>table.tBodies[0].appendChild(row));
+        buttons.forEach((item)=>{item.classList.remove('active');item.dataset.direction='';const icon=item.querySelector('i');icon.className='fa-solid fa-sort';});
+        button.classList.add('active');button.dataset.direction=direction;
+        button.querySelector('i').className=`fa-solid fa-sort-${direction==='asc'?'up':'down'}`;
+    }));
+})();
+</script>
 {% endblock %}

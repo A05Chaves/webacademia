@@ -1,4 +1,4 @@
-from .models import ConfiguracionClases, ConfiguracionHome
+from .models import ConfiguracionClases, ConfiguracionHome, TipoRecompensa
 from datetime import timedelta
 
 from django.utils import timezone
@@ -150,6 +150,115 @@ class CambioPerfilAlumnoForm(forms.Form):
                     'Ya existe otro profesor registrado con este documento.',
                 )
         return cleaned
+
+
+class AdministrarPerfilUsuarioForm(forms.Form):
+    rol = forms.ChoiceField(
+        choices=Usuario.Roles.choices,
+        label='Rol de acceso',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    cuenta_activa = forms.BooleanField(
+        required=False,
+        label='Cuenta activa',
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+    )
+    es_profesor = forms.BooleanField(
+        required=False,
+        label='También tiene perfil de profesor',
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+    )
+    especialidad = forms.CharField(
+        required=False,
+        max_length=100,
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+    )
+    profesor_activo = forms.BooleanField(
+        required=False,
+        label='Profesor activo',
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+    )
+    foto_profesor = forms.ImageField(
+        required=False,
+        label='Foto del profesor',
+        widget=forms.FileInput(attrs={
+            'class': 'form-control', 'accept': '.jpg,.jpeg,.png,.webp',
+        }),
+    )
+
+    def __init__(self, *args, usuario, **kwargs):
+        self.usuario = usuario
+        instructor = getattr(usuario, 'perfil_instructor', None)
+        kwargs.setdefault('initial', {
+            'rol': usuario.rol,
+            'cuenta_activa': usuario.is_active,
+            'es_profesor': bool(instructor),
+            'especialidad': instructor.especialidad if instructor else '',
+            'profesor_activo': instructor.activo if instructor else True,
+        })
+        super().__init__(*args, **kwargs)
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get('rol') == Usuario.Roles.INSTRUCTOR:
+            cleaned['es_profesor'] = True
+        if cleaned.get('es_profesor') and not (
+            cleaned.get('especialidad') or ''
+        ).strip():
+            self.add_error('especialidad', 'Indica la especialidad del profesor.')
+        if cleaned.get('es_profesor'):
+            instructor = getattr(self.usuario, 'perfil_instructor', None)
+            alumno = getattr(self.usuario, 'perfil_alumno', None)
+            documento = (
+                instructor.documento if instructor
+                else alumno.documento if alumno else ''
+            )
+            if not documento:
+                self.add_error(
+                    'es_profesor',
+                    'El usuario debe tener un documento registrado antes de '
+                    'asignarle el perfil de profesor.',
+                )
+            elif Instructor.objects.filter(documento=documento).exclude(
+                user=self.usuario
+            ).exists():
+                self.add_error(
+                    'es_profesor',
+                    'El documento ya está asignado a otro profesor.',
+                )
+        return cleaned
+
+    def save(self):
+        usuario = self.usuario
+        usuario.rol = self.cleaned_data['rol']
+        usuario.is_active = self.cleaned_data['cuenta_activa']
+        if not usuario.is_superuser:
+            usuario.is_staff = usuario.rol == Usuario.Roles.ADMIN
+        usuario.save(update_fields=['rol', 'is_active', 'is_staff'])
+
+        instructor = getattr(usuario, 'perfil_instructor', None)
+        if self.cleaned_data['es_profesor']:
+            alumno = getattr(usuario, 'perfil_alumno', None)
+            documento = (
+                instructor.documento if instructor
+                else alumno.documento if alumno else ''
+            )
+            instructor, _ = Instructor.objects.update_or_create(
+                user=usuario,
+                defaults={
+                    'documento': documento,
+                    'especialidad': self.cleaned_data['especialidad'].strip(),
+                    'telefono': usuario.telefono,
+                    'activo': self.cleaned_data['profesor_activo'],
+                },
+            )
+            if self.cleaned_data.get('foto_profesor'):
+                instructor.foto = self.cleaned_data['foto_profesor']
+                instructor.save(update_fields=['foto'])
+        elif instructor:
+            instructor.activo = False
+            instructor.save(update_fields=['activo'])
+        return usuario
 
 
 class PlanForm(forms.ModelForm):
@@ -1152,6 +1261,14 @@ class AplicarPromocionForm(forms.Form):
 
 
 class ClaseProgramadaForm(forms.ModelForm):
+    dias = forms.MultipleChoiceField(
+        choices=ClaseProgramada.DiasSemana.choices,
+        label='Días de la clase',
+        required=True,
+        widget=forms.CheckboxSelectMultiple,
+        help_text='Selecciona uno o varios días para crear el mismo horario.',
+    )
+
     class Meta:
         model = ClaseProgramada
         fields = [
@@ -1186,6 +1303,33 @@ class ClaseProgramadaForm(forms.ModelForm):
             'cupo_maximo': forms.NumberInput(attrs={'class': 'form-control'}),
             'activa': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            self.fields.pop('dias', None)
+            self.order_fields([
+                'dia', 'hora_inicio', 'hora_fin', 'disciplina', 'titulo',
+                'publico_objetivo', 'instructor', 'cupo_maximo', 'activa',
+            ])
+        else:
+            self.fields.pop('dia', None)
+            self.order_fields([
+                'dias', 'hora_inicio', 'hora_fin', 'disciplina', 'titulo',
+                'publico_objetivo', 'instructor', 'cupo_maximo', 'activa',
+            ])
+
+    def clean(self):
+        cleaned_data = super().clean()
+        hora_inicio = cleaned_data.get('hora_inicio')
+        hora_fin = cleaned_data.get('hora_fin')
+        if hora_inicio and hora_fin and hora_fin <= hora_inicio:
+            self.add_error(
+                'hora_fin',
+                'La hora de finalización debe ser posterior a la hora de inicio.',
+            )
+        return cleaned_data
+
 
 # FORMULARIO DE PAGO POR ESTUDIANTE
 
@@ -1244,13 +1388,21 @@ class CuentaFinancieraForm(forms.ModelForm):
             'activa': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
-
 class ConfiguracionClasesForm(forms.ModelForm):
     monedas_por_asistencia = forms.IntegerField(
         required=False,
         min_value=0,
         max_value=1000,
         label='Monedas por asistencia',
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control', 'min': 0, 'max': 1000,
+        }),
+    )
+    monedas_por_asistencia_profesor = forms.IntegerField(
+        required=False,
+        min_value=0,
+        max_value=1000,
+        label='Monedas por clase para profesores',
         widget=forms.NumberInput(attrs={
             'class': 'form-control', 'min': 0, 'max': 1000,
         }),
@@ -1263,6 +1415,7 @@ class ConfiguracionClasesForm(forms.ModelForm):
             'minutos_despues_confirmacion',
             'gamificacion_activa',
             'monedas_por_asistencia',
+            'monedas_por_asistencia_profesor',
         ]
         widgets = {
             'minutos_antes_confirmacion': forms.NumberInput(attrs={
@@ -1281,6 +1434,54 @@ class ConfiguracionClasesForm(forms.ModelForm):
         if valor is not None:
             return valor
         return self.instance.monedas_por_asistencia or 10
+
+    def clean_monedas_por_asistencia_profesor(self):
+        valor = self.cleaned_data.get('monedas_por_asistencia_profesor')
+        if valor is not None:
+            return valor
+        return self.instance.monedas_por_asistencia_profesor or 2
+
+
+class TipoRecompensaForm(forms.ModelForm):
+    class Meta:
+        model = TipoRecompensa
+        fields = [
+            'nombre', 'simbolo', 'imagen', 'valor_monedas',
+            'cantidad_para_bono', 'monedas_bono', 'orden', 'activa',
+        ]
+        widgets = {
+            'nombre': forms.TextInput(attrs={'class': 'form-control'}),
+            'simbolo': forms.TextInput(attrs={
+                'class': 'form-control', 'placeholder': '⭐',
+            }),
+            'imagen': forms.ClearableFileInput(attrs={
+                'class': 'form-control', 'accept': 'image/*',
+            }),
+            'valor_monedas': forms.NumberInput(attrs={
+                'class': 'form-control', 'min': 0,
+            }),
+            'cantidad_para_bono': forms.NumberInput(attrs={
+                'class': 'form-control', 'min': 0,
+            }),
+            'monedas_bono': forms.NumberInput(attrs={
+                'class': 'form-control', 'min': 0,
+            }),
+            'orden': forms.NumberInput(attrs={
+                'class': 'form-control', 'min': 0,
+            }),
+            'activa': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+    def clean(self):
+        cleaned = super().clean()
+        meta = cleaned.get('cantidad_para_bono') or 0
+        bono = cleaned.get('monedas_bono') or 0
+        if not meta and bono:
+            self.add_error(
+                'cantidad_para_bono',
+                'Indica cuántas recompensas se necesitan para entregar el bono.',
+            )
+        return cleaned
 
 
 class GastoForm(forms.ModelForm):
@@ -1726,6 +1927,8 @@ class CambioPasswordObligatorioForm(UsernameUnicoMixin, PasswordChangeForm):
     def __init__(self, user, *args, **kwargs):
         super().__init__(user, *args, **kwargs)
         self.fields['username'].initial = user.username
+        for nombre in ('old_password', 'new_password1', 'new_password2'):
+            self.fields[nombre].widget.attrs['class'] = 'form-control'
         if user.username_modificado:
             self.fields['username'].disabled = True
             self.fields['username'].help_text = (

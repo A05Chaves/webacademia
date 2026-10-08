@@ -1,0 +1,41 @@
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <h2 class="mb-1">Editar perfil</h2>
+        <p class="text-secondary mb-0">{{ usuario_editado.get_full_name|default:usuario_editado.username }} · {{ usuario_editado.username }}</p>
+    </div>
+    <a href="{% url 'gestion:configurar_perfiles' %}" class="btn btn-outline-light">Volver</a>
+</div>
+
+<form method="post" enctype="multipart/form-data" class="card bg-dark text-light border-secondary">
+    {% csrf_token %}
+    <div class="card-body">
+        {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="row g-4">
+            <div class="col-md-6">
+                <label class="form-label" for="{{ form.rol.id_for_label }}">{{ form.rol.label }}</label>
+                {{ form.rol }}
+                <div class="form-text">Administrador da acceso a panel, tienda y configuración. Profesor no da esos permisos.</div>
+                {% for error in form.rol.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-md-6 d-flex align-items-center">
+                <div class="form-check mt-4">{{ form.cuenta_activa }} <label class="form-check-label" for="{{ form.cuenta_activa.id_for_label }}">{{ form.cuenta_activa.label }}</label></div>
+            </div>
+            <div class="col-12"><hr class="border-secondary"></div>
+            <div class="col-12">
+                <div class="form-check">{{ form.es_profesor }} <label class="form-check-label fw-bold" for="{{ form.es_profesor.id_for_label }}">{{ form.es_profesor.label }}</label></div>
+                <div class="form-text">Permite confirmar y dictar clases. Puede combinarse con el rol Administrador.</div>
+            </div>
+            <div class="col-md-6"><label class="form-label">{{ form.especialidad.label }}</label>{{ form.especialidad }}{% for error in form.especialidad.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
+            <div class="col-md-6"><label class="form-label">{{ form.foto_profesor.label }}</label>{{ form.foto_profesor }}{% if instructor and instructor.foto %}<div class="form-text">Actualmente: {{ instructor.foto.name }}</div>{% endif %}</div>
+            <div class="col-12"><div class="form-check">{{ form.profesor_activo }} <label class="form-check-label" for="{{ form.profesor_activo.id_for_label }}">{{ form.profesor_activo.label }}</label></div></div>
+        </div>
+    </div>
+    <div class="card-footer d-flex gap-2 justify-content-end">
+        <a href="{% url 'gestion:configurar_perfiles' %}" class="btn btn-outline-light">Cancelar</a>
+        <button class="btn btn-success">Guardar cambios</button>
+    </div>
+</form>
+{% endblock %}

@@ -8,7 +8,7 @@ from .models import RegistroLegalEstudiante
 from alumnos.models import Alumno
 from django.contrib.auth import get_user_model
 from config.file_validation import validate_base64_signature, validate_image
-from instructores.models import Instructor
+from instructores.models import Instructor, SolicitudRegistroProfesor
 from planes.models import Plan
 
 User = get_user_model()
@@ -380,13 +380,22 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
                 documento=documento
             ).exists()
 
+            solicitud_profesor = SolicitudRegistroProfesor.objects.filter(
+                documento__iexact=documento,
+            ).exclude(
+                estado=SolicitudRegistroProfesor.Estados.RECHAZADO
+            ).exists()
+
             if (
                 registro_existente
                 and registro_existente.estado
                 == RegistroLegalEstudiante.Estados.PENDIENTE_VALIDACION
             ):
                 self.add_error('documento', MENSAJE_REGISTRO_PENDIENTE)
-            elif registro_existente or existe_alumno or existe_instructor:
+            elif (
+                registro_existente or existe_alumno or existe_instructor
+                or solicitud_profesor
+            ):
                 self.add_error(
                     'documento',
                     'Ya existe un estudiante o registro con este documento, o está asignado a un instructor.'
@@ -450,6 +459,14 @@ class RegistroLegalEstudianteForm(forms.ModelForm):
         if registros.exists():
             raise forms.ValidationError(
                 'Este nombre de usuario ya está reservado por otro registro.'
+            )
+        if SolicitudRegistroProfesor.objects.filter(
+            usuario_solicitado__iexact=username,
+        ).exclude(
+            estado=SolicitudRegistroProfesor.Estados.RECHAZADO
+        ).exists():
+            raise forms.ValidationError(
+                'Este nombre de usuario está reservado por una solicitud de profesor.'
             )
         return username
 

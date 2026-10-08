@@ -1,75 +1,14 @@
 {% extends 'gestion/base.html' %}
-
 {% block content %}
-<div class="page-heading">
-    <div class="page-heading-main">
-        <h2 class="page-heading-title"><i class="fa-solid fa-id-card"></i><span>Suscripciones</span></h2>
-        <p class="page-heading-subtitle text-secondary">La vista inicial muestra únicamente las mensualidades activas.</p>
-    </div>
-    <div class="page-heading-actions">
-        <a href="{% url 'gestion:crear_suscripcion' %}" class="btn btn-outline-light page-heading-action">
-            <i class="fa-solid fa-plus"></i><span>Nueva suscripción</span>
-        </a>
-    </div>
-</div>
+<style>
+.subscriptions-heading{background:linear-gradient(135deg,rgba(111,66,193,.14),transparent 58%);border:1px solid var(--border-color);border-radius:18px;margin-bottom:22px;padding:20px 22px}.subscriptions-heading .page-heading{padding:0}.subscriptions-summary{display:grid;gap:13px;grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:22px}.subscription-stat{align-items:center;background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;display:flex;gap:13px;padding:16px}.subscription-stat i{align-items:center;background:rgba(108,117,125,.13);border-radius:12px;color:var(--text-secondary);display:flex;height:42px;justify-content:center;width:42px}.subscription-stat strong{display:block;font-size:1.4rem;line-height:1}.subscription-stat small{color:var(--text-secondary)}.subscription-stat.active i{background:rgba(25,135,84,.14);color:#42b883}.subscription-stat.scheduled i{background:rgba(13,202,240,.12);color:#48cbe6}.subscription-stat.expired i{background:rgba(220,53,69,.13);color:#e05b68}.subscription-filter{border-radius:18px!important;margin-bottom:22px}.subscription-filter .card-body{padding:20px!important}.subscription-filter-grid{align-items:end;display:grid;gap:13px;grid-template-columns:minmax(0,2fr) minmax(190px,.8fr) auto}.subscriptions-table{border-radius:18px!important}.subscriptions-table .card-header{align-items:center;background:transparent;border-color:var(--border-color);display:flex;justify-content:space-between;padding:17px 20px}.subscriptions-table table{min-width:940px}.subscriptions-table th{color:var(--text-secondary);font-size:.74rem;letter-spacing:.04em;padding:14px 13px;text-transform:uppercase;white-space:nowrap}.subscriptions-table td{padding:15px 13px;vertical-align:middle}.subscription-person{min-width:175px}.subscription-period{font-size:.86rem;line-height:1.5;min-width:160px}.subscription-status{border-radius:999px;display:inline-flex;font-size:.72rem;font-weight:800;padding:7px 10px}.subscription-status.active{background:rgba(25,135,84,.15);color:#42b883}.subscription-status.scheduled{background:rgba(13,202,240,.13);color:#48cbe6}.subscription-status.expired{background:rgba(220,53,69,.13);color:#e05b68}.subscription-status.other{background:rgba(108,117,125,.16);color:var(--text-secondary)}.subscription-actions{display:flex;flex-wrap:wrap;gap:7px;justify-content:flex-end}.subscription-empty{padding:50px!important;text-align:center;color:var(--text-secondary)}@media(max-width:767.98px){.subscriptions-summary{grid-template-columns:1fr 1fr}.subscription-filter-grid{grid-template-columns:1fr}.subscription-filter-grid .btn{width:100%}}@media(max-width:420px){.subscriptions-heading{padding:17px}.subscriptions-summary{grid-template-columns:1fr}}
+</style>
 
-<div class="card bg-dark text-light border-secondary mb-4">
-    <div class="card-body">
-        <form method="get" class="row g-3 align-items-end">
-            <div class="col-lg-7">
-                <label for="qSuscripcion" class="form-label">Buscar estudiante</label>
-                <input id="qSuscripcion" name="q" value="{{ busqueda }}" class="form-control" placeholder="Nombre, apellido, usuario o cédula">
-            </div>
-            <div class="col-lg-3">
-                <label for="estadoSuscripcion" class="form-label">Estado</label>
-                <select id="estadoSuscripcion" name="estado" class="form-select">
-                    <option value="activas" {% if estado_filtro == 'activas' %}selected{% endif %}>Activas</option>
-                    <option value="vencidas" {% if estado_filtro == 'vencidas' %}selected{% endif %}>Vencidas / finalizadas</option>
-                    <option value="programadas" {% if estado_filtro == 'programadas' %}selected{% endif %}>Programadas</option>
-                    <option value="todas" {% if estado_filtro == 'todas' %}selected{% endif %}>Historial completo</option>
-                </select>
-            </div>
-            <div class="col-lg-2 d-grid">
-                <button class="btn btn-primary" type="submit"><i class="fa-solid fa-search"></i> Buscar</button>
-            </div>
-        </form>
-    </div>
-</div>
+<div class="subscriptions-heading"><div class="page-heading"><div class="page-heading-main"><h2 class="page-heading-title"><i class="fa-solid fa-id-card text-info"></i><span>Suscripciones</span></h2><p class="page-heading-subtitle text-secondary">Controla la vigencia, el plan y el historial de mensualidades de cada estudiante.</p></div><div class="page-heading-actions"><a href="{% url 'gestion:crear_suscripcion' %}" class="btn btn-info page-heading-action"><i class="fa-solid fa-plus"></i><span>Nueva suscripción</span></a></div></div></div>
 
-<div class="table-responsive">
-    <table class="table table-dark table-hover table-dark-custom align-middle">
-        <thead>
-            <tr>
-                <th>Estudiante</th>
-                <th>Cédula</th>
-                <th>Plan</th>
-                <th>Vigencia</th>
-                <th>Estado</th>
-                <th class="text-center">Mensualidades pagadas</th>
-                <th>Acciones</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for suscripcion in suscripciones %}
-            <tr>
-                <td><strong>{{ suscripcion.alumno }}</strong></td>
-                <td>{{ suscripcion.alumno.documento }}</td>
-                <td>{{ suscripcion.plan.nombre }}</td>
-                <td>{{ suscripcion.fecha_inicio|date:"d/m/Y" }}<br><small class="text-secondary">hasta {{ suscripcion.fecha_vencimiento|date:"d/m/Y" }}</small></td>
-                <td><span class="badge {% if suscripcion.estado == 'ACTIVA' %}bg-success{% elif suscripcion.estado == 'PROGRAMADA' %}bg-info text-dark{% else %}bg-secondary{% endif %}">{{ suscripcion.get_estado_display }}</span></td>
-                <td class="text-center"><span class="badge bg-primary fs-6">{{ suscripcion.mensualidades_pagadas }}</span></td>
-                <td>
-                    <div class="d-flex flex-wrap gap-1">
-                        <a href="{% url 'gestion:asistencia_alumno' suscripcion.alumno.id %}" class="btn btn-outline-success btn-sm" title="Ver calendario de asistencias"><i class="fa-solid fa-calendar-check"></i> Asistencia</a>
-                        <a href="{% url 'gestion:editar_suscripcion' suscripcion.id %}" class="btn btn-outline-warning btn-sm" title="Editar suscripción"><i class="fa-solid fa-pen"></i></a>
-                        <a href="{% url 'gestion:eliminar_suscripcion' suscripcion.id %}" class="btn btn-outline-danger btn-sm" title="Eliminar suscripción"><i class="fa-solid fa-trash"></i></a>
-                    </div>
-                </td>
-            </tr>
-            {% empty %}
-            <tr><td colspan="7" class="text-center py-4">No se encontraron suscripciones con estos filtros.</td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
+<section class="subscriptions-summary"><article class="subscription-stat"><i class="fa-solid fa-layer-group"></i><div><strong>{{ resumen_suscripciones.total }}</strong><small>Total</small></div></article><article class="subscription-stat active"><i class="fa-solid fa-circle-check"></i><div><strong>{{ resumen_suscripciones.activas }}</strong><small>Activas</small></div></article><article class="subscription-stat scheduled"><i class="fa-solid fa-calendar-plus"></i><div><strong>{{ resumen_suscripciones.programadas }}</strong><small>Programadas</small></div></article><article class="subscription-stat expired"><i class="fa-solid fa-calendar-xmark"></i><div><strong>{{ resumen_suscripciones.vencidas }}</strong><small>Vencidas o finalizadas</small></div></article></section>
+
+<form method="get" class="card subscription-filter"><div class="card-body"><div class="subscription-filter-grid"><div><label for="qSuscripcion" class="form-label">Buscar estudiante</label><input id="qSuscripcion" name="q" value="{{ busqueda }}" type="search" class="form-control" placeholder="Nombre, apellido, usuario o documento"></div><div><label for="estadoSuscripcion" class="form-label">Estado</label><select id="estadoSuscripcion" name="estado" class="form-select"><option value="activas" {% if estado_filtro == 'activas' %}selected{% endif %}>Activas</option><option value="vencidas" {% if estado_filtro == 'vencidas' %}selected{% endif %}>Vencidas / finalizadas</option><option value="programadas" {% if estado_filtro == 'programadas' %}selected{% endif %}>Programadas</option><option value="todas" {% if estado_filtro == 'todas' %}selected{% endif %}>Historial completo</option></select></div><button class="btn btn-primary" type="submit"><i class="fa-solid fa-filter me-1"></i> Aplicar</button></div></div></form>
+
+<section class="card subscriptions-table"><div class="card-header"><strong><i class="fa-solid fa-list-check text-info me-2"></i>Resultados</strong><span class="badge bg-secondary">{{ suscripciones|length }}</span></div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Estudiante</th><th>Documento</th><th>Plan</th><th>Periodo</th><th>Estado</th><th class="text-center">Pagos</th><th class="text-end">Acciones</th></tr></thead><tbody>{% for suscripcion in suscripciones %}<tr><td class="subscription-person"><strong>{{ suscripcion.alumno }}</strong></td><td>{{ suscripcion.alumno.documento }}</td><td><strong>{{ suscripcion.plan.nombre }}</strong></td><td class="subscription-period"><i class="fa-regular fa-calendar me-1 text-info"></i>{{ suscripcion.fecha_inicio|date:"d M Y" }}<br><small class="text-secondary">hasta {{ suscripcion.fecha_vencimiento|date:"d M Y" }}</small></td><td><span class="subscription-status {% if suscripcion.estado == 'ACTIVA' %}active{% elif suscripcion.estado == 'PROGRAMADA' %}scheduled{% elif suscripcion.estado == 'VENCIDA' or suscripcion.estado == 'FINALIZADA' %}expired{% else %}other{% endif %}">{{ suscripcion.get_estado_display }}</span></td><td class="text-center"><span class="badge bg-primary fs-6">{{ suscripcion.mensualidades_pagadas }}</span></td><td><div class="subscription-actions"><a href="{% url 'gestion:asistencia_alumno' suscripcion.alumno.id %}" class="btn btn-outline-success btn-sm"><i class="fa-solid fa-calendar-check"></i> Asistencia</a><a href="{% url 'gestion:editar_suscripcion' suscripcion.id %}" class="btn btn-outline-warning btn-sm" title="Editar"><i class="fa-solid fa-pen"></i></a><a href="{% url 'gestion:eliminar_suscripcion' suscripcion.id %}" class="btn btn-outline-danger btn-sm" title="Eliminar"><i class="fa-solid fa-trash"></i></a></div></td></tr>{% empty %}<tr><td colspan="7" class="subscription-empty"><i class="fa-regular fa-folder-open fa-2x mb-3"></i><div>No se encontraron suscripciones con estos filtros.</div></td></tr>{% endfor %}</tbody></table></div></section>
 {% endblock %}

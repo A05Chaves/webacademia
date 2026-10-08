@@ -160,6 +160,11 @@ class ConfiguracionClases(models.Model):
         validators=[MaxValueValidator(1000)],
         verbose_name='Monedas por asistencia',
     )
+    monedas_por_asistencia_profesor = models.PositiveSmallIntegerField(
+        default=2,
+        validators=[MaxValueValidator(1000)],
+        verbose_name='Monedas por clase para profesores',
+    )
     actualizado = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -207,6 +212,9 @@ class BilleteraMonedas(models.Model):
 class MovimientoMonedas(models.Model):
     class Tipos(models.TextChoices):
         ASISTENCIA = 'ASISTENCIA', 'Premio por asistencia'
+        ASISTENCIA_PROFESOR = 'ASISTENCIA_PROF', 'Premio por asistencia de profesor'
+        RECOMPENSA = 'RECOMPENSA', 'Recompensa del profesor'
+        BONO_RECOMPENSA = 'BONO_RECOMPENSA', 'Bono por recompensas acumuladas'
         AJUSTE = 'AJUSTE', 'Ajuste administrativo'
         DESCUENTO = 'DESCUENTO', 'Descuento de monedas'
 
@@ -234,6 +242,13 @@ class MovimientoMonedas(models.Model):
         null=True,
         blank=True,
     )
+    recompensa_otorgada = models.ForeignKey(
+        'RecompensaOtorgada',
+        on_delete=models.PROTECT,
+        related_name='movimientos_monedas',
+        null=True,
+        blank=True,
+    )
 
     class Meta:
         ordering = ['-creado', '-id']
@@ -249,6 +264,86 @@ class MovimientoMonedas(models.Model):
     def __str__(self):
         signo = '+' if self.cantidad > 0 else ''
         return f'{self.billetera.usuario}: {signo}{self.cantidad}'
+
+
+class TipoRecompensa(models.Model):
+    nombre = models.CharField(max_length=80, unique=True)
+    simbolo = models.CharField(
+        max_length=12,
+        default='⭐',
+        help_text='Emoji o símbolo corto que se mostrará junto al estudiante.',
+    )
+    imagen = models.ImageField(
+        upload_to='recompensas/',
+        blank=True,
+        null=True,
+        help_text='Opcional. Si se carga, reemplaza el símbolo en la pantalla.',
+    )
+    valor_monedas = models.PositiveIntegerField(default=5)
+    cantidad_para_bono = models.PositiveSmallIntegerField(
+        default=0,
+        help_text='Cantidad que completa un ciclo. Usa 0 para no crear ciclos.',
+    )
+    monedas_bono = models.PositiveIntegerField(default=0)
+    activa = models.BooleanField(default=True)
+    orden = models.PositiveSmallIntegerField(default=1)
+    creada = models.DateTimeField(auto_now_add=True)
+    actualizada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['orden', 'nombre']
+        verbose_name = 'Tipo de recompensa'
+        verbose_name_plural = 'Tipos de recompensas'
+
+    def __str__(self):
+        return f'{self.simbolo} {self.nombre} · {self.valor_monedas} monedas'
+
+
+class RecompensaOtorgada(models.Model):
+    recompensa = models.ForeignKey(
+        TipoRecompensa,
+        on_delete=models.PROTECT,
+        related_name='entregas',
+    )
+    alumno = models.ForeignKey(
+        'alumnos.Alumno',
+        on_delete=models.PROTECT,
+        related_name='recompensas_recibidas',
+    )
+    asistencia = models.ForeignKey(
+        'clases.AsistenciaClase',
+        on_delete=models.PROTECT,
+        related_name='recompensas_otorgadas',
+    )
+    otorgada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='recompensas_otorgadas',
+        null=True,
+    )
+    nombre_snapshot = models.CharField(max_length=80)
+    simbolo_snapshot = models.CharField(max_length=12, blank=True)
+    imagen_snapshot = models.CharField(max_length=255, blank=True)
+    monedas_otorgadas = models.PositiveIntegerField(default=0)
+    bono_otorgado = models.PositiveIntegerField(default=0)
+    motivo = models.CharField(max_length=180, blank=True)
+    canjeada = models.BooleanField(default=False)
+    canjeada_en = models.DateTimeField(blank=True, null=True)
+    creada = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-creada', '-id']
+        verbose_name = 'Recompensa otorgada'
+        verbose_name_plural = 'Recompensas otorgadas'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['recompensa', 'asistencia'],
+                name='recompensa_unica_por_tipo_y_asistencia',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.nombre_snapshot} para {self.alumno}'
 
 
 def estado_tv_inicial():

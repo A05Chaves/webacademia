@@ -100,6 +100,38 @@
             color: var(--bg-main) !important;
         }
 
+        .menu-btn.nav-active {
+            background: linear-gradient(145deg, #4f9fe8, #2568a5) !important;
+            border-color: #78b8ef !important;
+            box-shadow:
+                0 4px 0 #174a76,
+                0 8px 16px rgba(16, 55, 88, .38),
+                inset 0 1px 0 rgba(255, 255, 255, .35) !important;
+            color: #fff !important;
+            transform: translateY(-3px);
+            transition: transform .16s ease, box-shadow .16s ease, filter .16s ease;
+        }
+
+        .menu-btn.nav-active:hover {
+            background: linear-gradient(145deg, #61adf0, #2d75b5) !important;
+            box-shadow:
+                0 2px 0 #174a76,
+                0 5px 11px rgba(16, 55, 88, .34),
+                inset 0 1px 0 rgba(255, 255, 255, .4) !important;
+            color: #fff !important;
+            filter: brightness(1.04);
+            transform: translateY(-1px);
+        }
+
+        .menu-btn.nav-active:active {
+            box-shadow: 0 1px 0 #174a76, 0 2px 5px rgba(16, 55, 88, .28) !important;
+            transform: translateY(1px);
+        }
+
+        .cortesia-alerta-btn.nav-active {
+            animation: none;
+        }
+
         @keyframes alerta-cortesia {
             0%, 100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, .65); }
             50% { box-shadow: 0 0 0 7px rgba(255, 193, 7, 0); }
@@ -164,6 +196,10 @@
             border-radius: 22px !important;
             overflow: hidden;
             box-shadow: 0 4px 20px rgba(0,0,0,.10);
+        }
+
+        .card-custom {
+            padding: clamp(18px, 2.2vw, 30px);
         }
 
         .card-body {
@@ -298,58 +334,35 @@
         .payment-feedback-card p { font-size: 1.08rem; line-height: 1.55; }
 
         .avatar-huevo {
-            background:
-                radial-gradient(circle at 34% 27%, rgba(255,255,255,.95) 0 7%, transparent 8%),
-                linear-gradient(145deg, #fff8dc 0%, #f3dba0 65%, #c99b42 100%);
-            border: 3px solid #d5aa53;
-            border-radius: 52% 52% 46% 46% / 62% 62% 40% 40%;
-            box-shadow: inset -10px -12px 18px rgba(116,69,16,.18), 0 8px 20px rgba(0,0,0,.24);
+            background: transparent url('{% static "img/avatar-huevo-bjj.png" %}') center / contain no-repeat;
             display: inline-block;
-            height: 82px;
+            filter: drop-shadow(0 8px 10px rgba(0,0,0,.24));
+            height: 168px;
             position: relative;
-            width: 64px;
+            width: 154px;
         }
 
         .avatar-huevo::before,
         .avatar-huevo::after {
-            background: #523819;
-            border-radius: 50%;
-            content: '';
-            height: 6px;
-            position: absolute;
-            top: 39px;
-            width: 6px;
+            content: none;
         }
 
-        .avatar-huevo::before { left: 18px; }
-        .avatar-huevo::after { right: 18px; }
-        .avatar-huevo.avatar-huevo-sm { height: 28px; width: 22px; border-width: 1px; box-shadow: none; }
-        .avatar-huevo.avatar-huevo-sm::before,
-        .avatar-huevo.avatar-huevo-sm::after { height: 2px; top: 14px; width: 2px; }
-        .avatar-huevo.avatar-huevo-sm::before { left: 6px; }
-        .avatar-huevo.avatar-huevo-sm::after { right: 6px; }
+        .avatar-huevo.avatar-huevo-sm {
+            filter: drop-shadow(0 2px 3px rgba(0,0,0,.22));
+            height: 32px;
+            width: 30px;
+        }
 
         .avatar-huevo.avatar-huevo-mobile {
-            border-width: 2px;
-            box-shadow: 0 3px 8px rgba(0,0,0,.28);
-            height: 40px;
-            width: 31px;
+            filter: drop-shadow(0 3px 4px rgba(0,0,0,.28));
+            height: 50px;
+            width: 46px;
         }
-
-        .avatar-huevo.avatar-huevo-mobile::before,
-        .avatar-huevo.avatar-huevo-mobile::after {
-            height: 3px;
-            top: 20px;
-            width: 3px;
-        }
-
-        .avatar-huevo.avatar-huevo-mobile::before { left: 9px; }
-        .avatar-huevo.avatar-huevo-mobile::after { right: 9px; }
 
         .avatar-mobile-link {
             align-items: center;
             display: inline-flex;
-            height: 48px;
+            height: 54px;
             justify-content: center;
             min-width: 50px;
             position: relative;
@@ -389,21 +402,48 @@
             white-space: nowrap;
         }
 
+        .monedas-nav-imagen {
+            filter: drop-shadow(0 2px 3px rgba(105,65,0,.32));
+            height: 30px;
+            margin-left: -7px;
+            object-fit: contain;
+            width: 32px;
+        }
+
+        .monedas-perfil-imagen {
+            filter: drop-shadow(0 8px 12px rgba(151,91,0,.28));
+            height: 112px;
+            object-fit: contain;
+            width: 124px;
+        }
+
+        .monedas-perfil-resumen {
+            align-items: center;
+            display: flex;
+            gap: 15px;
+        }
+
         .moneda-recompensa {
             animation: moneda-emerge 1.05s cubic-bezier(.2,.85,.3,1) both;
-            background: radial-gradient(circle at 35% 30%, #fff6a8, #ffc107 48%, #b87400 100%);
-            border: 5px solid #ffe46b;
-            border-radius: 50%;
-            box-shadow: 0 0 0 6px rgba(255,193,7,.16), 0 12px 30px rgba(255,193,7,.38);
-            color: #4a2c00;
+            background: transparent url('{% static "img/moneda-cuy.png" %}?v=face') center / contain no-repeat;
+            color: #fff8cf;
             display: inline-flex;
-            font-size: 1.45rem;
+            filter: drop-shadow(0 12px 18px rgba(255,193,7,.38));
+            font-size: 1.05rem;
             font-weight: 900;
             height: 92px;
             justify-content: center;
-            align-items: center;
+            align-items: flex-end;
             margin-bottom: 18px;
+            padding-bottom: 8px;
+            position: relative;
+            text-shadow: 0 2px 3px #6d3b00, 0 0 5px #6d3b00;
+            transform-style: preserve-3d;
             width: 92px;
+        }
+
+        .moneda-recompensa::before {
+            content: none;
         }
 
         @keyframes moneda-emerge {
@@ -641,12 +681,14 @@
 
                 <a class="btn btn-outline-light btn-sm menu-btn"
                     href="{% url 'gestion:home_publica' %}"
+                    data-nav-paths="/"
                     aria-label="Home" data-nav-tooltip title="Home">
                     <i class="fa-solid fa-house"></i><span class="menu-label">Home</span>
                 </a>
 
                 <a class="btn btn-outline-light btn-sm menu-btn"
                     href="{% url 'gestion:horario_clases' %}"
+                    data-nav-paths="/horario/"
                     aria-label="Horario" data-nav-tooltip title="Horario">
                     <i class="fa-solid fa-calendar-days"></i>
                     <span class="menu-label">Horario</span>
@@ -655,6 +697,7 @@
                 {% if user.perfil_alumno %}
                 <a class="btn btn-outline-light btn-sm menu-btn"
                     href="{% url 'gestion:mi_asistencia' %}"
+                    data-nav-paths="/mi-asistencia/"
                     aria-label="Mi asistencia" data-nav-tooltip title="Mi asistencia">
                     <i class="fa-solid fa-calendar-check"></i>
                     <span class="menu-label">Mi asistencia</span>
@@ -664,6 +707,7 @@
                 {% if puede_gestionar_cortesias %}
                 <a class="btn btn-warning btn-sm menu-btn {% if cortesias_agendadas_pendientes %}cortesia-alerta-btn{% endif %}"
                    href="{% url 'cortesias:lista_cortesias' %}"
+                   data-nav-paths="/cortesias/"
                    aria-label="Cortesías agendadas"
                    data-nav-tooltip
                    title="{% if cortesias_agendadas_pendientes %}{{ cortesias_agendadas_pendientes }} cortesía{{ cortesias_agendadas_pendientes|pluralize }} agendada{{ cortesias_agendadas_pendientes|pluralize }}{% else %}Cortesías{% endif %}">
@@ -675,20 +719,23 @@
 
                 {% if user.is_authenticated and user.is_staff %}
 
-                    {% if user.is_superuser or not user.perfil_instructor.activo %}
+                    {% if user.is_superuser or user.rol == 'ADMIN' or not user.perfil_instructor.activo %}
                     <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'gestion:dashboard' %}"
+                       data-nav-paths="/dashboard/,/finanzas/"
                        aria-label="Dashboard" data-nav-tooltip title="Dashboard">
                         <i class="fa-solid fa-chart-line"></i><span class="menu-label">Dashboard</span>
                     </a>
                     {% endif %}
 
                     <a class="btn btn-outline-info btn-sm menu-btn" href="{% url 'gestion:control_tv' %}"
+                       data-nav-paths="/modo-tv/"
                        aria-label="Modo TV" data-nav-tooltip title="Modo TV">
                         <i class="fa-solid fa-tv"></i><span class="menu-label">Modo TV</span>
                     </a>
 
-                    {% if user.is_superuser or not user.perfil_instructor.activo %}
+                    {% if user.is_superuser or user.rol == 'ADMIN' or not user.perfil_instructor.activo %}
                     <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'tienda:panel' %}"
+                       data-nav-paths="/tienda/"
                        aria-label="Tienda" data-nav-tooltip title="Dashboard de tienda">
                         <i class="fa-solid fa-store"></i><span class="menu-label">Tienda</span>
                     </a>
@@ -697,33 +744,39 @@
                     
 
                     <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'gestion:lista_alumnos' %}"
+                       data-nav-paths="/alumnos/"
                        aria-label="Alumnos" data-nav-tooltip title="Alumnos">
                         <i class="fa-solid fa-users"></i><span class="menu-label">Alumnos</span>
                     </a>
 
                     <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'gestion:lista_planes' %}"
+                       data-nav-paths="/planes/"
                        aria-label="Planes" data-nav-tooltip title="Planes">
                         <i class="fa-solid fa-layer-group"></i><span class="menu-label">Planes</span>
                     </a>
 
                     <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'gestion:lista_suscripciones' %}"
+                       data-nav-paths="/suscripciones/"
                        aria-label="Suscripciones" data-nav-tooltip title="Suscripciones">
                         <i class="fa-solid fa-id-card"></i><span class="menu-label">Suscripciones</span>
                     </a>
 
                     <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'gestion:lista_pagos' %}"
+                       data-nav-paths="/pagos/"
                        aria-label="Pagos" data-nav-tooltip title="Pagos">
                         <i class="fa-solid fa-money-bill"></i><span class="menu-label">Pagos</span>
                     </a>
 
                     <a class="btn btn-outline-light btn-sm menu-btn" href="{% url 'gestion:lista_registros_legales' %}"
+                       data-nav-paths="/registros-legales/"
                        aria-label="Registros" data-nav-tooltip title="Registros">
                         <i class="fa-solid fa-file-signature"></i><span class="menu-label">Registros</span>
                     </a>
 
-                    {% if user.is_superuser or not user.perfil_instructor.activo %}
+                    {% if user.is_superuser or user.rol == 'ADMIN' or not user.perfil_instructor.activo %}
                     <a class="btn btn-outline-light btn-sm menu-btn"
                         href="{% url 'gestion:configuraciones' %}"
+                        data-nav-paths="/configuraciones/,/configurar-home/,/configurar-horario/,/promociones-eventos/,/promociones/,/eventos/"
                         aria-label="Configuraciones" data-nav-tooltip title="Configuraciones">
                         <i class="fa-solid fa-gear"></i>
                         <span class="menu-label">Configuraciones</span>
@@ -750,22 +803,16 @@
                        aria-label="{{ billetera_monedas_usuario.saldo }} monedas"
                        title="Mis monedas">
                         <span class="avatar-huevo avatar-huevo-sm" aria-hidden="true"></span>
-                        <span><i class="fa-solid fa-coins"></i> {{ billetera_monedas_usuario.saldo }}</span>
+                        <img src="{% static 'img/moneda-cuy.png' %}?v=face" class="monedas-nav-imagen" alt="" aria-hidden="true">
+                        <span>{{ billetera_monedas_usuario.saldo }}</span>
                     </a>
 
                     <a class="btn btn-outline-light btn-sm menu-btn"
                        href="{% url 'gestion:mi_perfil' %}"
+                       data-nav-paths="/mi-perfil/"
                        aria-label="Mi perfil" data-nav-tooltip title="Mi perfil">
                         <i class="fa-solid fa-address-card"></i><span class="menu-label">Mi perfil</span>
                     </a>
-                    {% endif %}
-
-                    {% if not user.username_modificado %}
-                        <a class="btn btn-outline-light btn-sm menu-btn"
-                           href="{% url 'gestion:cambiar_usuario' %}"
-                           aria-label="Cambiar usuario" data-nav-tooltip title="Cambiar usuario">
-                            <i class="fa-solid fa-user-pen"></i><span class="menu-label">Cambiar usuario</span>
-                        </a>
                     {% endif %}
 
                     <form method="post" action="{% url 'logout' %}" class="m-0">
@@ -860,6 +907,22 @@
                 </div>
             {% endif %}
         {% endfor %}
+    {% endif %}
+
+    {% if notificacion_recompensa_pendiente %}
+        <div class="payment-feedback-overlay" role="alertdialog" aria-modal="true"
+             aria-live="assertive" data-notificacion-recompensa="{{ notificacion_recompensa_pendiente.id }}">
+            <div class="payment-feedback-card warning">
+                <div class="payment-feedback-icon" aria-hidden="true"><i class="fa-solid fa-gift"></i></div>
+                <h2 class="mb-3">{{ notificacion_recompensa_pendiente.titulo }}</h2>
+                <p class="mb-4">{{ notificacion_recompensa_pendiente.mensaje }}</p>
+                <form method="post" action="{% url 'gestion:confirmar_notificacion_recompensa' notificacion_recompensa_pendiente.id %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button class="btn btn-warning btn-lg px-5">¡Gracias!</button>
+                </form>
+            </div>
+        </div>
     {% endif %}
 
     <div class="card-custom">
@@ -1110,9 +1173,10 @@
         input.classList.add('fecha-input-nativa');
         const actualizar = function () {
             const texto = textoFechaLegible(input);
+            const textoVacio = input.dataset.fechaPlaceholder || 'Selecciona una fecha';
             salida.innerHTML = `
                 <i class="fa-regular fa-calendar-check" aria-hidden="true"></i>
-                <span>${texto || 'Selecciona una fecha'}</span>
+                <span>${texto || textoVacio}</span>
                 <i class="fa-regular fa-calendar fecha-calendario" aria-hidden="true"></i>
             `;
         };
@@ -1254,6 +1318,100 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
+    function activarSeccionActualDelMenu() {
+        const rutaActual = window.location.pathname || '/';
+        let mejorCoincidencia = null;
+        let longitudCoincidencia = -1;
+
+        document.querySelectorAll('.menu-btn[data-nav-paths]').forEach(function (enlace) {
+            const rutas = enlace.dataset.navPaths.split(',').map(ruta => ruta.trim());
+            rutas.forEach(function (ruta) {
+                const coincide = ruta === '/'
+                    ? rutaActual === '/'
+                    : rutaActual.startsWith(ruta);
+                if (coincide && ruta.length > longitudCoincidencia) {
+                    mejorCoincidencia = enlace;
+                    longitudCoincidencia = ruta.length;
+                }
+            });
+        });
+
+        if (mejorCoincidencia) {
+            mejorCoincidencia.classList.add('nav-active');
+            mejorCoincidencia.setAttribute('aria-current', 'page');
+        }
+    }
+
+    activarSeccionActualDelMenu();
+
+    {% if consultar_notificaciones_recompensa %}
+    function obtenerCookie(nombre) {
+        return document.cookie.split(';').map(valor => valor.trim()).reduce((resultado, valor) => {
+            const partes = valor.split('=');
+            return partes[0] === nombre ? decodeURIComponent(partes.slice(1).join('=')) : resultado;
+        }, '');
+    }
+
+    function mostrarNotificacionRecompensa(notificacion) {
+        if (!notificacion || document.querySelector('[data-notificacion-recompensa]')) return;
+        const overlay = document.createElement('div');
+        overlay.className = 'payment-feedback-overlay';
+        overlay.setAttribute('role', 'alertdialog');
+        overlay.setAttribute('aria-modal', 'true');
+        overlay.setAttribute('aria-live', 'assertive');
+        overlay.dataset.notificacionRecompensa = notificacion.id;
+
+        const tarjeta = document.createElement('div');
+        tarjeta.className = 'payment-feedback-card warning';
+        const icono = document.createElement('div');
+        icono.className = 'payment-feedback-icon';
+        icono.innerHTML = '<i class="fa-solid fa-gift"></i>';
+        const titulo = document.createElement('h2');
+        titulo.className = 'mb-3';
+        titulo.textContent = notificacion.titulo;
+        const mensaje = document.createElement('p');
+        mensaje.className = 'mb-4';
+        mensaje.textContent = notificacion.mensaje;
+        const boton = document.createElement('button');
+        boton.type = 'button';
+        boton.className = 'btn btn-warning btn-lg px-5';
+        boton.textContent = '¡Gracias!';
+        boton.addEventListener('click', async () => {
+            const plantilla = "{% url 'gestion:confirmar_notificacion_recompensa' 0 %}";
+            const respuesta = await fetch(
+                plantilla.replace('/0/', `/${notificacion.id}/`),
+                {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': obtenerCookie('csrftoken'),
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                }
+            );
+            if (respuesta.ok) overlay.remove();
+        });
+        tarjeta.append(icono, titulo, mensaje, boton);
+        overlay.appendChild(tarjeta);
+        document.body.appendChild(overlay);
+    }
+
+    async function consultarRecompensaPendiente() {
+        if (document.querySelector('[data-notificacion-recompensa]')) return;
+        try {
+            const respuesta = await fetch(
+                "{% url 'gestion:notificacion_recompensa_pendiente' %}",
+                {headers: {'X-Requested-With': 'XMLHttpRequest'}, cache: 'no-store'}
+            );
+            if (!respuesta.ok) return;
+            const datos = await respuesta.json();
+            mostrarNotificacionRecompensa(datos.notificacion);
+        } catch (error) {
+            // Se volverá a intentar sin interrumpir el uso de la aplicación.
+        }
+    }
+    window.setInterval(consultarRecompensaPendiente, 4000);
+    {% endif %}
+
     if (window.matchMedia('(min-width: 992px)').matches) {
         document.querySelectorAll('[data-nav-tooltip]').forEach(function (element) {
             new bootstrap.Tooltip(element, {

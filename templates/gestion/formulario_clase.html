@@ -1,0 +1,46 @@
+{% extends 'gestion/base.html' %}
+
+{% block content %}
+<style>
+.class-form-heading{background:linear-gradient(135deg,rgba(25,135,84,.15),transparent 60%);border:1px solid var(--border-color);border-radius:18px;margin-bottom:22px;padding:20px 22px}.class-form-heading .page-heading{padding:0}.class-form-card{border-radius:20px!important;overflow:hidden}.class-form-card .card-body{padding:26px}.class-form-grid{display:grid;gap:20px;grid-template-columns:repeat(2,minmax(0,1fr))}.class-form-field.full{grid-column:1/-1}.class-form-field label{font-size:.83rem;font-weight:750;margin-bottom:7px}.class-form-field .helptext{color:var(--text-secondary);display:block;font-size:.78rem;margin-top:6px}.class-form-field .errorlist{color:#dc3545;font-size:.8rem;list-style:none;margin:6px 0 0;padding:0}.class-days>div{display:grid;gap:9px;grid-template-columns:repeat(7,minmax(90px,1fr))}.class-days>div>div{margin:0}.class-days label{align-items:center;background:rgba(108,117,125,.08);border:1px solid var(--border-color);border-radius:12px;cursor:pointer;display:flex;gap:8px;justify-content:center;margin:0;min-height:48px;padding:10px;transition:.16s ease}.class-days label:hover{border-color:#198754;transform:translateY(-1px)}.class-days label:has(input:checked){background:rgba(25,135,84,.14);border-color:#198754;color:#42b883}.class-active{align-items:center;background:rgba(25,135,84,.08);border:1px solid rgba(25,135,84,.2);border-radius:13px;display:flex;gap:10px;min-height:48px;padding:11px 14px}.class-form-actions{border-top:1px solid var(--border-color);display:flex;gap:10px;justify-content:flex-end;margin-top:25px;padding-top:20px}@media(max-width:900px){.class-days>div{grid-template-columns:repeat(4,minmax(90px,1fr))}}@media(max-width:650px){.class-form-grid{grid-template-columns:1fr}.class-form-field.full{grid-column:auto}.class-days>div{grid-template-columns:repeat(2,minmax(0,1fr))}.class-form-card .card-body{padding:19px}.class-form-actions{flex-direction:column-reverse}.class-form-actions .btn{width:100%}}
+</style>
+
+<div class="class-form-heading">
+    <div class="page-heading">
+        <div class="page-heading-main">
+            <h2 class="page-heading-title"><i class="fa-solid fa-calendar-plus text-success"></i><span>{{ titulo }}</span></h2>
+            <p class="page-heading-subtitle text-secondary">{% if es_creacion %}Define una vez el horario y marca todos los días en que se repite la clase.{% else %}Actualiza la información de esta clase programada.{% endif %}</p>
+        </div>
+        <div class="page-heading-actions"><a href="{% url cancelar_url %}" class="btn btn-outline-secondary page-heading-action"><i class="fa-solid fa-arrow-left"></i><span>Volver</span></a></div>
+    </div>
+</div>
+
+<form method="post" class="card class-form-card" novalidate>
+    {% csrf_token %}
+    <div class="card-body">
+        {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="class-form-grid">
+            {% if es_creacion %}
+            <div class="class-form-field full">
+                <label>{{ form.dias.label }}</label>
+                <div class="class-days">{{ form.dias }}</div>
+                {% if form.dias.help_text %}<span class="helptext">{{ form.dias.help_text }}</span>{% endif %}
+                {{ form.dias.errors }}
+            </div>
+            {% else %}
+            <div class="class-form-field full"><label for="{{ form.dia.id_for_label }}">{{ form.dia.label }}</label>{{ form.dia }}{{ form.dia.errors }}</div>
+            {% endif %}
+
+            <div class="class-form-field"><label for="{{ form.hora_inicio.id_for_label }}">Hora de inicio</label>{{ form.hora_inicio }}{{ form.hora_inicio.errors }}</div>
+            <div class="class-form-field"><label for="{{ form.hora_fin.id_for_label }}">Hora de finalización</label>{{ form.hora_fin }}{{ form.hora_fin.errors }}</div>
+            <div class="class-form-field"><label for="{{ form.disciplina.id_for_label }}">{{ form.disciplina.label }}</label>{{ form.disciplina }}{{ form.disciplina.errors }}</div>
+            <div class="class-form-field"><label for="{{ form.publico_objetivo.id_for_label }}">{{ form.publico_objetivo.label }}</label>{{ form.publico_objetivo }}{{ form.publico_objetivo.errors }}</div>
+            <div class="class-form-field"><label for="{{ form.titulo.id_for_label }}">{{ form.titulo.label }}</label>{{ form.titulo }}{% if form.titulo.help_text %}<span class="helptext">{{ form.titulo.help_text }}</span>{% endif %}{{ form.titulo.errors }}</div>
+            <div class="class-form-field"><label for="{{ form.instructor.id_for_label }}">{{ form.instructor.label }}</label>{{ form.instructor }}{{ form.instructor.errors }}</div>
+            <div class="class-form-field"><label for="{{ form.cupo_maximo.id_for_label }}">{{ form.cupo_maximo.label }}</label>{{ form.cupo_maximo }}{{ form.cupo_maximo.errors }}</div>
+            <div class="class-form-field"><label>Disponibilidad</label><div class="class-active">{{ form.activa }}<label class="mb-0" for="{{ form.activa.id_for_label }}">Clase activa y visible en el horario</label></div>{{ form.activa.errors }}</div>
+        </div>
+        <div class="class-form-actions"><a href="{% url cancelar_url %}" class="btn btn-outline-secondary">Cancelar</a><button type="submit" class="btn btn-success"><i class="fa-solid fa-floppy-disk me-1"></i>{% if es_creacion %}Crear clases{% else %}Guardar cambios{% endif %}</button></div>
+    </div>
+</form>
+{% endblock %}

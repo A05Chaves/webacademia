@@ -3,93 +3,116 @@
 {% block content %}
 
 <style>
-
-.chart-container {
-
-    position: relative;
-
-    height: 280px;
-
-    width: 100%;
-
-}
+    .dashboard-heading {
+        align-items: center;
+        background: linear-gradient(135deg, rgba(13, 202, 240, .10), transparent 58%);
+        border: 1px solid var(--border-color);
+        border-radius: 18px;
+        display: flex;
+        gap: 20px;
+        justify-content: space-between;
+        padding: 20px 22px;
+    }
+    .dashboard-heading h2 { font-size: clamp(1.55rem, 2vw, 2rem); }
+    .dashboard-toolbar {
+        background: rgba(255,255,255,.025);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        display: grid;
+        gap: 10px;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        margin-top: 16px;
+        padding: 14px;
+    }
+    .dashboard-toolbar .btn {
+        align-items: center;
+        display: flex;
+        justify-content: center;
+        min-height: 44px;
+        white-space: nowrap;
+        width: 100%;
+    }
+    .dashboard-section-heading {
+        align-items: end;
+        display: flex;
+        justify-content: space-between;
+        margin: 30px 4px 14px;
+    }
+    .dashboard-section-heading h3 { font-size: 1.08rem; margin: 0; }
+    .dashboard-section-heading p { color: var(--text-secondary); font-size: .88rem; margin: 3px 0 0; }
+    .dashboard-metric-card { height: 100%; min-height: 152px; }
+    .dashboard-metric-card .card-body { display: flex; flex-direction: column; justify-content: space-between; }
+    .dashboard-metric-label { color: var(--text-secondary); font-size: .9rem; font-weight: 700; }
+    .dashboard-metric-value { font-size: clamp(1.65rem, 2.5vw, 2.15rem); font-weight: 700; line-height: 1.1; overflow-wrap: anywhere; }
+    .dashboard-alert-card { transition: transform .2s ease, border-color .2s ease; }
+    .dashboard-alert-card:hover { border-color: #ffc107 !important; transform: translateY(-2px); }
+    .dashboard-alert-icon {
+        align-items: center; background: rgba(255, 193, 7, .14); border-radius: 14px;
+        color: #ffc107; display: inline-flex; font-size: 1.2rem; height: 44px;
+        justify-content: center; width: 44px;
+    }
+    .chart-container { height: 280px; position: relative; width: 100%; }
+    @media (max-width: 1199.98px) {
+        .dashboard-toolbar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+    @media (max-width: 767.98px) {
+        .dashboard-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .dashboard-metric-card { min-height: 132px; }
+    }
+    @media (max-width: 420px) {
+        .dashboard-toolbar { grid-template-columns: 1fr; }
+    }
 
 </style>
 
-<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4 px-2">
-    <h2 class="mb-0">
-        <i class="fa-solid fa-chart-line"></i>
-        Dashboard
-    </h2>
-
-    <div class="d-flex flex-wrap gap-2">
-        <a href="{% url 'gestion:registrar_ingreso_manual' %}"
-           class="btn btn-outline-success btn-sm">
-            <i class="fa-solid fa-plus"></i>
-            Otro ingreso
-        </a>
-        <a href="{% url 'gestion:registrar_gasto' %}"
-           class="btn btn-outline-light btn-sm">
-            <i class="fa-solid fa-minus"></i>
-            Registrar gasto
-        </a>
-        <a href="{% url 'gestion:crear_pago_programado' %}"
-           class="btn btn-outline-light btn-sm">
-            <i class="fa-solid fa-calendar-plus"></i>
-            Pago programado
-        </a>
-        <a href="{% url 'cortesias:lista_cortesias' %}"
-           class="btn btn-outline-light btn-sm">
-            <i class="fa-solid fa-user-plus"></i>
-            Cortesías
-        </a>
-        <a href="{% url 'gestion:detalle_financiero' %}"
-           class="btn btn-outline-light btn-sm">
-            <i class="fa-solid fa-file-invoice-dollar"></i>
-            Detalle financiero
-        </a>
-        <a href="{% url 'gestion:registrar_transferencia' %}"
-           class="btn btn-outline-light btn-sm">
-            <i class="fa-solid fa-right-left"></i>
-            Transferencia
-        </a>
+<div class="dashboard-heading">
+    <div>
+        <h2 class="mb-1"><i class="fa-solid fa-chart-line text-info"></i> Dashboard</h2>
+        <p class="text-secondary mb-0">Estado general de la academia y movimientos del período.</p>
     </div>
+
 </div>
 
-<div class="row mb-4">
-<div class="col-md-6 mb-3">
+<nav class="dashboard-toolbar" aria-label="Operaciones de la academia">
+    <a href="{% url 'gestion:registrar_ingreso_manual' %}" class="btn btn-success"><i class="fa-solid fa-plus me-2"></i>Ingreso</a>
+    <a href="{% url 'gestion:registrar_gasto' %}" class="btn btn-outline-danger"><i class="fa-solid fa-minus me-2"></i>Gasto</a>
+    <a href="{% url 'gestion:detalle_financiero' %}" class="btn btn-outline-info"><i class="fa-solid fa-file-invoice-dollar me-2"></i>Detalle financiero</a>
+    <a href="{% url 'gestion:crear_pago_programado' %}" class="btn btn-outline-light"><i class="fa-solid fa-calendar-plus me-2"></i>Pago programado</a>
+    <a href="{% url 'gestion:registrar_transferencia' %}" class="btn btn-outline-light"><i class="fa-solid fa-right-left me-2"></i>Transferencia</a>
+    <a href="{% url 'cortesias:lista_cortesias' %}" class="btn btn-outline-warning"><i class="fa-solid fa-user-plus me-2"></i>Cortesías</a>
+</nav>
+
+<div class="dashboard-section-heading">
+    <div><h3><i class="fa-solid fa-bell text-warning me-1"></i> Atención requerida</h3><p>Pendientes que necesitan revisión administrativa.</p></div>
+</div>
+
+<div class="row g-3 mb-4">
+<div class="col-md-6">
     <a href="{% url 'gestion:lista_registros_legales' %}"
        class="text-decoration-none">
-        <div class="card bg-dark text-light border-warning h-100">
+        <div class="card bg-dark text-light border-warning h-100 dashboard-alert-card">
             <div class="card-body">
-                <h6>Registros pendientes</h6>
-                <h2>{{ registros_pendientes }}</h2>
-                <small class="text-warning">
-                    Estudiantes por aprobar
-                </small>
+                <div class="d-flex align-items-center gap-3">
+                    <span class="dashboard-alert-icon"><i class="fa-solid fa-user-clock"></i></span>
+                    <div><div class="dashboard-metric-label">Registros pendientes</div><div class="dashboard-metric-value">{{ registros_pendientes }}</div><small class="text-warning">Estudiantes por aprobar</small></div>
+                </div>
             </div>
         </div>
     </a>
 </div>
 
-<div class="col-md-6 mb-3">
+<div class="col-md-6">
     <a href="{% url 'gestion:lista_pagos' %}"
        class="text-decoration-none">
 
-        <div class="card bg-dark text-light border-warning h-100">
+        <div class="card bg-dark text-light border-warning h-100 dashboard-alert-card">
 
             <div class="card-body">
 
-                <h6>
-                    <i class="fa-solid fa-money-bill-wave"></i>
-                    Pagos pendientes
-                </h6>
-
-                <h2>{{ pagos_pendientes_total }}</h2>
-
-                <small class="text-warning">
-                    Pagos por validar
-                </small>
+                <div class="d-flex align-items-center gap-3">
+                    <span class="dashboard-alert-icon"><i class="fa-solid fa-money-bill-wave"></i></span>
+                    <div><div class="dashboard-metric-label">Pagos pendientes</div><div class="dashboard-metric-value">{{ pagos_pendientes_total }}</div><small class="text-warning">Pagos por validar</small></div>
+                </div>
 
             </div>
 
@@ -99,43 +122,48 @@
 </div>
 </div>
 
-<div class="row mb-5">
+<div class="dashboard-section-heading">
+    <div><h3><i class="fa-solid fa-users text-info me-1"></i> Estado de estudiantes</h3><p>Resumen actual de matrículas y vencimientos.</p></div>
+    <a href="{% url 'gestion:lista_alumnos' %}" class="btn btn-outline-light btn-sm">Ver alumnos</a>
+</div>
 
-    <div class="col-md-3 mb-3">
-        <div class="card bg-dark text-light border-secondary">
+<div class="row g-3 mb-4">
+
+    <div class="col-sm-6 col-xl-3">
+        <div class="card bg-dark text-light border-secondary dashboard-metric-card">
             <div class="card-body">
-                <h6>Alumnos</h6>
-                <h2>{{ total_alumnos }}</h2>
+                <div class="dashboard-metric-label">Alumnos</div>
+                <div class="dashboard-metric-value">{{ total_alumnos }}</div>
                 <small>Total registrados</small>
             </div>
         </div>
     </div>
 
-    <div class="col-md-3 mb-3">
-        <div class="card bg-dark text-light border-success">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card bg-dark text-light border-success dashboard-metric-card">
             <div class="card-body">
-                <h6>Activos</h6>
-                <h2>{{ alumnos_activos }}</h2>
+                <div class="dashboard-metric-label">Activos</div>
+                <div class="dashboard-metric-value text-success">{{ alumnos_activos }}</div>
                 <small>Al día</small>
             </div>
         </div>
     </div>
 
-    <div class="col-md-3 mb-3">
-        <div class="card bg-dark text-light border-warning">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card bg-dark text-light border-warning dashboard-metric-card">
             <div class="card-body">
-                <h6>Próximos a vencer</h6>
-                <h2>{{ alumnos_proximos }}</h2>
+                <div class="dashboard-metric-label">Próximos a vencer</div>
+                <div class="dashboard-metric-value text-warning">{{ alumnos_proximos }}</div>
                 <small>10 días o menos</small>
             </div>
         </div>
     </div>
 
-    <div class="col-md-3 mb-3">
-        <div class="card bg-dark text-light border-danger">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card bg-dark text-light border-danger dashboard-metric-card">
             <div class="card-body">
-                <h6>Vencidos</h6>
-                <h2>{{ alumnos_vencidos_total }}</h2>
+                <div class="dashboard-metric-label">Vencidos</div>
+                <div class="dashboard-metric-value text-danger">{{ alumnos_vencidos_total }}</div>
                 <small>Con mora</small>
             </div>
         </div>
@@ -143,9 +171,25 @@
 
 </div>
 
-<div class="row mb-5">
+<div class="dashboard-section-heading">
+    <div><h3><i class="fa-solid fa-coins text-success me-1"></i> Resumen financiero</h3><p>Saldos y resultado del mes actual.</p></div>
+    <a href="{% url 'gestion:detalle_financiero' %}" class="btn btn-outline-info btn-sm">Abrir detalle</a>
+</div>
 
-    <div class="col-md-6 mb-3">
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3"><div class="card bg-dark text-light border-success dashboard-metric-card"><div class="card-body"><div class="dashboard-metric-label">Saldo total</div><div class="dashboard-metric-value">$ {{ saldo_total|floatformat:"2g" }}</div><small>Disponible en cuentas</small></div></div></div>
+    <div class="col-sm-6 col-xl-3"><div class="card bg-dark text-light border-info dashboard-metric-card"><div class="card-body"><div class="dashboard-metric-label">Ingresos del mes</div><div class="dashboard-metric-value text-success">$ {{ ingresos_mes|floatformat:"2g" }}</div><small>Sin transferencias internas</small></div></div></div>
+    <div class="col-sm-6 col-xl-3"><div class="card bg-dark text-light border-danger dashboard-metric-card"><div class="card-body"><div class="dashboard-metric-label">Gastos del mes</div><div class="dashboard-metric-value text-danger">$ {{ gastos_mes|floatformat:"2g" }}</div><small>Sin transferencias internas</small></div></div></div>
+    <div class="col-sm-6 col-xl-3"><div class="card bg-dark text-light {% if utilidad_mes >= 0 %}border-success{% else %}border-danger{% endif %} dashboard-metric-card"><div class="card-body"><div class="dashboard-metric-label">Resultado del mes</div><div class="dashboard-metric-value {% if utilidad_mes >= 0 %}text-success{% else %}text-danger{% endif %}">$ {{ utilidad_mes|floatformat:"2g" }}</div><small>Ingresos menos gastos</small></div></div></div>
+</div>
+
+<div class="dashboard-section-heading">
+    <div><h3><i class="fa-solid fa-chart-column text-info me-1"></i> Tendencias financieras</h3><p>Comportamiento de los últimos meses y distribución del saldo.</p></div>
+</div>
+
+<div class="row g-3 mb-4">
+
+    <div class="col-lg-6">
         <div class="card bg-dark text-light border-secondary">
             <div class="card-header">
                 <i class="fa-solid fa-chart-line me-1"></i>
@@ -159,7 +203,7 @@
         </div>
     </div>
 
-    <div class="col-md-6 mb-3">
+    <div class="col-lg-6">
         <div class="card bg-dark text-light border-secondary">
             <div class="card-header">
                 <i class="fa-solid fa-wallet me-1"></i>
@@ -175,10 +219,14 @@
 
 </div>
 
-<div class="row">
+<div class="dashboard-section-heading">
+    <div><h3><i class="fa-solid fa-list-check text-warning me-1"></i> Seguimiento diario</h3><p>Pagos por validar y suscripciones que requieren atención.</p></div>
+</div>
 
-    <div class="col-md-6 mb-3">
-        <div class="card bg-dark text-light border-secondary">
+<div class="row g-3 mb-4">
+
+    <div class="col-lg-6">
+        <div class="card bg-dark text-light border-secondary h-100">
             <div class="card-header">
                 Pagos pendientes
             </div>
@@ -198,8 +246,8 @@
         </div>
     </div>
 
-    <div class="col-md-6 mb-3">
-        <div class="card bg-dark text-light border-secondary">
+    <div class="col-lg-6">
+        <div class="card bg-dark text-light border-secondary h-100">
             <div class="card-header">
                 Suscripciones próximas a vencer
             </div>
@@ -219,48 +267,8 @@
 
 </div>
 
-<div class="row mb-4">
-
-    <div class="col-md-3 mb-3">
-        <div class="card bg-dark text-light border-success">
-            <div class="card-body">
-                <h6>Saldo total</h6>
-                <h2>$ {{ saldo_total|floatformat:"2g" }}</h2>
-                <small>Disponible en cuentas</small>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-md-3 mb-3">
-        <div class="card bg-dark text-light border-info">
-            <div class="card-body">
-                <h6>Ingresos del mes</h6>
-                <h2>$ {{ ingresos_mes|floatformat:"2g" }}</h2>
-                <small>Ingresos operativos, sin transferencias internas</small>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-md-3 mb-3">
-        <div class="card bg-dark text-light border-danger">
-            <div class="card-body">
-                <h6>Gastos del mes</h6>
-                <h2>$ {{ gastos_mes|floatformat:"2g" }}</h2>
-                <small>Egresos operativos, sin transferencias internas</small>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-md-3 mb-3">
-        <div class="card bg-dark text-light border-warning">
-            <div class="card-body">
-                <h6>Utilidad del mes</h6>
-                <h2>$ {{ utilidad_mes|floatformat:"2g" }}</h2>
-                <small>Ingresos - gastos</small>
-            </div>
-        </div>
-    </div>
-
+<div class="dashboard-section-heading">
+    <div><h3><i class="fa-solid fa-table-list text-info me-1"></i> Detalle contable</h3><p>Composición del resultado, eventos, cuentas y compromisos próximos.</p></div>
 </div>
 
 <div class="card bg-dark text-light border-secondary mb-4">

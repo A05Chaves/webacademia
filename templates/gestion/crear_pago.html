@@ -1,103 +1,33 @@
 {% extends 'gestion/base.html' %}
-
 {% block content %}
+<style>
+.payment-form-heading{background:linear-gradient(135deg,rgba(25,135,84,.14),transparent 58%);border:1px solid var(--border-color);border-radius:18px;margin-bottom:22px;padding:20px 22px}.payment-form-heading .page-heading{padding:0}.payment-form-layout{display:grid;gap:20px;grid-template-columns:minmax(0,1.7fr) minmax(260px,.7fr)}.payment-form-card,.payment-help-card{border-radius:18px!important}.payment-form-card .card-header,.payment-help-card .card-header{background:transparent;border-color:var(--border-color);font-weight:700;padding:18px 22px}.payment-form-section{border-bottom:1px solid var(--border-color);padding:23px}.payment-form-section:last-of-type{border-bottom:0}.payment-section-title{align-items:center;display:flex;font-size:1rem;font-weight:750;gap:10px;margin-bottom:17px}.payment-section-number{align-items:center;background:rgba(25,135,84,.14);border-radius:10px;color:#42b883;display:inline-flex;font-size:.82rem;height:31px;justify-content:center;width:31px}.payment-form-actions{align-items:center;background:rgba(128,128,128,.045);display:flex;gap:10px;justify-content:flex-end;padding:18px 23px}.payment-help-card{height:max-content;position:sticky;top:18px}.payment-help-list{display:grid;gap:18px}.payment-help-item{display:grid;gap:11px;grid-template-columns:36px minmax(0,1fr)}.payment-help-icon{align-items:center;background:rgba(13,202,240,.11);border-radius:10px;color:#48cbe6;display:flex;height:36px;justify-content:center;width:36px}.payment-help-item strong{display:block;font-size:.91rem;margin-bottom:3px}.payment-help-item p{color:var(--text-secondary);font-size:.82rem;line-height:1.4;margin:0}.payment-form-card .errorlist{color:#dc3545;font-size:.82rem;list-style:none;margin:6px 0 0;padding:0}@media(max-width:991.98px){.payment-form-layout{grid-template-columns:1fr}.payment-help-card{position:static}}@media(max-width:575.98px){.payment-form-heading{padding:17px}.payment-form-section{padding:19px}.payment-form-actions{align-items:stretch;flex-direction:column-reverse}.payment-form-actions .btn{width:100%}}
+</style>
 
-<div class="d-flex justify-content-between align-items-center mb-5 px-2">
+<div class="payment-form-heading"><div class="page-heading"><div class="page-heading-main"><h2 class="page-heading-title"><i class="fa-solid fa-money-bill-wave text-success"></i><span>Registrar pago</span></h2><p class="page-heading-subtitle text-secondary">Registra un pago administrativo y déjalo listo para su validación.</p></div><div class="page-heading-actions"><a href="{% url 'gestion:lista_pagos' %}" class="btn btn-outline-light page-heading-action"><i class="fa-solid fa-arrow-left"></i><span>Volver a pagos</span></a></div></div></div>
 
-    <h2 class="mb-0">
-        <i class="fa-solid fa-money-bill-wave"></i>
-        Registrar pago
-    </h2>
+<div class="payment-form-layout">
+    <form method="post" enctype="multipart/form-data" class="card payment-form-card" novalidate>{% csrf_token %}
+        {% if form.non_field_errors %}<div class="alert alert-danger m-3 mb-0">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="card-header"><i class="fa-solid fa-file-invoice-dollar me-2 text-info"></i>Información del pago</div>
+        <section class="payment-form-section"><div class="payment-section-title"><span class="payment-section-number">1</span> Estudiante y concepto</div><div class="row g-3">
+            <div class="col-md-6"><label class="form-label" for="{{ form.alumno.id_for_label }}">Alumno</label>{{ form.alumno }}{{ form.alumno.errors }}</div>
+            <div class="col-md-6"><label class="form-label" for="{{ form.plan.id_for_label }}">Plan</label>{{ form.plan }}{{ form.plan.errors }}</div>
+        </div></section>
+        <section class="payment-form-section"><div class="payment-section-title"><span class="payment-section-number">2</span> Datos de la consignación</div><div class="row g-3">
+            <div class="col-md-6"><label class="form-label" for="{{ form.metodo_qr.id_for_label }}">Cuenta o método de pago</label>{{ form.metodo_qr }}{{ form.metodo_qr.errors }}</div>
+            <div class="col-md-6"><label class="form-label" for="{{ form.valor.id_for_label }}">Valor pagado</label>{{ form.valor }}{{ form.valor.errors }}</div>
+            <div class="col-12"><label class="form-label" for="{{ form.referencia_pago.id_for_label }}">Referencia de pago</label>{{ form.referencia_pago }}{{ form.referencia_pago.errors }}<div class="form-text">Escribe la referencia que aparece en la transferencia o comprobante.</div></div>
+        </div></section>
+        <section class="payment-form-section"><div class="payment-section-title"><span class="payment-section-number">3</span> Soporte</div><label class="form-label" for="{{ form.comprobante.id_for_label }}">Comprobante del pago</label>{{ form.comprobante }}{{ form.comprobante.errors }}<div class="form-text">Formatos admitidos: PDF, JPG, PNG o WEBP.</div></section>
+        <div class="payment-form-actions"><a href="{% url 'gestion:lista_pagos' %}" class="btn btn-outline-light"><i class="fa-solid fa-xmark me-1"></i> Cancelar</a><button type="submit" class="btn btn-success"><i class="fa-solid fa-check me-1"></i> Registrar pago</button></div>
+    </form>
 
-    <a href="{% url 'gestion:lista_pagos' %}"
-       class="btn btn-outline-light btn-sm">
-
-        <i class="fa-solid fa-arrow-left"></i>
-        Volver
-
-    </a>
-
+    <aside class="card payment-help-card"><div class="card-header"><i class="fa-solid fa-circle-info me-2 text-info"></i>Antes de guardar</div><div class="card-body"><div class="payment-help-list">
+        <div class="payment-help-item"><span class="payment-help-icon"><i class="fa-solid fa-user-check"></i></span><div><strong>Verifica el estudiante</strong><p>El pago y la futura suscripción quedarán asociados a la persona seleccionada.</p></div></div>
+        <div class="payment-help-item"><span class="payment-help-icon"><i class="fa-solid fa-building-columns"></i></span><div><strong>Selecciona la cuenta correcta</strong><p>Este dato determina dónde quedará registrado el ingreso.</p></div></div>
+        <div class="payment-help-item"><span class="payment-help-icon"><i class="fa-solid fa-paperclip"></i></span><div><strong>Adjunta el soporte</strong><p>Facilita la revisión del valor, la referencia y posibles pagos duplicados.</p></div></div>
+        <div class="alert alert-warning mb-0"><i class="fa-solid fa-clock me-1"></i> El pago quedará <strong>pendiente</strong> hasta que sea revisado y aprobado.</div>
+    </div></div></aside>
 </div>
-
-<div class="card bg-dark text-light border-secondary">
-
-    <div class="card-body">
-
-        <form method="post" enctype="multipart/form-data">
-
-            {% csrf_token %}
-
-            <div class="row">
-
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">
-                        Alumno
-                    </label>
-                    {{ form.alumno }}
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label">Plan</label>
-                    {{ form.plan }}
-                </div>
-
-            </div>
-
-            <div class="row">
-
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">
-                        Método de pago
-                    </label>
-                    {{ form.metodo_qr }}
-                </div>
-
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">
-                        Valor
-                    </label>
-                    {{ form.valor }}
-                </div>
-
-            </div>
-
-            <div class="mb-3">
-                <label class="form-label">
-                    Referencia de pago
-                </label>
-                {{ form.referencia_pago }}
-            </div>
-
-            <div class="mb-4">
-                <label class="form-label">
-                    Comprobante
-                </label>
-                {{ form.comprobante }}
-            </div>
-
-            <div class="d-flex gap-2">
-
-                <button type="submit" class="btn btn-success">
-
-                    <i class="fa-solid fa-check"></i>
-                    Registrar pago
-
-                </button>
-
-                <a href="{% url 'gestion:lista_pagos' %}"
-                   class="btn btn-outline-light">
-
-                    <i class="fa-solid fa-xmark"></i>
-                    Cancelar
-
-                </a>
-
-            </div>
-
-        </form>
-
-    </div>
-
-</div>
-
 {% endblock %}

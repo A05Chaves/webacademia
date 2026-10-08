@@ -582,19 +582,29 @@ def configuracion(request):
     cuentas = list(CuentaTienda.objects.all())
     for item in cuentas:
         item.saldo_calculado = item.saldo_actual
+    productos = ProductoTienda.objects.select_related(
+        'categoria', 'subcategoria', 'marca', 'linea_modelo', 'disciplina',
+        'proveedor_catalogo',
+    )
+    categorias = CategoriaProducto.objects.prefetch_related('subcategorias')
+    proveedores = ProveedorTienda.objects.all()
     return render(request, 'tienda/configuracion.html', {
         'cuentas': cuentas,
-        'productos': ProductoTienda.objects.select_related(
-            'categoria', 'subcategoria', 'marca', 'linea_modelo', 'disciplina',
-            'proveedor_catalogo',
-        ),
-        'categorias': CategoriaProducto.objects.prefetch_related('subcategorias'),
+        'productos': productos,
+        'categorias': categorias,
         'marcas': MarcaProducto.objects.prefetch_related('lineas_modelos'),
         'lineas_modelos': LineaModeloProducto.objects.select_related('marca'),
         'disciplinas_producto': DisciplinaProducto.objects.all(),
-        'proveedores': ProveedorTienda.objects.all(),
+        'proveedores': proveedores,
         'categorias_contables': CategoriaMovimientoTienda.objects.all(),
         'clientes': ClienteTienda.objects.all()[:30],
+        'resumen_configuracion': {
+            'productos': productos.count(),
+            'productos_activos': productos.filter(activo=True).count(),
+            'categorias': categorias.count(),
+            'proveedores': proveedores.count(),
+            'saldo_cuentas': sum((item.saldo_calculado for item in cuentas), 0),
+        },
     })
 
 

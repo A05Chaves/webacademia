@@ -6,7 +6,7 @@ from django.views.decorators.http import require_POST
 from django.contrib.auth import get_user_model
 
 from alumnos.models import Alumno
-from instructores.models import Instructor
+from instructores.models import Instructor, SolicitudRegistroProfesor
 
 from .forms import (
     MENSAJE_REGISTRO_PENDIENTE,
@@ -42,6 +42,11 @@ def validar_datos_registro(request):
         registro_existente
         or Alumno.objects.filter(documento=documento).exists()
         or Instructor.objects.filter(documento=documento).exists()
+        or SolicitudRegistroProfesor.objects.filter(
+            documento__iexact=documento,
+        ).exclude(
+            estado=SolicitudRegistroProfesor.Estados.RECHAZADO
+        ).exists()
     ):
         errores['documento'] = (
             'Ya existe un estudiante o registro con este documento, '
@@ -56,6 +61,14 @@ def validar_datos_registro(request):
         ).exclude(estado=RegistroLegalEstudiante.Estados.RECHAZADO).exists():
             errores['usuario_solicitado'] = (
                 'Este nombre de usuario ya está reservado por otro registro.'
+            )
+        elif SolicitudRegistroProfesor.objects.filter(
+            usuario_solicitado__iexact=username,
+        ).exclude(
+            estado=SolicitudRegistroProfesor.Estados.RECHAZADO
+        ).exists():
+            errores['usuario_solicitado'] = (
+                'Este nombre de usuario está reservado por una solicitud de profesor.'
             )
 
     advertencias = contactos_repetidos(correo, celular)

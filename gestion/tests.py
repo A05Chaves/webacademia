@@ -19,6 +19,7 @@ from pagos.models import (
 from planes.models import Plan, Suscripcion
 from clases.models import ClaseProgramada, AsistenciaClase
 from instructores.models import Instructor
+from notificaciones.models import Notificacion
 from config.file_validation import (
     validate_base64_signature,
     validate_image,
@@ -26,7 +27,9 @@ from config.file_validation import (
 )
 from gestion.models import (
     BilleteraMonedas, ConfiguracionClases, MovimientoMonedas, SesionTV,
+    RecompensaOtorgada, TipoRecompensa,
 )
+from gestion.services_gamificacion import otorgar_recompensa
 from gestion.views import limites_confirmacion_clase
 from registros_legales.models import RegistroLegalEstudiante
 import base64
@@ -279,6 +282,27 @@ class MiPerfilTests(TestCase):
         self.alumno.refresh_from_db()
         self.assertTrue(self.alumno.foto.name.startswith('alumnos/fotos/'))
 
+    def test_usuario_cambia_su_clave_desde_el_perfil(self):
+        response = self.client.post(reverse('gestion:mi_perfil'), {
+            'accion': 'credenciales',
+            'username': 'mi_perfil_usuario',
+            'old_password': 'clave',
+            'new_password1': 'NuevaClaveSegura456!',
+            'new_password2': 'NuevaClaveSegura456!',
+        })
+
+        self.assertRedirects(response, reverse('gestion:mi_perfil'))
+        self.usuario.refresh_from_db()
+        self.assertTrue(self.usuario.check_password('NuevaClaveSegura456!'))
+        self.assertFalse(self.usuario.username_modificado)
+
+    def test_perfil_incluye_seguridad_y_cambio_de_usuario(self):
+        response = self.client.get(reverse('gestion:mi_perfil'))
+
+        self.assertContains(response, 'Seguridad y acceso')
+        self.assertContains(response, 'name="username"')
+        self.assertContains(response, 'name="new_password1"')
+
 
 class ListaAlumnosFiltroTests(TestCase):
     def setUp(self):
@@ -372,12 +396,14 @@ class ConfiguracionYAsistenciaClasesTests(TestCase):
         response = self.client.post(reverse('gestion:configurar_horario'), {
             'minutos_antes_confirmacion': '45',
             'minutos_despues_confirmacion': '25',
+            'monedas_por_asistencia_profesor': '3',
         })
 
         self.assertRedirects(response, reverse('gestion:configurar_horario'))
         configuracion = ConfiguracionClases.cargar()
         self.assertEqual(configuracion.minutos_antes_confirmacion, 45)
         self.assertEqual(configuracion.minutos_despues_confirmacion, 25)
+        self.assertEqual(configuracion.monedas_por_asistencia_profesor, 3)
 
         ahora = timezone.make_aware(datetime(2026, 8, 3, 9, 30))
         inicio, fin = limites_confirmacion_clase(
@@ -385,6 +411,86 @@ class ConfiguracionYAsistenciaClasesTests(TestCase):
         )
         self.assertEqual(inicio.time(), time(9, 15))
         self.assertEqual(fin.time(), time(10, 25))
+
+    def test_crea_la_misma_clase_en_varios_dias_seleccionados(self):
+        response = self.client.post(reverse('gestion:crear_clase'), {
+            'dias': [
+                ClaseProgramada.DiasSemana.LUNES,
+                ClaseProgramada.DiasSemana.MIERCOLES,
+                ClaseProgramada.DiasSemana.VIERNES,
+            ],
+            'hora_inicio': '18:00',
+            'hora_fin': '19:00',
+            'disciplina': ClaseProgramada.Disciplinas.JIU_JITSU,
+            'titulo': 'Clase técnica nocturna',
+            'publico_objetivo': ClaseProgramada.PublicosObjetivo.ADULTO,
+            'instructor': self.instructor.id,
+            'cupo_maximo': '24',
+            'activa': 'on',
+        })
+
+        self.assertRedirects(response, reverse('gestion:configurar_horario'))
+        clases = ClaseProgramada.objects.filter(
+            titulo='Clase técnica nocturna',
+        )
+        self.assertEqual(clases.count(), 3)
+        self.assertCountEqual(
+            clases.values_list('dia', flat=True),
+            [
+                ClaseProgramada.DiasSemana.LUNES,
+                ClaseProgramada.DiasSemana.MIERCOLES,
+                ClaseProgramada.DiasSemana.VIERNES,
+            ],
+        )
+
+    def test_creacion_multiple_omite_clases_identicas_existentes(self):
+        datos = {
+            'dias': [
+                ClaseProgramada.DiasSemana.MARTES,
+                ClaseProgramada.DiasSemana.JUEVES,
+            ],
+            'hora_inicio': '17:00',
+            'hora_fin': '18:00',
+            'disciplina': ClaseProgramada.Disciplinas.MUAY_THAI,
+            'titulo': 'Muay Thai tarde',
+            'publico_objetivo': ClaseProgramada.PublicosObjetivo.TODOS,
+            'instructor': self.instructor.id,
+            'cupo_maximo': '20',
+            'activa': 'on',
+        }
+
+        self.client.post(reverse('gestion:crear_clase'), datos)
+        repetida = self.client.post(
+            reverse('gestion:crear_clase'), datos, follow=True,
+        )
+
+        self.assertEqual(
+            ClaseProgramada.objects.filter(titulo='Muay Thai tarde').count(),
+            2,
+        )
+        self.assertContains(repetida, 'Se omitieron 2 clase(s) idénticas')
+
+    def test_formulario_rechaza_hora_final_anterior_al_inicio(self):
+        response = self.client.post(reverse('gestion:crear_clase'), {
+            'dias': [ClaseProgramada.DiasSemana.SABADO],
+            'hora_inicio': '19:00',
+            'hora_fin': '18:00',
+            'disciplina': ClaseProgramada.Disciplinas.JIU_JITSU,
+            'titulo': 'Horario inválido',
+            'publico_objetivo': ClaseProgramada.PublicosObjetivo.TODOS,
+            'instructor': self.instructor.id,
+            'cupo_maximo': '20',
+            'activa': 'on',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            'La hora de finalización debe ser posterior a la hora de inicio.',
+        )
+        self.assertFalse(
+            ClaseProgramada.objects.filter(titulo='Horario inválido').exists()
+        )
 
     def test_consulta_asistentes_de_una_fecha_especifica(self):
         usuario_uno = get_user_model().objects.create_user(
@@ -416,6 +522,175 @@ class ConfiguracionYAsistenciaClasesTests(TestCase):
         self.assertNotContains(response, 'Carlos López')
         self.assertContains(response, '?fecha=2026-08-03')
         self.assertContains(response, '?fecha=2026-07-27')
+
+
+class RecompensasConfigurablesTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.admin = User.objects.create_user(
+            username='admin_recompensas', password='clave', is_staff=True
+        )
+        self.usuario_profesor = User.objects.create_user(
+            username='profesor_recompensas', password='clave'
+        )
+        self.profesor = Instructor.objects.create(
+            user=self.usuario_profesor,
+            documento='PROF-RECOMPENSAS',
+            especialidad='Jiu Jitsu',
+        )
+        self.usuario_alumno = User.objects.create_user(
+            username='alumno_recompensas',
+            password='clave',
+            first_name='Ana',
+            last_name='Prueba',
+        )
+        self.alumno = Alumno.objects.create(
+            user=self.usuario_alumno, documento='ALU-RECOMPENSAS'
+        )
+        self.clase = ClaseProgramada.objects.create(
+            dia=ClaseProgramada.DiasSemana.LUNES,
+            hora_inicio=time(10, 0),
+            hora_fin=time(11, 0),
+            disciplina=ClaseProgramada.Disciplinas.JIU_JITSU,
+            instructor=self.profesor,
+        )
+        self.estrella = TipoRecompensa.objects.get(nombre='Estrella')
+
+    def _asistencia(self, dia):
+        return AsistenciaClase.objects.create(
+            alumno=self.alumno,
+            clase=self.clase,
+            fecha_clase=dia,
+            estado=AsistenciaClase.Estados.CONFIRMADA,
+        )
+
+    def test_cinco_estrellas_entregan_bono_y_reinician_progreso(self):
+        resultados = []
+        for numero in range(5):
+            asistencia = self._asistencia(date(2026, 8, 3) + timedelta(days=7 * numero))
+            resultado, error = otorgar_recompensa(
+                asistencia, self.estrella, self.usuario_profesor, 'Esfuerzo'
+            )
+            self.assertIsNone(error)
+            resultados.append(resultado)
+
+        billetera = BilleteraMonedas.objects.get(usuario=self.usuario_alumno)
+        self.assertEqual(billetera.saldo, 30)
+        self.assertEqual(resultados[-1]['bono'], 5)
+        self.assertEqual(resultados[-1]['progreso'], 0)
+        self.assertEqual(
+            RecompensaOtorgada.objects.filter(canjeada=True).count(), 5
+        )
+        self.assertEqual(MovimientoMonedas.objects.count(), 6)
+
+    def test_valor_historico_no_cambia_al_editar_recompensa(self):
+        asistencia = self._asistencia(date(2026, 8, 3))
+        otorgar_recompensa(
+            asistencia, self.estrella, self.usuario_profesor, 'Compañerismo'
+        )
+        self.estrella.valor_monedas = 10
+        self.estrella.save(update_fields=['valor_monedas'])
+
+        entrega = RecompensaOtorgada.objects.get()
+        self.assertEqual(entrega.monedas_otorgadas, 5)
+        self.assertEqual(entrega.motivo, 'Compañerismo')
+
+    def test_profesor_puede_premiar_y_estudiante_no(self):
+        asistencia = self._asistencia(date(2026, 8, 3))
+        url = reverse('gestion:recompensar_asistencia', args=[asistencia.id])
+        self.client.force_login(self.usuario_alumno)
+        prohibida = self.client.post(url, {'recompensa': self.estrella.id})
+        self.assertEqual(prohibida.status_code, 403)
+
+        self.client.force_login(self.usuario_profesor)
+        permitida = self.client.post(url, {
+            'recompensa': self.estrella.id,
+            'motivo': 'Buen comportamiento',
+        })
+        self.assertRedirects(permitida, reverse('gestion:home_publica'))
+        self.assertTrue(RecompensaOtorgada.objects.filter(
+            asistencia=asistencia,
+            otorgada_por=self.usuario_profesor,
+        ).exists())
+        notificacion = Notificacion.objects.get(
+            usuario=self.usuario_alumno,
+            tipo=Notificacion.Tipos.RECOMPENSA,
+        )
+        self.assertEqual(notificacion.estado, Notificacion.Estados.PENDIENTE)
+
+        self.client.force_login(self.usuario_alumno)
+        inicio = self.client.get(reverse('gestion:home_publica'))
+        self.assertContains(inicio, '¡Recibiste Estrella!')
+        self.assertContains(inicio, 'Ganaste 5 monedas')
+        pendiente = self.client.get(
+            reverse('gestion:notificacion_recompensa_pendiente')
+        )
+        self.assertEqual(
+            pendiente.json()['notificacion']['id'], notificacion.id
+        )
+        confirmada = self.client.post(
+            reverse(
+                'gestion:confirmar_notificacion_recompensa',
+                args=[notificacion.id],
+            ),
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+        self.assertEqual(confirmada.json(), {'confirmada': True})
+        notificacion.refresh_from_db()
+        self.assertEqual(notificacion.estado, Notificacion.Estados.ENVIADA)
+
+    def test_administrador_sin_perfil_de_profesor_no_puede_premiar(self):
+        asistencia = self._asistencia(date(2026, 8, 3))
+        self.client.force_login(self.admin)
+        response = self.client.post(
+            reverse('gestion:recompensar_asistencia', args=[asistencia.id]),
+            {'recompensa': self.estrella.id},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(RecompensaOtorgada.objects.exists())
+
+    def test_configuracion_permite_crear_un_cofre(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse('gestion:configurar_recompensas'), {
+            'nombre': 'Cofre dorado',
+            'simbolo': '🎁',
+            'valor_monedas': 25,
+            'cantidad_para_bono': 0,
+            'monedas_bono': 0,
+            'orden': 2,
+            'activa': 'on',
+        })
+
+        self.assertRedirects(response, reverse('gestion:configurar_recompensas'))
+        self.assertTrue(TipoRecompensa.objects.filter(
+            nombre='Cofre dorado', valor_monedas=25, activa=True
+        ).exists())
+
+    def test_api_muestra_progreso_en_la_siguiente_clase(self):
+        anterior = self._asistencia(date(2026, 7, 27))
+        otorgar_recompensa(
+            anterior, self.estrella, self.usuario_profesor, 'Progreso'
+        )
+        self._asistencia(date(2026, 8, 3))
+        self.client.force_login(self.usuario_profesor)
+        momento = timezone.make_aware(datetime(2026, 8, 3, 10, 30))
+
+        with patch('gestion.views.timezone.localtime', return_value=momento):
+            response = self.client.get(
+                reverse('gestion:asistencias_home_actuales')
+            )
+
+        premio = response.json()['asistencias'][0]['recompensas'][0]
+        self.assertEqual(premio['nombre'], 'Estrella')
+        self.assertEqual(premio['cantidad'], 1)
+        self.assertEqual(premio['meta'], 5)
+
+        with patch('gestion.views.timezone.localtime', return_value=momento):
+            inicio = self.client.get(reverse('gestion:home_publica'))
+        self.assertContains(inicio, 'data-estudiante="Ana Prueba"')
+        self.assertContains(inicio, 'Premios disponibles')
+        self.assertNotContains(inicio, '>Premiar<')
 
 
 class CronometroLlavesPermisosTests(TestCase):
@@ -2051,6 +2326,25 @@ class CalendarioAsistenciaTests(TestCase):
         )
         self.assertIsNone(asistencia.alumno)
         self.assertEqual(asistencia.tipo_participante, 'Profesor')
+        billetera = BilleteraMonedas.objects.get(usuario=usuario_profesor)
+        self.assertEqual(billetera.saldo, 2)
+        movimiento = MovimientoMonedas.objects.get(asistencia=asistencia)
+        self.assertEqual(
+            movimiento.tipo,
+            MovimientoMonedas.Tipos.ASISTENCIA_PROFESOR,
+        )
+        self.assertEqual(movimiento.cantidad, 2)
+
+        with patch('gestion.views.timezone.localtime', return_value=dentro_de_ventana):
+            self.client.post(
+                reverse('gestion:confirmar_clase_home'),
+                {'clase_id': self.clase.id},
+            )
+        billetera.refresh_from_db()
+        self.assertEqual(billetera.saldo, 2)
+        self.assertEqual(
+            MovimientoMonedas.objects.filter(asistencia=asistencia).count(), 1
+        )
 
         durante_clase = timezone.make_aware(datetime(2026, 7, 15, 18, 5))
         with patch('gestion.views.timezone.localtime', return_value=durante_clase):
@@ -2101,6 +2395,79 @@ class CalendarioAsistenciaTests(TestCase):
             self.client.get(reverse('tienda:panel')).status_code,
             200,
         )
+
+    def test_administrador_profesor_conserva_permisos_administrativos(self):
+        administrador = get_user_model().objects.create_user(
+            username='admin-profesor',
+            password='clave-admin',
+            is_staff=True,
+            rol=get_user_model().Roles.ADMIN,
+        )
+        Instructor.objects.create(
+            user=administrador,
+            documento='ADMIN-PROF-001',
+            especialidad='Jiu Jitsu',
+            activo=True,
+        )
+        self.client.force_login(administrador)
+
+        home = self.client.get(reverse('gestion:home_publica'))
+        self.assertContains(home, 'href="/dashboard/"')
+        self.assertContains(home, 'href="/tienda/"')
+        self.assertContains(home, 'href="/configuraciones/"')
+        self.assertEqual(
+            self.client.get(reverse('gestion:dashboard')).status_code,
+            200,
+        )
+        self.assertEqual(
+            self.client.get(reverse('gestion:configuraciones')).status_code,
+            200,
+        )
+        self.assertEqual(
+            self.client.get(reverse('tienda:panel')).status_code,
+            200,
+        )
+
+    def test_convertir_administrador_en_profesor_no_cambia_su_rol_admin(self):
+        administrador = get_user_model().objects.create_user(
+            username='admin-profesor-edicion',
+            password='clave-admin',
+            is_staff=True,
+            rol=get_user_model().Roles.ADMIN,
+        )
+        alumno_admin = Alumno.objects.create(
+            user=administrador,
+            documento='ADMIN-PROF-002',
+        )
+        self.client.force_login(administrador)
+
+        respuesta = self.client.post(
+            reverse('gestion:editar_alumno', args=[alumno_admin.id]),
+            {
+                'first_name': 'Administrador',
+                'last_name': 'Profesor',
+                'email': 'admin-profesor@example.com',
+                'telefono': '3001234567',
+                'documento': alumno_admin.documento,
+                'fecha_nacimiento': '',
+                'direccion': '',
+                'disciplina': alumno_admin.disciplina,
+                'grado': '',
+                'nombre_acudiente': '',
+                'documento_acudiente': '',
+                'parentesco_acudiente': '',
+                'telefono_acudiente': '',
+                'estado': alumno_admin.estado,
+                'rol': 'INSTRUCTOR',
+                'especialidad': 'Jiu Jitsu',
+                'instructor_activo': 'on',
+            },
+        )
+
+        self.assertRedirects(respuesta, reverse('gestion:lista_alumnos'))
+        administrador.refresh_from_db()
+        self.assertEqual(administrador.rol, get_user_model().Roles.ADMIN)
+        self.assertTrue(administrador.perfil_instructor.activo)
 
     def test_administrador_convierte_estudiante_en_profesor_sin_borrar_historial(self):
         administrador = get_user_model().objects.create_user(

@@ -77,6 +77,7 @@ urlpatterns = [
 
     path('cortesias/', include('cortesias.urls')),
     path('tienda/', include('tienda.urls')),
+    path('', include('instructores.urls')),
     path('', include('registros_legales.urls')),
     path('', include('gestion.urls')),
 ]

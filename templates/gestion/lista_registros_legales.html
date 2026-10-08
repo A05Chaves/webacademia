@@ -1,90 +1,17 @@
 {% extends 'gestion/base.html' %}
 
 {% block content %}
+<style>
+.records-heading{background:linear-gradient(135deg,rgba(13,202,240,.12),transparent 60%);border:1px solid var(--border-color);border-radius:18px;margin-bottom:22px;padding:20px 22px}.records-heading .page-heading{padding:0}.records-summary{display:grid;gap:13px;grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:22px}.record-stat{align-items:center;background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;display:flex;gap:13px;padding:16px}.record-stat i{align-items:center;background:rgba(108,117,125,.13);border-radius:12px;color:var(--text-secondary);display:flex;height:42px;justify-content:center;width:42px}.record-stat strong{display:block;font-size:1.4rem;line-height:1}.record-stat small{color:var(--text-secondary)}.record-stat.pending i{background:rgba(255,193,7,.14);color:#d9a900}.record-stat.approved i{background:rgba(25,135,84,.14);color:#42b883}.record-stat.rejected i{background:rgba(220,53,69,.13);color:#e05b68}.records-filter{border-radius:18px!important;margin-bottom:22px}.records-filter .card-body{padding:20px!important}.records-filter-grid{align-items:end;display:grid;gap:13px;grid-template-columns:minmax(0,2fr) minmax(190px,.7fr) auto}.records-filter-actions{display:flex;gap:8px}.records-table{border-radius:18px!important}.records-table .card-header{align-items:center;background:transparent;border-color:var(--border-color);display:flex;justify-content:space-between;padding:17px 20px}.records-table table{min-width:920px}.records-table th{color:var(--text-secondary);font-size:.74rem;letter-spacing:.04em;padding:14px 13px;text-transform:uppercase;white-space:nowrap}.records-table td{padding:15px 13px;vertical-align:middle}.record-person{line-height:1.25;min-width:185px}.record-person a{font-weight:750}.record-contact{font-size:.84rem;line-height:1.5}.record-status{border-radius:999px;display:inline-flex;font-size:.72rem;font-weight:800;padding:7px 10px;white-space:nowrap}.record-status.pending{background:rgba(255,193,7,.15);color:#d0a000}.record-status.approved{background:rgba(25,135,84,.15);color:#42b883}.record-status.rejected{background:rgba(220,53,69,.13);color:#e05b68}.record-status.other{background:rgba(108,117,125,.15);color:var(--text-secondary)}.records-empty{color:var(--text-secondary);padding:50px 20px!important;text-align:center}@media(max-width:900px){.records-summary{grid-template-columns:1fr 1fr}}@media(max-width:680px){.records-heading{padding:17px}.records-filter-grid{grid-template-columns:1fr}.records-filter-actions .btn{flex:1}}@media(max-width:420px){.records-summary{grid-template-columns:1fr}}
+</style>
 
-<div class="d-flex justify-content-between align-items-center mb-5 px-2">
-    <h2 class="mb-0">
-        <i class="fa-solid fa-file-signature"></i>
-        Registros legales
-    </h2>
+<div class="records-heading"><div class="page-heading"><div class="page-heading-main"><h2 class="page-heading-title"><i class="fa-solid fa-file-signature text-info"></i><span>Registros legales</span></h2><p class="page-heading-subtitle text-secondary">Busca, revisa y controla el estado de los registros enviados.</p></div><div class="page-heading-actions"><a href="{% url 'gestion:dashboard' %}" class="btn btn-outline-secondary page-heading-action"><i class="fa-solid fa-arrow-left"></i><span>Volver</span></a></div></div></div>
 
-    <a href="{% url 'gestion:dashboard' %}" class="btn btn-outline-light btn-sm">
-        <i class="fa-solid fa-arrow-left"></i>
-        Volver
-    </a>
-</div>
+<section class="records-summary" aria-label="Resumen de registros"><article class="record-stat"><i class="fa-solid fa-folder-open"></i><div><strong>{{ resumen_registros.total|default:0 }}</strong><small>Total</small></div></article><article class="record-stat pending"><i class="fa-solid fa-clock"></i><div><strong>{{ resumen_registros.pendientes|default:0 }}</strong><small>Pendientes</small></div></article><article class="record-stat approved"><i class="fa-solid fa-circle-check"></i><div><strong>{{ resumen_registros.aprobados|default:0 }}</strong><small>Aprobados</small></div></article><article class="record-stat rejected"><i class="fa-solid fa-circle-xmark"></i><div><strong>{{ resumen_registros.rechazados|default:0 }}</strong><small>Rechazados</small></div></article></section>
 
-<form method="get" class="card bg-dark text-light border-secondary mb-4">
-    <div class="card-body">
-        <label for="buscarRegistroLegal" class="form-label">
-            Buscar por nombre, apellido o documento
-        </label>
-        <div class="input-group">
-            <span class="input-group-text"><i class="fa-solid fa-magnifying-glass"></i></span>
-            <input type="search" id="buscarRegistroLegal" name="q"
-                   class="form-control" value="{{ consulta }}"
-                   placeholder="Ej: MARÍA PÉREZ o 1085000000">
-            <button type="submit" class="btn btn-primary">Buscar</button>
-            {% if consulta %}
-                <a href="{% url 'gestion:lista_registros_legales' %}"
-                   class="btn btn-outline-light">Limpiar</a>
-            {% endif %}
-        </div>
-        {% if consulta %}
-            <div class="form-text text-secondary mt-2">
-                Resultados encontrados: {{ registros|length }}
-            </div>
-        {% endif %}
-    </div>
-</form>
+<form method="get" class="card records-filter"><div class="card-body"><div class="records-filter-grid"><div><label for="buscarRegistroLegal" class="form-label">Nombre, apellido o documento</label><input type="search" id="buscarRegistroLegal" name="q" class="form-control" value="{{ consulta }}" placeholder="Escribe el nombre o documento"></div><div><label for="estadoRegistroLegal" class="form-label">Estado</label><select id="estadoRegistroLegal" name="estado" class="form-select"><option value="">Todos</option>{% for valor, etiqueta in estados_registro %}<option value="{{ valor }}" {% if estado_filtro == valor %}selected{% endif %}>{{ etiqueta }}</option>{% endfor %}</select></div><div class="records-filter-actions"><button type="submit" class="btn btn-primary"><i class="fa-solid fa-filter me-1"></i>Aplicar</button>{% if consulta or estado_filtro %}<a href="{% url 'gestion:lista_registros_legales' %}" class="btn btn-outline-secondary" title="Limpiar filtros"><i class="fa-solid fa-rotate-left"></i></a>{% endif %}</div></div></div></form>
 
-<div class="table-responsive">
-    <table class="table table-dark table-hover table-dark-custom">
-        <thead>
-            <tr>
-                <th>Fecha</th>
-                <th>Nombre</th>
-                <th>Documento</th>
-                <th>Tipo</th>
-                <th>Celular</th>
-                <th>Estado</th>
-            </tr>
-        </thead>
-
-        <tbody>
-            {% for registro in registros %}
-            <tr>
-                <td>{{ registro.creado|date:"d/m/Y H:i" }}</td>
-                <td>
-                    <a href="{% url 'gestion:detalle_registro_legal' registro.id %}"
-                    class="text-info text-decoration-none">
-
-                        {{ registro.nombres|title }} {{ registro.apellidos|title }}
-
-                    </a>
-                </td>
-                <td>{{ registro.documento }}</td>
-                <td>{{ registro.get_tipo_estudiante_display }}</td>
-                <td>{{ registro.celular }}</td>
-                <td>
-                    <span class="badge bg-warning text-dark">
-                        {{ registro.get_estado_display }}
-                    </span>
-                </td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="6" class="text-center">
-                    {% if consulta %}
-                        No se encontraron registros para “{{ consulta }}”.
-                    {% else %}
-                        No hay registros legales.
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-
+<section class="card records-table"><div class="card-header"><strong><i class="fa-solid fa-list-check text-info me-2"></i>Resultados</strong><span class="badge bg-secondary">{{ registros|length }}</span></div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Fecha</th><th>Persona</th><th>Documento</th><th>Tipo</th><th>Contacto</th><th>Estado</th><th class="text-end">Acción</th></tr></thead><tbody>
+    {% for registro in registros %}<tr><td><strong>{{ registro.creado|date:"d/m/Y" }}</strong><br><small class="text-secondary">{{ registro.creado|date:"H:i" }}</small></td><td class="record-person"><a href="{% url 'gestion:detalle_registro_legal' registro.id %}" class="text-info text-decoration-none">{{ registro.nombres|title }} {{ registro.apellidos|title }}</a></td><td>{{ registro.documento }}</td><td>{{ registro.get_tipo_estudiante_display }}</td><td class="record-contact"><i class="fa-solid fa-mobile-screen me-1 text-secondary"></i>{{ registro.celular|default:"—" }}{% if registro.correo %}<br><small class="text-secondary"><i class="fa-regular fa-envelope me-1"></i>{{ registro.correo }}</small>{% endif %}</td><td><span class="record-status {% if registro.estado == 'PENDIENTE_VALIDACION' %}pending{% elif registro.estado == 'APROBADO' %}approved{% elif registro.estado == 'RECHAZADO' %}rejected{% else %}other{% endif %}">{{ registro.get_estado_display }}</span></td><td class="text-end"><a href="{% url 'gestion:detalle_registro_legal' registro.id %}" class="btn btn-outline-info btn-sm"><i class="fa-regular fa-eye me-1"></i>Ver detalle</a></td></tr>{% empty %}<tr><td colspan="7" class="records-empty"><i class="fa-regular fa-folder-open fa-2x mb-3"></i><div>{% if consulta or estado_filtro %}No se encontraron registros con estos filtros.{% else %}No hay registros legales.{% endif %}</div></td></tr>{% endfor %}
+</tbody></table></div></section>
 {% endblock %}

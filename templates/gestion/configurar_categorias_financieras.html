@@ -1,45 +1,10 @@
 {% extends 'gestion/base.html' %}
 {% block content %}
-<div class="page-heading">
-    <div class="page-heading-main">
-        <h2 class="page-heading-title"><i class="fa-solid fa-tags"></i><span>Categorías contables de la academia</span></h2>
-        <p class="page-heading-subtitle text-secondary">Estas categorías solo clasifican movimientos de la academia. Inhabilitarlas no elimina su historial.</p>
-    </div>
-    <div class="page-heading-actions"><a href="{% url 'gestion:configuraciones' %}" class="btn btn-outline-light">Volver</a></div>
-</div>
-
-<div class="row g-4">
-    <div class="col-lg-5">
-        <div class="card bg-dark text-light border-secondary">
-            <div class="card-header"><strong>{% if categoria_edicion %}Editar{% else %}Nueva{% endif %} categoría</strong></div>
-            <div class="card-body">
-                <form method="post">{% csrf_token %}
-                    {% for field in form %}
-                        {% if field.field.widget.input_type == 'checkbox' %}
-                            <div class="form-check mb-3">{{ field }}<label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label></div>
-                        {% else %}
-                            <div class="mb-3"><label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}</div>
-                        {% endif %}
-                        {% for error in field.errors %}<div class="text-danger small mb-2">{{ error }}</div>{% endfor %}
-                    {% endfor %}
-                    <button class="btn btn-success"><i class="fa-solid fa-floppy-disk"></i> Guardar</button>
-                    {% if categoria_edicion %}<a href="{% url 'gestion:configurar_categorias_financieras' %}" class="btn btn-outline-light">Cancelar edición</a>{% endif %}
-                </form>
-            </div>
-        </div>
-    </div>
-    <div class="col-lg-7">
-        <div class="card bg-dark text-light border-secondary">
-            <div class="table-responsive"><table class="table table-dark table-hover mb-0">
-                <thead><tr><th>Categoría</th><th>Movimiento</th><th>Naturaleza</th><th>Estado</th><th></th></tr></thead>
-                <tbody>{% for categoria in categorias %}<tr class="{% if not categoria.activa %}opacity-50{% endif %}">
-                    <td><strong>{{ categoria.nombre }}</strong><br><small class="text-secondary">{{ categoria.descripcion|default:'Sin descripción' }}</small></td>
-                    <td>{{ categoria.get_tipo_display }}</td><td>{{ categoria.get_naturaleza_display }}</td>
-                    <td>{% if categoria.activa %}<span class="badge bg-success">Activa</span>{% else %}<span class="badge bg-secondary">Inhabilitada</span>{% endif %}</td>
-                    <td><a href="{% url 'gestion:editar_categoria_financiera' categoria.id %}" class="btn btn-outline-info btn-sm"><i class="fa-solid fa-pen"></i></a></td>
-                </tr>{% empty %}<tr><td colspan="5" class="text-center py-4">No hay categorías configuradas.</td></tr>{% endfor %}</tbody>
-            </table></div>
-        </div>
-    </div>
-</div>
+<style>
+.accounting-heading{background:linear-gradient(135deg,rgba(111,66,193,.14),transparent 60%);border:1px solid var(--border-color);border-radius:18px;margin-bottom:22px;padding:20px 22px}.accounting-heading .page-heading{padding:0}.accounting-summary{display:grid;gap:13px;grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:22px}.accounting-stat{background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:16px}.accounting-stat span{color:var(--text-secondary);display:block;font-size:.75rem;font-weight:750;text-transform:uppercase}.accounting-stat strong{display:block;font-size:1.45rem;margin-top:4px}.accounting-layout{display:grid;gap:20px;grid-template-columns:minmax(280px,.72fr) minmax(0,1.45fr)}.accounting-card{border-radius:18px!important}.accounting-card .card-header{background:transparent;border-color:var(--border-color);padding:17px 20px}.accounting-card .card-body{padding:21px}.accounting-table table{min-width:720px}.accounting-table th{color:var(--text-secondary);font-size:.74rem;padding:13px;text-transform:uppercase}.accounting-table td{padding:15px 13px;vertical-align:middle}.accounting-badge{border-radius:999px;font-size:.72rem;font-weight:800;padding:7px 10px}.accounting-badge.active{background:rgba(25,135,84,.15);color:#42b883}.accounting-badge.inactive{background:rgba(108,117,125,.16);color:var(--text-secondary)}@media(max-width:991.98px){.accounting-layout{grid-template-columns:1fr}}@media(max-width:680px){.accounting-summary{grid-template-columns:1fr 1fr}}@media(max-width:420px){.accounting-summary{grid-template-columns:1fr}.accounting-heading{padding:17px}}
+</style>
+<div class="accounting-heading"><div class="page-heading"><div class="page-heading-main"><h2 class="page-heading-title"><i class="fa-solid fa-tags text-info"></i><span>Categorías contables</span></h2><p class="page-heading-subtitle text-secondary">Clasifica los ingresos y gastos de la academia sin perder su trazabilidad histórica.</p></div><div class="page-heading-actions"><a href="{% url 'gestion:configuraciones' %}" class="btn btn-outline-secondary page-heading-action"><i class="fa-solid fa-arrow-left"></i><span>Volver</span></a></div></div></div>
+<section class="accounting-summary"><article class="accounting-stat"><span>Total</span><strong>{{ resumen_categorias.total }}</strong></article><article class="accounting-stat"><span>Activas</span><strong>{{ resumen_categorias.activas }}</strong></article><article class="accounting-stat"><span>Para ingresos</span><strong>{{ resumen_categorias.ingresos }}</strong></article><article class="accounting-stat"><span>Para gastos</span><strong>{{ resumen_categorias.egresos }}</strong></article></section>
+<div class="accounting-layout"><section class="card accounting-card"><div class="card-header"><strong>{% if categoria_edicion %}Editar categoría{% else %}Nueva categoría{% endif %}</strong></div><div class="card-body"><form method="post">{% csrf_token %}{% for field in form %}{% if field.field.widget.input_type == 'checkbox' %}<div class="form-check mb-3">{{ field }}<label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label></div>{% else %}<div class="mb-3"><label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}</div>{% endif %}{% for error in field.errors %}<div class="text-danger small mb-2">{{ error }}</div>{% endfor %}{% endfor %}<div class="d-flex flex-wrap gap-2"><button class="btn btn-success"><i class="fa-solid fa-floppy-disk me-1"></i>Guardar</button>{% if categoria_edicion %}<a href="{% url 'gestion:configurar_categorias_financieras' %}" class="btn btn-outline-secondary">Cancelar edición</a>{% endif %}</div></form></div></section>
+<section class="card accounting-card accounting-table"><div class="card-header d-flex justify-content-between"><strong>Categorías configuradas</strong><span class="badge bg-secondary">{{ categorias|length }}</span></div><div class="table-responsive"><table class="table table-hover mb-0"><thead><tr><th>Categoría</th><th>Movimiento</th><th>Naturaleza</th><th>Estado</th><th></th></tr></thead><tbody>{% for categoria in categorias %}<tr class="{% if not categoria.activa %}opacity-75{% endif %}"><td><strong>{{ categoria.nombre }}</strong><br><small class="text-secondary">{{ categoria.descripcion|default:'Sin descripción' }}</small></td><td>{{ categoria.get_tipo_display }}</td><td>{{ categoria.get_naturaleza_display }}</td><td><span class="accounting-badge {% if categoria.activa %}active{% else %}inactive{% endif %}">{% if categoria.activa %}Activa{% else %}Inhabilitada{% endif %}</span></td><td class="text-end"><a href="{% url 'gestion:editar_categoria_financiera' categoria.id %}" class="btn btn-outline-info btn-sm"><i class="fa-solid fa-pen me-1"></i>Editar</a></td></tr>{% empty %}<tr><td colspan="5" class="text-center text-secondary py-5">No hay categorías configuradas.</td></tr>{% endfor %}</tbody></table></div></section></div>
 {% endblock %}

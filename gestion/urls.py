@@ -110,6 +110,21 @@ urlpatterns = [
          name='confirmar_asistencia_kiosko'),
     path('horario/<int:clase_id>/asistentes/',
          views.asistentes_clase, name='asistentes_clase'),
+    path(
+        'asistencias/<int:asistencia_id>/recompensar/',
+        views.recompensar_asistencia,
+        name='recompensar_asistencia',
+    ),
+    path(
+        'notificaciones/recompensa-pendiente/',
+        views.notificacion_recompensa_pendiente,
+        name='notificacion_recompensa_pendiente',
+    ),
+    path(
+        'notificaciones/recompensa/<int:notificacion_id>/confirmar/',
+        views.confirmar_notificacion_recompensa,
+        name='confirmar_notificacion_recompensa',
+    ),
 
     path('pagos/alumno/registrar/', views.registrar_pago_alumno,
          name='registrar_pago_alumno'),
@@ -169,6 +184,26 @@ urlpatterns = [
         name='configurar_cuentas'
     ),
     path(
+        'configuraciones/perfiles/',
+        views.configurar_perfiles,
+        name='configurar_perfiles',
+    ),
+    path(
+        'configuraciones/perfiles/<int:usuario_id>/editar/',
+        views.editar_perfil_usuario,
+        name='editar_perfil_usuario',
+    ),
+    path(
+        'configuraciones/profesores/<int:solicitud_id>/aprobar/',
+        views.aprobar_solicitud_profesor,
+        name='aprobar_solicitud_profesor',
+    ),
+    path(
+        'configuraciones/profesores/<int:solicitud_id>/rechazar/',
+        views.rechazar_solicitud_profesor,
+        name='rechazar_solicitud_profesor',
+    ),
+    path(
         'configuraciones/cuentas/<int:cuenta_id>/editar/',
         views.configurar_cuentas,
         name='editar_cuenta_financiera'
@@ -182,6 +217,16 @@ urlpatterns = [
         'configuraciones/categorias-financieras/<int:categoria_id>/editar/',
         views.configurar_categorias_financieras,
         name='editar_categoria_financiera',
+    ),
+    path(
+        'configuraciones/recompensas/',
+        views.configurar_recompensas,
+        name='configurar_recompensas',
+    ),
+    path(
+        'configuraciones/recompensas/<int:recompensa_id>/editar/',
+        views.configurar_recompensas,
+        name='editar_recompensa',
     ),
     path(
         'configurar-horario/',

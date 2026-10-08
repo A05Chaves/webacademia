@@ -9,6 +9,7 @@ class Notificacion(models.Model):
         MORA = 'MORA', 'Mora'
         PAGO_APROBADO = 'PAGO_APROBADO', 'Pago aprobado'
         PAGO_RECHAZADO = 'PAGO_RECHAZADO', 'Pago rechazado'
+        RECOMPENSA = 'RECOMPENSA', 'Recompensa recibida'
 
     class Estados(models.TextChoices):
         PENDIENTE = 'PENDIENTE', 'Pendiente'

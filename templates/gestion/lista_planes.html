@@ -1,53 +1,47 @@
 {% extends 'gestion/base.html' %}
 
 {% block content %}
+<style>
+.plans-heading{background:linear-gradient(135deg,rgba(255,193,7,.13),transparent 60%);border:1px solid var(--border-color);border-radius:18px;margin-bottom:22px;padding:20px 22px}.plans-heading .page-heading{padding:0}.plans-summary{display:grid;gap:14px;grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:22px}.plan-stat{align-items:center;background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;display:flex;gap:13px;padding:17px}.plan-stat i{align-items:center;background:rgba(108,117,125,.13);border-radius:12px;color:var(--text-secondary);display:flex;font-size:1.05rem;height:43px;justify-content:center;width:43px}.plan-stat strong{display:block;font-size:1.45rem;line-height:1}.plan-stat small{color:var(--text-secondary)}.plan-stat.active i{background:rgba(25,135,84,.14);color:#42b883}.plan-stat.inactive i{background:rgba(220,53,69,.13);color:#e05b68}.plans-grid{display:grid;gap:17px;grid-template-columns:repeat(3,minmax(0,1fr))}.plan-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:18px;display:flex;flex-direction:column;min-height:100%;overflow:hidden;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}.plan-card:hover{border-color:rgba(255,193,7,.45);box-shadow:0 10px 28px rgba(0,0,0,.13);transform:translateY(-2px)}.plan-card.inactive{opacity:.76}.plan-card-body{display:flex;flex:1;flex-direction:column;padding:20px}.plan-card-head{align-items:flex-start;display:flex;gap:10px;justify-content:space-between}.plan-card-title{font-size:1.13rem;font-weight:780;margin:0}.plan-status{border-radius:999px;font-size:.7rem;font-weight:800;padding:6px 9px;white-space:nowrap}.plan-status.active{background:rgba(25,135,84,.15);color:#42b883}.plan-status.inactive{background:rgba(108,117,125,.15);color:var(--text-secondary)}.plan-price{color:#ffc107;font-size:1.7rem;font-weight:850;margin:14px 0 2px}.plan-duration{color:var(--text-secondary);font-size:.82rem}.plan-features{display:grid;gap:8px;grid-template-columns:1fr 1fr;margin:18px 0}.plan-feature{background:rgba(108,117,125,.075);border-radius:11px;padding:10px}.plan-feature span{color:var(--text-secondary);display:block;font-size:.7rem;text-transform:uppercase}.plan-feature strong{display:block;font-size:.88rem;margin-top:2px}.plan-disciplines{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}.plan-discipline{background:rgba(13,202,240,.1);border:1px solid rgba(13,202,240,.18);border-radius:999px;color:#48cbe6;font-size:.72rem;font-weight:700;padding:5px 8px}.plan-description{color:var(--text-secondary);font-size:.86rem;line-height:1.5;margin-bottom:18px}.plan-actions{border-top:1px solid var(--border-color);display:flex;gap:8px;margin-top:auto;padding-top:15px}.plan-actions .btn{flex:1}.plans-empty{background:var(--bg-card);border:1px dashed var(--border-color);border-radius:18px;color:var(--text-secondary);grid-column:1/-1;padding:55px 20px;text-align:center}@media(max-width:991.98px){.plans-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:650px){.plans-summary,.plans-grid{grid-template-columns:1fr}.plans-heading{padding:17px}}
+</style>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-
-    <h2 class="mb-0">
-        Planes
-    </h2>
-
-    <a href="{% url 'gestion:crear_plan' %}"
-       class="btn btn-outline-light btn-sm">
-
-        <i class="fa-solid fa-plus"></i>
-        Nuevo plan
-
-    </a>
-
+<div class="plans-heading">
+    <div class="page-heading">
+        <div class="page-heading-main">
+            <h2 class="page-heading-title"><i class="fa-solid fa-layer-group text-warning"></i><span>Planes</span></h2>
+            <p class="page-heading-subtitle text-secondary">Administra precios, vigencia, clases y disciplinas incluidas.</p>
+        </div>
+        <div class="page-heading-actions"><a href="{% url 'gestion:crear_plan' %}" class="btn btn-warning page-heading-action"><i class="fa-solid fa-plus"></i><span>Nuevo plan</span></a></div>
+    </div>
 </div>
 
+<section class="plans-summary" aria-label="Resumen de planes">
+    <article class="plan-stat"><i class="fa-solid fa-layer-group"></i><div><strong>{{ resumen_planes.total|default:0 }}</strong><small>Total de planes</small></div></article>
+    <article class="plan-stat active"><i class="fa-solid fa-circle-check"></i><div><strong>{{ resumen_planes.activos|default:0 }}</strong><small>Activos</small></div></article>
+    <article class="plan-stat inactive"><i class="fa-solid fa-circle-pause"></i><div><strong>{{ resumen_planes.inactivos|default:0 }}</strong><small>Inactivos</small></div></article>
+</section>
 
-<div class="table-responsive">
-
-    <table class="table table-dark table-hover table-dark-custom">
-        <tr>
-            <th>ID</th>
-            <th>Nombre</th>
-            <th>Precio</th>
-            <th>Duración</th>
-            <th>Activo</th>
-            <th>Acciones</th>
-        </tr>
-        {% for plan in planes %}
-        <tr>
-            <td>{{ plan.id }}</td>
-            <td>{{ plan.nombre }}</td>
-            <td>{{ plan.precio }}</td>
-            <td>{{ plan.duracion_dias }}</td>
-            <td>{{ plan.activo }}</td>
-            <td>
-                <a href="{% url 'gestion:editar_plan' plan.id %}" class="btn btn-outline-warning btn-sm">
-                    <i class="fa-solid fa-pen"></i> Editar
-                </a>
-                |
-                <a href="{% url 'gestion:eliminar_plan' plan.id %}" class="btn btn-outline-danger btn-sm">
-                    <i class="fa-solid fa-trash"></i> Eliminar
-                </a>
-            </td>
-        </tr>
-        {% endfor %}
-    </table>
-</div>
+<section class="plans-grid">
+    {% for plan in planes %}
+    <article class="plan-card {% if not plan.activo %}inactive{% endif %}">
+        <div class="plan-card-body">
+            <div class="plan-card-head"><h3 class="plan-card-title">{{ plan.nombre }}</h3><span class="plan-status {% if plan.activo %}active{% else %}inactive{% endif %}">{% if plan.activo %}ACTIVO{% else %}INACTIVO{% endif %}</span></div>
+            <div class="plan-price">$ {{ plan.precio|floatformat:"0g" }}</div>
+            <div class="plan-duration"><i class="fa-regular fa-calendar me-1"></i>{{ plan.duracion_dias }} días de vigencia</div>
+            <div class="plan-features">
+                <div class="plan-feature"><span>Clases al mes</span><strong>{% if plan.asistencia_ilimitada %}Ilimitadas{% else %}{{ plan.clases_mes|default:"—" }}{% endif %}</strong></div>
+                <div class="plan-feature"><span>Clases por semana</span><strong>{% if plan.asistencia_ilimitada %}Sin límite{% else %}{{ plan.clases_semana|default:"—" }}{% endif %}</strong></div>
+            </div>
+            <div class="plan-disciplines">
+                {% if plan.permite_jiu_jitsu %}<span class="plan-discipline">Jiu-jitsu</span>{% endif %}
+                {% if plan.permite_muay_thai %}<span class="plan-discipline">Muay Thai</span>{% endif %}
+                {% if plan.permite_mma %}<span class="plan-discipline">MMA</span>{% endif %}
+                {% if not plan.permite_jiu_jitsu and not plan.permite_muay_thai and not plan.permite_mma %}<span class="plan-discipline">Sin disciplina definida</span>{% endif %}
+            </div>
+            {% if plan.descripcion %}<p class="plan-description">{{ plan.descripcion|truncatechars:150 }}</p>{% endif %}
+            <div class="plan-actions"><a href="{% url 'gestion:editar_plan' plan.id %}" class="btn btn-outline-warning btn-sm"><i class="fa-solid fa-pen me-1"></i>Editar</a><a href="{% url 'gestion:eliminar_plan' plan.id %}" class="btn btn-outline-danger btn-sm"><i class="fa-solid fa-trash me-1"></i>Eliminar</a></div>
+        </div>
+    </article>
+    {% empty %}<div class="plans-empty"><i class="fa-regular fa-folder-open fa-2x mb-3"></i><div>No hay planes registrados.</div></div>{% endfor %}
+</section>
 {% endblock %}

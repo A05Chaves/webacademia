@@ -1,167 +1,43 @@
 {% extends 'gestion/base.html' %}
-
 {% block content %}
+<style>
+.config-heading{align-items:center;background:linear-gradient(135deg,rgba(79,140,201,.13),transparent 60%);border:1px solid var(--border-color);border-radius:18px;display:flex;gap:18px;justify-content:space-between;padding:20px 22px}.config-heading h2{font-size:clamp(1.55rem,2vw,2rem)}.config-section{margin-top:30px}.config-section-title{align-items:center;display:flex;gap:12px;margin:0 4px 14px}.config-section-icon{align-items:center;background:rgba(79,140,201,.14);border-radius:10px;color:#5da2df;display:inline-flex;height:36px;justify-content:center;width:36px}.config-section-title h3{font-size:1.08rem;margin:0}.config-section-title p{color:var(--text-secondary);font-size:.84rem;margin:2px 0 0}.config-grid{display:grid;gap:14px;grid-template-columns:repeat(2,minmax(0,1fr))}.config-grid-three{grid-template-columns:repeat(3,minmax(0,1fr))}.config-option{align-items:center;background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;color:var(--text-main);display:grid;gap:16px;grid-template-columns:52px minmax(0,1fr) auto;min-height:108px;padding:18px;text-decoration:none;transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease}.config-option:hover{border-color:#5d9fd7;box-shadow:0 8px 20px rgba(20,60,94,.18);color:var(--text-main);transform:translateY(-2px)}.config-option-icon{align-items:center;background:rgba(79,140,201,.12);border:1px solid rgba(79,140,201,.22);border-radius:14px;color:#5da2df;display:inline-flex;font-size:1.25rem;height:52px;justify-content:center;width:52px}.config-option h4{font-size:1rem;margin:0 0 5px}.config-option p{color:var(--text-secondary);font-size:.85rem;line-height:1.35;margin:0}.config-option-arrow{color:var(--text-secondary)}.config-option.accent-finance .config-option-icon{background:rgba(25,135,84,.12);border-color:rgba(25,135,84,.24);color:#46a879}.config-option.accent-content .config-option-icon{background:rgba(255,193,7,.12);border-color:rgba(255,193,7,.24);color:#d7a90c}.config-option.accent-store .config-option-icon{background:rgba(111,66,193,.12);border-color:rgba(111,66,193,.24);color:#9876d2}@media(max-width:1199.98px){.config-grid-three{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:767.98px){.config-heading{align-items:stretch;flex-direction:column}.config-heading .btn{width:100%}.config-grid,.config-grid-three{grid-template-columns:1fr}}@media(max-width:420px){.config-option{grid-template-columns:44px minmax(0,1fr);padding:15px}.config-option-icon{height:44px;width:44px}.config-option-arrow{display:none}}
+</style>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-
-    <h2 class="mb-0">
-        <i class="fa-solid fa-gear"></i>
-        Configuraciones
-    </h2>
-
-    <a href="{% url 'gestion:dashboard' %}"
-       class="btn btn-outline-light btn-sm">
-        <i class="fa-solid fa-arrow-left"></i>
-        Volver
-    </a>
-
+<div class="config-heading">
+  <div><h2 class="mb-1"><i class="fa-solid fa-gear text-info me-1"></i> Configuración</h2><p class="text-secondary mb-0">Administra la academia por áreas sin mezclar sus funciones.</p></div>
+  <a href="{% url 'gestion:dashboard' %}" class="btn btn-outline-light"><i class="fa-solid fa-arrow-left me-1"></i> Volver al dashboard</a>
 </div>
 
-<div class="row g-4">
+<section class="config-section">
+  <div class="config-section-title"><span class="config-section-icon"><i class="fa-solid fa-users-gear"></i></span><div><h3>Academia y usuarios</h3><p>Personas, clases y sistema de incentivos.</p></div></div>
+  <div class="config-grid config-grid-three">
+    <a href="{% url 'gestion:configurar_perfiles' %}" class="config-option"><span class="config-option-icon"><i class="fa-solid fa-user-gear"></i></span><span><h4>Perfiles y profesores</h4><p>Roles, cuentas y solicitudes de profesores pendientes.</p></span><i class="fa-solid fa-chevron-right config-option-arrow"></i></a>
+    <a href="{% url 'gestion:configurar_horario' %}" class="config-option"><span class="config-option-icon"><i class="fa-solid fa-calendar-days"></i></span><span><h4>Horario y clases</h4><p>Días, horas y parámetros para confirmar asistencia.</p></span><i class="fa-solid fa-chevron-right config-option-arrow"></i></a>
+    <a href="{% url 'gestion:configurar_recompensas' %}" class="config-option"><span class="config-option-icon"><i class="fa-solid fa-gift"></i></span><span><h4>Recompensas</h4><p>Estrellas, cofres, monedas y bonos por acumulación.</p></span><i class="fa-solid fa-chevron-right config-option-arrow"></i></a>
+  </div>
+</section>
 
-    <div class="col-md-6 col-lg-3">
+<section class="config-section">
+  <div class="config-section-title"><span class="config-section-icon"><i class="fa-solid fa-coins"></i></span><div><h3>Finanzas de la academia</h3><p>Cuentas y clasificación de los movimientos.</p></div></div>
+  <div class="config-grid">
+    <a href="{% url 'gestion:configurar_cuentas' %}" class="config-option accent-finance"><span class="config-option-icon"><i class="fa-solid fa-building-columns"></i></span><span><h4>Cuentas financieras</h4><p>Saldos iniciales, moneda, tipo y estado de cada cuenta.</p></span><i class="fa-solid fa-chevron-right config-option-arrow"></i></a>
+    <a href="{% url 'gestion:configurar_categorias_financieras' %}" class="config-option accent-finance"><span class="config-option-icon"><i class="fa-solid fa-tags"></i></span><span><h4>Categorías contables</h4><p>Ingresos y gastos operacionales o no operacionales.</p></span><i class="fa-solid fa-chevron-right config-option-arrow"></i></a>
+  </div>
+</section>
 
-        <a href="{% url 'gestion:configurar_home' %}"
-           class="text-decoration-none">
+<section class="config-section">
+  <div class="config-section-title"><span class="config-section-icon"><i class="fa-solid fa-bullhorn"></i></span><div><h3>Contenido y publicaciones</h3><p>Lo que se presenta en la página principal.</p></div></div>
+  <div class="config-grid">
+    <a href="{% url 'gestion:configurar_home' %}" class="config-option accent-content"><span class="config-option-icon"><i class="fa-solid fa-photo-film"></i></span><span><h4>Contenido del Home</h4><p>Video principal, música, carrusel y prioridades.</p></span><i class="fa-solid fa-chevron-right config-option-arrow"></i></a>
+    <a href="{% url 'gestion:promociones_eventos' %}" class="config-option accent-content"><span class="config-option-icon"><i class="fa-solid fa-bullhorn"></i></span><span><h4>Promociones y eventos</h4><p>Publicaciones, condiciones, cupos e inscripciones.</p></span><i class="fa-solid fa-chevron-right config-option-arrow"></i></a>
+  </div>
+</section>
 
-            <div class="card bg-dark text-light border-secondary h-100">
-
-                <div class="card-body text-center py-4">
-
-                    <i class="fa-brands fa-youtube fa-2x mb-3 text-danger"></i>
-
-                    <h5 class="mb-2">
-                        Música / Home
-                    </h5>
-
-                    <p class="text-secondary small mb-0">
-                        Video principal y playlist.
-                    </p>
-
-                </div>
-
-            </div>
-
-        </a>
-
-    </div>
-
-    <div class="col-md-6 col-lg-3">
-
-        <a href="{% url 'gestion:configurar_horario' %}"
-           class="text-decoration-none">
-
-            <div class="card bg-dark text-light border-secondary h-100">
-
-                <div class="card-body text-center py-4">
-
-                    <i class="fa-solid fa-calendar-days fa-2x mb-3 text-info"></i>
-
-                    <h5 class="mb-2">
-                        Horario
-                    </h5>
-
-                    <p class="text-secondary small mb-0">
-                        Días y horas visibles.
-                    </p>
-
-                </div>
-
-            </div>
-
-        </a>
-
-    </div>
-
-    <div class="col-md-6 col-lg-3">
-
-        <a href="{% url 'gestion:configurar_cuentas' %}"
-           class="text-decoration-none">
-
-            <div class="card bg-dark text-light border-secondary h-100">
-
-                <div class="card-body text-center py-4">
-
-                    <i class="fa-solid fa-building-columns fa-2x mb-3 text-success"></i>
-
-                    <h5 class="mb-2">
-                        Cuentas financieras
-                    </h5>
-
-                    <p class="text-secondary small mb-0">
-                        Saldos iniciales, tipos y estado.
-                    </p>
-
-                </div>
-
-            </div>
-
-        </a>
-
-    </div>
-
-    <div class="col-md-6 col-lg-3">
-
-        <a href="{% url 'gestion:configurar_categorias_financieras' %}"
-           class="text-decoration-none">
-
-            <div class="card bg-dark text-light border-info h-100">
-
-                <div class="card-body text-center py-4">
-
-                    <i class="fa-solid fa-tags fa-2x mb-3 text-info"></i>
-
-                    <h5 class="mb-2">Categorías contables</h5>
-
-                    <p class="text-secondary small mb-0">
-                        Ingresos y gastos operacionales o no operacionales de la academia.
-                    </p>
-
-                </div>
-
-            </div>
-
-        </a>
-
-    </div>
-
-    <div class="col-md-6 col-lg-3">
-
-        <a href="{% url 'tienda:configuracion' %}"
-           class="text-decoration-none">
-
-            <div class="card bg-dark text-light border-success h-100">
-
-                <div class="card-body text-center py-4">
-
-                    <i class="fa-solid fa-store fa-2x mb-3 text-warning"></i>
-
-                    <h5 class="mb-2">
-                        Tienda
-                    </h5>
-
-                    <p class="text-secondary small mb-0">
-                        Productos, inventario y finanzas independientes.
-                    </p>
-
-                </div>
-
-            </div>
-
-        </a>
-
-    </div>
-
-    <div class="col-md-6 col-lg-3">
-        <a href="{% url 'gestion:promociones_eventos' %}" class="text-decoration-none">
-            <div class="card bg-dark text-light border-warning h-100"><div class="card-body text-center py-4">
-                <i class="fa-solid fa-bullhorn fa-2x mb-3 text-warning"></i>
-                <h5 class="mb-2">Promociones y eventos</h5>
-                <p class="text-secondary small mb-0">Publicaciones, condiciones, cupos e inscripciones del home.</p>
-            </div></div>
-        </a>
-    </div>
-
-</div>
-
+<section class="config-section">
+  <div class="config-section-title"><span class="config-section-icon"><i class="fa-solid fa-store"></i></span><div><h3>Tienda</h3><p>Configuración independiente del módulo comercial.</p></div></div>
+  <div class="config-grid">
+    <a href="{% url 'tienda:configuracion' %}" class="config-option accent-store"><span class="config-option-icon"><i class="fa-solid fa-store"></i></span><span><h4>Configuración de tienda</h4><p>Productos, proveedores, inventario, compradores y finanzas.</p></span><i class="fa-solid fa-chevron-right config-option-arrow"></i></a>
+  </div>
+</section>
 {% endblock %}
