@@ -776,6 +776,19 @@ class CronometroLlavesPermisosTests(TestCase):
 
 
 class ModoTVTests(TestCase):
+    def test_tv_desconectada_puede_vincularse_de_nuevo_con_codigo(self):
+        from django.test import Client
+        self.client.force_login(self.staff)
+        self.client.get(reverse('gestion:control_tv'))
+        sesion = SesionTV.objects.get(propietario=self.staff)
+        url = reverse('gestion:accion_tv', args=[sesion.token])
+        self.client.post(url, {'action': 'mode', 'value': 'timer'})
+        self.client.post(url, {'action': 'disconnect'})
+        response = Client().post(reverse('gestion:vincular_tv'), {'codigo': sesion.codigo})
+        self.assertRedirects(response, reverse('gestion:pantalla_tv', args=[sesion.token]))
+        sesion.refresh_from_db()
+        self.assertEqual(sesion.estado['mode'], 'timer')
+
     def test_desconectar_y_reconectar_tv_conserva_la_sesion(self):
         self.client.force_login(self.staff)
         self.client.get(reverse('gestion:control_tv'))

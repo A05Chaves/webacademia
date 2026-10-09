@@ -4882,6 +4882,12 @@ def vincular_tv(request):
             expira_en__gt=timezone.now(),
         ).first()
         if sesion:
+            estado = {**estado_tv_inicial(), **(sesion.estado or {})}
+            if estado.get('mode') == 'disconnected':
+                modo = estado.get('mode_before_disconnect', 'overview')
+                estado['mode'] = modo if modo in {'overview', 'timer', 'bracket', 'training'} else 'overview'
+                sesion.estado = estado
+                sesion.save(update_fields=['estado', 'actualizada'])
             return redirect('gestion:pantalla_tv', token=sesion.token)
         error = 'El código no existe o ya venció.'
     return render(request, 'gestion/vincular_tv.html', {'error': error})

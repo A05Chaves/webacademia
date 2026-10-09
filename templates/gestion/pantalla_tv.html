@@ -111,6 +111,12 @@ function renderFighterName(side,label){
 }
 function render(d){
   const s=d.state,c=d.class;
+  if(s.mode==='disconnected'){
+    if(ytReady)ytPlayer.pauseVideo();
+    if(document.fullscreenElement&&document.exitFullscreen)document.exitFullscreen().catch(()=>{});
+    window.location.replace("{% url 'gestion:vincular_tv' %}");
+    return;
+  }
   $('disconnectedScreen').style.display=s.mode==='disconnected'?'flex':'none';
   $('trainingScreen').style.display=s.mode==='training'?'flex':'none';
   trainingState=s.mode==='training'?s.training:null;trainingReceivedAt=Date.now();trainingServerTime=Date.parse(d.server_time);renderTraining();
@@ -131,7 +137,7 @@ function render(d){
   $('bigTime').classList.toggle('ended',s.display_remaining===0);
   renderBracket(s.bracket);if(s.bracket?.type==='triangulation')renderTriangulation(s.bracket);syncYoutube(s);playEvent(s.mode==='training'?s.training?.sound_event:s.sound_event);
 }
-async function sync(){try{const r=await fetch(stateUrl,{cache:'no-store'});if(r.status===410){document.body.innerHTML='<h1 style="padding:10vw">SESIÓN TV VENCIDA</h1>';return}render(await r.json())}catch(e){}}
+async function sync(){try{const r=await fetch(stateUrl,{cache:'no-store'});if(r.status===410){window.location.replace("{% url 'gestion:vincular_tv' %}");return}render(await r.json())}catch(e){}}
 sync();setInterval(sync,500);
 </script>
 </body>
