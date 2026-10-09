@@ -4582,6 +4582,9 @@ def cronometro_lucha(request):
                             siguiente_combate = combates_disponibles[indice + 1]
                         break
     return render(request, 'gestion/cronometro_lucha.html', {
+        'sesion_entrenamiento_tv': (
+            _obtener_sesion_tv(request.user) if request.user.is_staff else None
+        ),
         'torneos_llaves': torneos,
         'evento_llaves': evento_seleccionado,
         'categorias_llaves': categorias_torneo,
@@ -4795,10 +4798,9 @@ def _crear_llave_tv(names, configured_size):
     return bracket
 
 
-@staff_member_required
-def control_tv(request):
+def _obtener_sesion_tv(usuario):
     sesion = SesionTV.objects.filter(
-        propietario=request.user,
+        propietario=usuario,
         activa=True,
         expira_en__gt=timezone.now(),
     ).first()
@@ -4808,12 +4810,18 @@ def control_tv(request):
             if not SesionTV.objects.filter(codigo=codigo).exists():
                 break
         sesion = SesionTV.objects.create(
-            propietario=request.user,
+            propietario=usuario,
             codigo=codigo,
             # La vigencia real termina al cerrar sesión. Esta fecha lejana se
             # conserva por compatibilidad con sesiones y migraciones anteriores.
             expira_en=timezone.now() + timedelta(days=3650),
         )
+    return sesion
+
+
+@staff_member_required
+def control_tv(request):
+    sesion = _obtener_sesion_tv(request.user)
     llaves_torneo_tv = []
     llaves_torneo_tv_data = []
     if request.user.is_superuser:
@@ -4897,8 +4905,28 @@ def accion_tv(request, token):
         estado['remaining'] = display_remaining
     accion = request.POST.get('action', '')
 
-    if accion == 'mode':
-        estado['mode'] = request.POST.get('value') if request.POST.get('value') in {'overview', 'timer', 'bracket'} else 'overview'
+    if accion == 'training_sync':
+        try:
+            datos = json.loads(request.POST.get('value', '{}'))
+            fase = datos.get('phase')
+            if fase not in {'stopped', 'preparation', 'round', 'rest', 'paused', 'ended'}:
+                raise ValueError
+            restante = max(0, min(86400, int(datos['remaining'])))
+            entrenamiento = {
+                'phase': fase,
+                'remaining': restante,
+                'round': max(1, min(10000, int(datos['round']))),
+                'rounds': max(0, min(10000, int(datos['rounds']))),
+                'running': bool(datos.get('running')),
+                'updated_at': timezone.now().isoformat(),
+                'sound_event': datos.get('sound_event'),
+            }
+        except (ValueError, TypeError, KeyError, AttributeError):
+            return JsonResponse({'error': 'Configuración de entrenamiento inválida.'}, status=400)
+        estado['training'] = entrenamiento
+        estado['mode'] = 'training'
+    elif accion == 'mode':
+        estado['mode'] = request.POST.get('value') if request.POST.get('value') in {'overview', 'timer', 'bracket', 'training'} else 'overview'
     elif accion == 'start' and estado['remaining'] > 0 and not estado['running']:
         inicio_nuevo = estado['remaining'] == estado['duration']
         if inicio_nuevo:

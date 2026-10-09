@@ -776,6 +776,31 @@ class CronometroLlavesPermisosTests(TestCase):
 
 
 class ModoTVTests(TestCase):
+    def test_entrenamiento_se_proyecta_y_pausa_sin_cambiar_marcador(self):
+        import json
+        self.client.force_login(self.staff)
+        self.client.get(reverse('gestion:cronometro_lucha'))
+        sesion = SesionTV.objects.get(propietario=self.staff)
+        url = reverse('gestion:accion_tv', args=[sesion.token])
+        datos = {'phase': 'round', 'remaining': 120, 'round': 2,
+                 'rounds': 5, 'running': True}
+        response = self.client.post(url, {
+            'action': 'training_sync', 'value': json.dumps(datos),
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['state']['mode'], 'training')
+        self.assertEqual(response.json()['state']['training']['round'], 2)
+        datos.update(phase='paused', running=False, remaining=90)
+        self.client.post(url, {'action': 'training_sync', 'value': json.dumps(datos)})
+        sesion.refresh_from_db()
+        self.assertEqual(sesion.estado['training']['remaining'], 90)
+        self.assertFalse(sesion.estado['training']['running'])
+        self.assertEqual(sesion.estado['red_points'], 0)
+        self.client.force_login(self.otro_staff)
+        self.assertEqual(self.client.post(url, {
+            'action': 'training_sync', 'value': json.dumps(datos),
+        }).status_code, 404)
+
     def setUp(self):
         self.staff = get_user_model().objects.create_user(
             username='profesor_tv', password='Clave123!', is_staff=True

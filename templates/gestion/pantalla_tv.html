@@ -17,6 +17,7 @@ body{background:var(--tv-bg);color:var(--tv-text)}.top{border-bottom:1px solid v
 .fighter{background:var(--tv-panel);border-bottom:5px solid var(--tv-bg)}.red .points{background:#a83246}.blue .points{background:#316f99}.extras{background:#eef1f3}.extra{border-color:#d8dde1}.tournament-stage{color:#bdc9d2}.timer-phase,.ended,.next-fight-tv{color:#d8bc72}
 .round-title{color:var(--tv-muted)}.match{background:var(--tv-panel);border-color:var(--tv-border)}.slot.winner{background:#315744;color:#d8f3e5}.slot.bye,.champion{color:#d8bc72}.youtube-float{border-color:var(--tv-border);box-shadow:0 12px 35px rgba(0,0,0,.55)}
 </style>
+<style>.training-screen{display:none;height:100%;align-items:center;justify-content:center;flex-direction:column;gap:20px;text-align:center}.training-time{font-size:clamp(100px,25vw,300px);font-weight:850;line-height:1;font-variant-numeric:tabular-nums}.training-label{font-size:clamp(28px,4vw,60px);font-weight:750}.training-round{font-size:clamp(22px,3vw,45px);color:var(--tv-muted)}</style>
 </head>
 <body>
 <div id="soundGate" class="sound-gate"><button onclick="enableSound()">🔊 Activar sonido y comenzar</button></div>
@@ -25,6 +26,7 @@ body{background:var(--tv-bg);color:var(--tv-text)}.top{border-bottom:1px solid v
 <div class="screen">
   <header class="top"><div class="brand">GALERAS BJJ</div><div id="clock" class="clock"></div></header>
   <main class="panel">
+    <section id="trainingScreen" class="training-screen"><div id="trainingLabel" class="training-label">ENTRENAMIENTO</div><div id="trainingTime" class="training-time">05:00</div><div id="trainingRound" class="training-round"></div></section>
     <section id="overview" class="overview"><div class="class-card"><div id="classStatus" class="status"></div><div id="classTitle" class="class-title"></div><div id="classMeta" class="meta"></div><div><span id="classTotal" class="count">0</span><span class="meta"> asistentes</span></div></div><div class="attendees"><h2>ESTUDIANTES CONFIRMADOS</h2><div id="names" class="names"></div></div></section>
     <section id="timer" class="timer"><div class="fighter red"><div id="redPoints" class="points">0</div><div class="extras"><div class="extra">VENTAJAS <b id="redAdvantages">0</b></div><div class="extra penalty">FALTAS <b id="redPenalties">0</b></div></div><div id="redName" class="fighter-name"></div></div><div class="fighter blue"><div id="bluePoints" class="points">0</div><div class="extras"><div class="extra">VENTAJAS <b id="blueAdvantages">0</b></div><div class="extra penalty">FALTAS <b id="bluePenalties">0</b></div></div><div id="blueName" class="fighter-name"></div></div><div id="nextFightTV" class="next-fight-tv"></div><div id="tournamentStage" class="tournament-stage"></div><div id="timerPhase" class="timer-phase"></div><div id="bigTime" class="big-time">05:00</div></section>
     <section id="bracket" class="bracket"><div id="bracketBoard" class="bracket-board"></div></section>
@@ -37,6 +39,9 @@ const stateUrl="{% url 'gestion:estado_tv' sesion_tv.token %}";
 const $=id=>document.getElementById(id);
 const fmt=s=>`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
 let soundEnabled=false,lastSound=null,audioContext=null,ytPlayer=null,ytReady=false,lastYoutubeCommand=null,lastVideoId=null,pendingState=null;
+let trainingState=null,trainingReceivedAt=0,trainingServerTime=0;
+function renderTraining(){if(!trainingState)return;const t=trainingState;const elapsed=t.running?Math.max(0,(trainingServerTime+Date.now()-trainingReceivedAt-Date.parse(t.updated_at))/1000):0;const seconds=Math.max(0,Math.ceil(t.remaining-elapsed));$('trainingTime').textContent=fmt(seconds);$('trainingLabel').textContent=({stopped:'LISTO PARA ENTRENAR',preparation:'PREPARACIÓN',round:'ENTRENAMIENTO',rest:'DESCANSO',paused:'PAUSADO',ended:'FINALIZADO'})[t.phase]||'ENTRENAMIENTO';$('trainingRound').textContent=`RONDA ${t.round}${t.rounds?' / '+t.rounds:' · SIN LÍMITE'}`;}
+setInterval(renderTraining,200);
 
 function onYouTubeIframeAPIReady(){
   ytPlayer=new YT.Player('youtubePlayer',{height:'100%',width:'100%',playerVars:{playsinline:1,rel:0,controls:1},events:{onReady:()=>{ytReady=true;if(pendingState)syncYoutube(pendingState)}}});
@@ -100,6 +105,8 @@ function renderFighterName(side,label){
 }
 function render(d){
   const s=d.state,c=d.class;
+  $('trainingScreen').style.display=s.mode==='training'?'flex':'none';
+  trainingState=s.mode==='training'?s.training:null;trainingReceivedAt=Date.now();trainingServerTime=Date.parse(d.server_time);renderTraining();
   $('clock').textContent=new Date(d.server_time).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
   $('overview').style.display=s.mode==='overview'?'grid':'none';
   $('timer').style.display=s.mode==='timer'?'block':'none';
@@ -115,7 +122,7 @@ function render(d){
   $('tournamentStage').textContent=s.active_match?.round_name||'';
   $('bigTime').textContent=fmt(s.display_remaining);
   $('bigTime').classList.toggle('ended',s.display_remaining===0);
-  renderBracket(s.bracket);if(s.bracket?.type==='triangulation')renderTriangulation(s.bracket);syncYoutube(s);playEvent(s.sound_event);
+  renderBracket(s.bracket);if(s.bracket?.type==='triangulation')renderTriangulation(s.bracket);syncYoutube(s);playEvent(s.mode==='training'?s.training?.sound_event:s.sound_event);
 }
 async function sync(){try{const r=await fetch(stateUrl,{cache:'no-store'});if(r.status===410){document.body.innerHTML='<h1 style="padding:10vw">SESIÓN TV VENCIDA</h1>';return}render(await r.json())}catch(e){}}
 sync();setInterval(sync,500);

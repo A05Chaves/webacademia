@@ -447,6 +447,12 @@
 <div class="fight-timer-page">
 
     <div class="fight-tools-nav">
+        {% if sesion_entrenamiento_tv %}
+        <button type="button" onclick="projectTraining()"><i class="fa-solid fa-tv"></i> Proyectar entrenamiento</button>
+        <a class="btn btn-outline-info" href="{% url 'gestion:pantalla_tv' sesion_entrenamiento_tv.token %}" target="_blank">Abrir TV · {{ sesion_entrenamiento_tv.codigo }}</a>
+        <span id="trainingTVStatus" role="status"></span>
+        <form hidden>{% csrf_token %}</form>
+        {% endif %}
         <button id="timerTab" class="active" type="button" onclick="showTool('timer')"><i class="fa-solid fa-stopwatch"></i> Cronómetro</button>
         {% if request.user.is_superuser %}
         <button id="bracketTab" type="button" onclick="showTool('bracket')"><i class="fa-solid fa-sitemap"></i> Llaves</button>
@@ -672,6 +678,33 @@
 
     let currentTotal = duration;
     let audioContext = null;
+    let trainingProjected = false, trainingSignature = '', trainingSound = null;
+    let trainingSending = false, trainingPending = null;
+    {% if sesion_entrenamiento_tv %}
+    const trainingActionUrl = "{% url 'gestion:accion_tv' sesion_entrenamiento_tv.token %}";
+    async function publishTraining(force=false) {
+        if (!trainingProjected || activeMatch) return;
+        const phase = paused ? 'paused' : finished ? 'ended' : countdown ? 'preparation' : resting ? 'rest' : running ? 'round' : 'stopped';
+        const signature = JSON.stringify([phase,currentRound,rounds,duration,rest,phaseEndsAt,trainingSound]);
+        if (!force && signature === trainingSignature) return;
+        trainingSignature = signature;
+        trainingPending = {phase,round:currentRound,rounds,running,remaining:countdown?countdownRemaining:remaining,sound_event:trainingSound};
+        if (trainingSending) return;
+        trainingSending = true;
+        try {
+            while (trainingPending) {
+                const payload=trainingPending; trainingPending=null;
+                const response=await fetch(trainingActionUrl,{method:'POST',headers:{'X-CSRFToken':document.querySelector('[name=csrfmiddlewaretoken]').value,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({action:'training_sync',value:JSON.stringify(payload)})});
+                if(!response.ok) throw new Error('No se pudo sincronizar el entrenamiento.');
+                document.getElementById('trainingTVStatus').textContent='Entrenamiento proyectado';
+            }
+        } catch(error) { trainingSignature=''; document.getElementById('trainingTVStatus').textContent=error.message; }
+        finally { trainingSending=false; }
+    }
+    function projectTraining() { if(activeMatch){alert('Finaliza el combate para proyectar el entrenamiento.');return;} trainingProjected=true;publishTraining(true); }
+    {% else %}
+    function publishTraining() {}
+    {% endif %}
 
     function formatTime(seconds) {
         const safeSeconds = Math.max(0, seconds);
@@ -705,6 +738,7 @@
     }
 
     function campana() {
+        trainingSound = {type:'bell',id:String(Date.now())};
         const bellOriginal = document.getElementById('bellSound');
 
         if (!bellOriginal) {
@@ -744,6 +778,7 @@
     }
 
     function palmasTresVeces() {
+        trainingSound = {type:'claps',id:String(Date.now())};
         const clapOriginal = document.getElementById('clapSound');
 
         if (!clapOriginal) {
@@ -842,6 +877,7 @@
         }
 
         updateProgress();
+        publishTraining();
     }
 
     function startInterval() {

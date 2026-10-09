@@ -38,6 +38,7 @@ body[data-theme="light"] .tv-control{--tv-accent:#2f6fa8;--tv-panel:rgba(255,255
 </div>
 {{ llaves_torneo_tv_data|json_script:"savedBracketsData" }}
 <script>
+const trainingButton=document.createElement('a');trainingButton.className='btn btn-dark';trainingButton.href="{% url 'gestion:cronometro_lucha' %}";trainingButton.textContent='Cronómetro de entrenamiento';document.querySelector('.tv-control .control-row').appendChild(trainingButton);
 const actionUrl="{% url 'gestion:accion_tv' sesion_tv.token %}",stateUrl="{% url 'gestion:estado_tv' sesion_tv.token %}";
 const savedBrackets=JSON.parse(document.getElementById('savedBracketsData')?.textContent||'[]');
 let currentNextFight=null,currentBracketType=null,currentBracket=null,editingBracket=false;
