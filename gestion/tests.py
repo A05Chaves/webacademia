@@ -124,6 +124,42 @@ class FormatoFiltrosFinancierosTests(TestCase):
         self.assertNotContains(response, 'value="2.026"')
 
 
+class DashboardSaldosPorCuentaTests(TestCase):
+    def setUp(self):
+        administrador = get_user_model().objects.create_user(
+            username='admin_saldos_dashboard',
+            password='ClaveSegura789!',
+            is_staff=True,
+        )
+        self.client.force_login(administrador)
+
+    def test_muestra_el_saldo_calculado_de_cada_cuenta_activa(self):
+        cuenta = CuentaFinanciera.objects.create(
+            nombre='Caja principal pruebas',
+            tipo=CuentaFinanciera.Tipos.EFECTIVO,
+            saldo_inicial='1500000.00',
+        )
+        MovimientoFinanciero.objects.create(
+            cuenta=cuenta,
+            tipo=MovimientoFinanciero.Tipos.INGRESO,
+            concepto='Ingreso de prueba',
+            valor='60000.00',
+        )
+        MovimientoFinanciero.objects.create(
+            cuenta=cuenta,
+            tipo=MovimientoFinanciero.Tipos.EGRESO,
+            concepto='Egreso de prueba',
+            valor='10000.00',
+        )
+
+        response = self.client.get(reverse('gestion:dashboard'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Saldos actuales por cuenta')
+        self.assertContains(response, 'Caja principal pruebas')
+        self.assertContains(response, '$ 1.550.000,00')
+
+
 class RegistroGastoCategoriaTests(TestCase):
     def setUp(self):
         administrador = get_user_model().objects.create_user(

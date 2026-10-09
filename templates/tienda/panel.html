@@ -21,6 +21,13 @@
   .store-metric-card .card-body { display:flex; flex-direction:column; justify-content:space-between; min-width:0; padding:20px !important; }
   .store-metric-label { color:var(--text-secondary); font-size:.86rem; font-weight:700; }
   .store-metric-value { font-size:clamp(1.1rem, 1.45vw, 1.45rem); font-weight:700; letter-spacing:-.025em; line-height:1.15; white-space:nowrap; }
+  .store-account-grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); margin-bottom:24px; }
+  .store-account-card { background:var(--card-bg); border:1px solid var(--border-color); border-radius:15px; min-width:0; padding:17px 18px; }
+  .store-account-top { align-items:center; display:flex; gap:10px; justify-content:space-between; }
+  .store-account-name { font-size:.92rem; font-weight:700; overflow-wrap:anywhere; }
+  .store-account-badge { border-radius:999px; flex:0 0 auto; font-size:.7rem; font-weight:800; padding:4px 8px; }
+  .store-account-value { font-size:clamp(1.22rem, 1.7vw, 1.65rem); font-weight:800; letter-spacing:-.025em; margin:12px 0 5px; white-space:nowrap; }
+  .store-account-type { color:var(--text-secondary); font-size:.78rem; }
   .store-filter .card-body { padding:20px !important; }
   .store-activity-table th { min-width:150px; }
   @media (max-width:1199.98px) { .store-toolbar { grid-template-columns:repeat(3, minmax(0, 1fr)); } }
@@ -70,6 +77,22 @@
   <div class="col-sm-4"><label class="form-label">Hasta</label><input type="date" name="hasta" value="{{ hasta|date:'Y-m-d' }}" class="form-control"></div>
   <div class="col-sm-4"><button class="btn btn-primary w-100"><i class="fa-solid fa-filter"></i> Aplicar período</button></div>
 </div></form>
+
+<div class="store-section-heading"><div><h3><i class="fa-solid fa-building-columns text-success me-1"></i> Saldos por cuenta</h3><p>Dinero disponible en cada cuenta activa de la tienda.</p></div></div>
+<div class="store-account-grid" aria-label="Saldos actuales por cuenta de tienda">
+  {% for cuenta in cuentas_activas %}
+  <article class="store-account-card">
+    <div class="store-account-top">
+      <div class="store-account-name">{{ cuenta.nombre }}</div>
+      <span class="store-account-badge {% if cuenta.moneda == 'COP' %}bg-primary{% else %}bg-success{% endif %}">{{ cuenta.moneda }}</span>
+    </div>
+    <div class="store-account-value {% if cuenta.saldo_calculado < 0 %}text-danger{% else %}text-success{% endif %}">{% if cuenta.moneda == 'USD' %}US${% else %}${% endif %} {{ cuenta.saldo_calculado|floatformat:2 }}</div>
+    <div class="store-account-type">{{ cuenta.get_tipo_display }} · Cuenta activa</div>
+  </article>
+  {% empty %}
+  <article class="store-account-card"><span class="text-secondary">No hay cuentas activas configuradas en la tienda.</span></article>
+  {% endfor %}
+</div>
 
 <div class="store-section-heading"><div><h3><i class="fa-solid fa-coins text-warning me-1"></i> Resumen por moneda</h3><p>COP y USD se muestran por separado y no se convierten entre sí.</p></div></div>
 

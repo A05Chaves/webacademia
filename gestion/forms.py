@@ -2181,6 +2181,25 @@ class ConfiguracionHomeForm(forms.ModelForm):
             'playlist_youtube_url': 'Pegue una playlist real de YouTube. No use enlaces Radio/Mix.',
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['publicidad_tienda_titulo'].required = False
+        self.fields['orden_publicidad_tienda'].required = False
+
+    def clean_publicidad_tienda_titulo(self):
+        titulo = (self.cleaned_data.get('publicidad_tienda_titulo') or '').strip()
+        return (
+            titulo
+            or getattr(self.instance, 'publicidad_tienda_titulo', '')
+            or 'Tienda Bross Fight Sports'
+        )
+
+    def clean_orden_publicidad_tienda(self):
+        orden = self.cleaned_data.get('orden_publicidad_tienda')
+        if orden is not None:
+            return orden
+        return getattr(self.instance, 'orden_publicidad_tienda', 8) or 8
+
 
 # FORMULARIO PARA CONFIGURACION DE NOTIFICACIONES
 

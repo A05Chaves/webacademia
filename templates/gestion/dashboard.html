@@ -52,6 +52,21 @@
         justify-content: center; width: 44px;
     }
     .chart-container { height: 280px; position: relative; width: 100%; }
+    .account-balances-grid {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        margin-bottom: 22px;
+    }
+    .account-balance-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 15px;
+        padding: 15px 17px;
+    }
+    .account-balance-name { color: var(--text-secondary); font-size: .8rem; font-weight: 750; }
+    .account-balance-value { font-size: 1.25rem; font-weight: 800; margin-top: 5px; overflow-wrap: anywhere; }
+    .account-balance-type { color: var(--text-secondary); font-size: .75rem; margin-top: 3px; }
     @media (max-width: 1199.98px) {
         .dashboard-toolbar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     }
@@ -181,6 +196,18 @@
     <div class="col-sm-6 col-xl-3"><div class="card bg-dark text-light border-info dashboard-metric-card"><div class="card-body"><div class="dashboard-metric-label">Ingresos del mes</div><div class="dashboard-metric-value text-success">$ {{ ingresos_mes|floatformat:"2g" }}</div><small>Sin transferencias internas</small></div></div></div>
     <div class="col-sm-6 col-xl-3"><div class="card bg-dark text-light border-danger dashboard-metric-card"><div class="card-body"><div class="dashboard-metric-label">Gastos del mes</div><div class="dashboard-metric-value text-danger">$ {{ gastos_mes|floatformat:"2g" }}</div><small>Sin transferencias internas</small></div></div></div>
     <div class="col-sm-6 col-xl-3"><div class="card bg-dark text-light {% if utilidad_mes >= 0 %}border-success{% else %}border-danger{% endif %} dashboard-metric-card"><div class="card-body"><div class="dashboard-metric-label">Resultado del mes</div><div class="dashboard-metric-value {% if utilidad_mes >= 0 %}text-success{% else %}text-danger{% endif %}">$ {{ utilidad_mes|floatformat:"2g" }}</div><small>Ingresos menos gastos</small></div></div></div>
+</div>
+
+<div class="account-balances-grid" aria-label="Saldos actuales por cuenta">
+    {% for cuenta in cuentas_financieras %}
+    <article class="account-balance-card">
+        <div class="account-balance-name"><i class="fa-solid fa-building-columns me-1"></i>{{ cuenta.nombre }}</div>
+        <div class="account-balance-value {% if cuenta.saldo_calculado < 0 %}text-danger{% else %}text-success{% endif %}">$ {{ cuenta.saldo_calculado|floatformat:"2g" }}</div>
+        <div class="account-balance-type">{{ cuenta.get_tipo_display }} · Cuenta activa</div>
+    </article>
+    {% empty %}
+    <article class="account-balance-card"><div class="text-secondary">No hay cuentas financieras activas.</div></article>
+    {% endfor %}
 </div>
 
 <div class="dashboard-section-heading">

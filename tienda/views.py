@@ -484,6 +484,11 @@ def _resumen_moneda(moneda, desde, hasta):
 def panel(request):
     desde, hasta = _rango_fechas(request)
     resumenes = [_resumen_moneda(moneda, desde, hasta) for moneda in (Monedas.COP, Monedas.USD)]
+    cuentas_activas = list(
+        CuentaTienda.objects.filter(activa=True).order_by('moneda', 'nombre')
+    )
+    for cuenta in cuentas_activas:
+        cuenta.saldo_calculado = cuenta.saldo_actual
     productos_bajo_stock_qs = ProductoTienda.objects.filter(
         activo=True, stock_minimo__gt=0, stock__lte=models_f_stock_minimo()
     ).select_related('categoria', 'subcategoria')
@@ -546,6 +551,7 @@ def panel(request):
     cop = resumenes[0]
     return render(request, 'tienda/panel.html', {
         'resumenes': resumenes,
+        'cuentas_activas': cuentas_activas,
         'desde': desde, 'hasta': hasta,
         'productos_bajo_stock': productos_bajo_stock,
         'cantidad_productos_bajo_stock': cantidad_productos_bajo_stock,

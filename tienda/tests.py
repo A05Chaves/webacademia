@@ -643,6 +643,36 @@ class TiendaTests(TestCase):
 
         self.assertContains(response, '$ 200.000,00')
 
+    def test_dashboard_muestra_saldo_individual_de_cuentas_activas(self):
+        MovimientoTienda.objects.create(
+            cuenta=self.cuenta,
+            tipo=MovimientoTienda.Tipos.INGRESO,
+            origen=MovimientoTienda.Origenes.OTRO_INGRESO,
+            concepto='Ingreso de prueba',
+            valor='60000.00',
+        )
+        MovimientoTienda.objects.create(
+            cuenta=self.cuenta,
+            tipo=MovimientoTienda.Tipos.EGRESO,
+            origen=MovimientoTienda.Origenes.GASTO,
+            concepto='Gasto de prueba',
+            valor='10000.00',
+        )
+        cuenta_inactiva = CuentaTienda.objects.create(
+            nombre='Caja anterior',
+            tipo=CuentaTienda.Tipos.EFECTIVO,
+            saldo_inicial='900000.00',
+            activa=False,
+        )
+
+        response = self.client.get(reverse('tienda:panel'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Saldos actuales por cuenta de tienda')
+        self.assertContains(response, self.cuenta.nombre)
+        self.assertContains(response, '$ 250.000,00')
+        self.assertNotContains(response, cuenta_inactiva.nombre)
+
     def test_categoria_tienda_es_independiente_y_conserva_movimientos(self):
         categoria = CategoriaMovimientoTienda.objects.create(
             nombre='Donaciones tienda pruebas',
