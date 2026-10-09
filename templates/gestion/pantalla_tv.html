@@ -26,6 +26,7 @@ body{background:var(--tv-bg);color:var(--tv-text)}.top{border-bottom:1px solid v
 <div class="screen">
   <header class="top"><div class="brand">GALERAS BJJ</div><div id="clock" class="clock"></div></header>
   <main class="panel">
+    <section id="disconnectedScreen" class="training-screen"><div class="training-label">PROYECCIÓN DESCONECTADA</div><p>Selecciona un contenido desde el control de Modo TV o pulsa Proyectar entrenamiento en el cronómetro de Home.</p></section>
     <section id="trainingScreen" class="training-screen"><div id="trainingLabel" class="training-label">ENTRENAMIENTO</div><div id="trainingTime" class="training-time">05:00</div><div id="trainingRound" class="training-round"></div></section>
     <section id="overview" class="overview"><div class="class-card"><div id="classStatus" class="status"></div><div id="classTitle" class="class-title"></div><div id="classMeta" class="meta"></div><div><span id="classTotal" class="count">0</span><span class="meta"> asistentes</span></div></div><div class="attendees"><h2>ESTUDIANTES CONFIRMADOS</h2><div id="names" class="names"></div></div></section>
     <section id="timer" class="timer"><div class="fighter red"><div id="redPoints" class="points">0</div><div class="extras"><div class="extra">VENTAJAS <b id="redAdvantages">0</b></div><div class="extra penalty">FALTAS <b id="redPenalties">0</b></div></div><div id="redName" class="fighter-name"></div></div><div class="fighter blue"><div id="bluePoints" class="points">0</div><div class="extras"><div class="extra">VENTAJAS <b id="blueAdvantages">0</b></div><div class="extra penalty">FALTAS <b id="bluePenalties">0</b></div></div><div id="blueName" class="fighter-name"></div></div><div id="nextFightTV" class="next-fight-tv"></div><div id="tournamentStage" class="tournament-stage"></div><div id="timerPhase" class="timer-phase"></div><div id="bigTime" class="big-time">05:00</div></section>
@@ -33,6 +34,7 @@ body{background:var(--tv-bg);color:var(--tv-text)}.top{border-bottom:1px solid v
   </main>
 </div>
 <div id="youtubeFloat" class="youtube-float hidden"><div class="youtube-label">YOUTUBE</div><div id="youtubePlayer"></div></div>
+<div id="youtubeError" role="alert" style="display:none;position:fixed;bottom:18px;left:18px;z-index:20;background:#752b35;color:white;padding:15px;border-radius:12px;max-width:45vw"></div>
 <script src="https://www.youtube.com/iframe_api"></script>
 <script>
 const stateUrl="{% url 'gestion:estado_tv' sesion_tv.token %}";
@@ -44,7 +46,7 @@ function renderTraining(){if(!trainingState)return;const t=trainingState;const e
 setInterval(renderTraining,200);
 
 function onYouTubeIframeAPIReady(){
-  ytPlayer=new YT.Player('youtubePlayer',{height:'100%',width:'100%',playerVars:{playsinline:1,rel:0,controls:1},events:{onReady:()=>{ytReady=true;if(pendingState)syncYoutube(pendingState)}}});
+  ytPlayer=new YT.Player('youtubePlayer',{height:'100%',width:'100%',playerVars:{playsinline:1,rel:0,controls:1,origin:location.origin},events:{onReady:()=>{ytReady=true;if(pendingState)syncYoutube(pendingState)},onError:e=>{const notice=$('youtubeError');notice.textContent=({100:'Este video no está disponible o es privado.',101:'YouTube no permite reproducir este video en la aplicación.',150:'YouTube no permite reproducir este video en la aplicación.',153:'YouTube no pudo verificar el reproductor.'})[e.data]||'No se pudo reproducir el contenido de YouTube. Prueba otro video o revisa la lista.';notice.style.display='block'},onStateChange:e=>{if(e.data===1)$('youtubeError').style.display='none'}}});
 }
 async function enableSound(){
   soundEnabled=true;
@@ -55,19 +57,23 @@ async function enableSound(){
   $('soundGate').style.display='none';
 }
 function fallbackSound(type){if(!audioContext)return;const count=type==='claps'?3:1;for(let i=0;i<count;i++){const o=audioContext.createOscillator(),g=audioContext.createGain(),t=audioContext.currentTime+i*.22;o.frequency.value=type==='claps'?1500:850;g.gain.setValueAtTime(.5,t);g.gain.exponentialRampToValueAtTime(.001,t+.18);o.connect(g);g.connect(audioContext.destination);o.start(t);o.stop(t+.18)}}
-function playEvent(e){if(!soundEnabled||!e||e.id===lastSound)return;lastSound=e.id;const audio=$(e.type==='claps'?'claps':'bell');audio.currentTime=0;audio.play().catch(()=>fallbackSound(e.type))}
+const tvSoundNodes=new Map();
+function playEvent(e){if(!soundEnabled||!e||e.id===lastSound)return;lastSound=e.id;const audio=$(e.type==='claps'?'claps':'bell');const volume=pendingState?.mode==='training'?(pendingState.training?.bell_volume??100):100;if(!tvSoundNodes.has(audio)){const source=audioContext.createMediaElementSource(audio),gain=audioContext.createGain();source.connect(gain);gain.connect(audioContext.destination);tvSoundNodes.set(audio,gain)}tvSoundNodes.get(audio).gain.value=volume/100;audio.currentTime=0;audio.play().catch(()=>fallbackSound(e.type))}
 function syncYoutube(s){
   pendingState=s;
   const box=$('youtubeFloat');
-  box.classList.toggle('hidden',!s.youtube_visible||!s.youtube_video_id);
+  box.classList.toggle('hidden',!s.youtube_visible||(!s.youtube_video_id&&!s.youtube_playlist_id));
   box.classList.toggle('large',s.youtube_size==='large');
-  if(!ytReady||!s.youtube_video_id)return;
-  if(lastVideoId!==s.youtube_video_id){ytPlayer.cueVideoById(s.youtube_video_id);lastVideoId=s.youtube_video_id}
+  if(!ytReady||(!s.youtube_video_id&&!s.youtube_playlist_id))return;
+  const contentId=s.youtube_playlist_id?'playlist:'+s.youtube_playlist_id:s.youtube_video_id;
+  if(lastVideoId!==contentId){if(s.youtube_playlist_id){ytPlayer.cuePlaylist({list:s.youtube_playlist_id,listType:'playlist'})}else{ytPlayer.cueVideoById(s.youtube_video_id)}lastVideoId=contentId}
   ytPlayer.setVolume(s.youtube_volume??35);
   const command=s.youtube_command;
   if(!command||command.id===lastYoutubeCommand)return;
   lastYoutubeCommand=command.id;
-  if(command.type==='load'){ytPlayer.loadVideoById(s.youtube_video_id)}
+  if(command.type==='load'){if(s.youtube_playlist_id){ytPlayer.loadPlaylist({list:s.youtube_playlist_id,listType:'playlist'})}else{ytPlayer.loadVideoById(s.youtube_video_id)}}
+  if(command.type==='next')ytPlayer.nextVideo();
+  if(command.type==='previous')ytPlayer.previousVideo();
   if(command.type==='play')ytPlayer.playVideo();
   if(command.type==='pause')ytPlayer.pauseVideo();
   if(command.type==='stop')ytPlayer.stopVideo();
@@ -105,6 +111,7 @@ function renderFighterName(side,label){
 }
 function render(d){
   const s=d.state,c=d.class;
+  $('disconnectedScreen').style.display=s.mode==='disconnected'?'flex':'none';
   $('trainingScreen').style.display=s.mode==='training'?'flex':'none';
   trainingState=s.mode==='training'?s.training:null;trainingReceivedAt=Date.now();trainingServerTime=Date.parse(d.server_time);renderTraining();
   $('clock').textContent=new Date(d.server_time).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});

@@ -449,6 +449,7 @@
     <div class="fight-tools-nav">
         {% if sesion_entrenamiento_tv %}
         <button type="button" onclick="projectTraining()"><i class="fa-solid fa-tv"></i> Proyectar entrenamiento</button>
+        <button type="button" onclick="disconnectTraining()"><i class="fa-solid fa-link-slash"></i> Desconectar TV</button>
         <a class="btn btn-outline-info" href="{% url 'gestion:pantalla_tv' sesion_entrenamiento_tv.token %}" target="_blank">Abrir TV · {{ sesion_entrenamiento_tv.codigo }}</a>
         <span id="trainingTVStatus" role="status"></span>
         <form hidden>{% csrf_token %}</form>
@@ -460,6 +461,7 @@
     </div>
 
     <div id="timerPanel" class="tool-panel">
+    {% include 'gestion/cronometro_musica.html' %}
 
     <div id="timerShell" class="fight-timer-shell timer-state-stopped">
 
@@ -678,30 +680,40 @@
 
     let currentTotal = duration;
     let audioContext = null;
+    let bellVolume = Math.max(0,Math.min(200,Number(localStorage.getItem('timerBellVolume')??100)));
+    function setBellVolume(value){bellVolume=Number(value);localStorage.setItem('timerBellVolume',String(bellVolume));document.getElementById('bellVolumeValue').textContent=bellVolume+'%';publishTraining(true);}
+    function playTimerSound(audio){
+        if(!audioContext) iniciarAudio();
+        const source=audioContext.createMediaElementSource(audio),gain=audioContext.createGain();
+        gain.gain.value=bellVolume/100;source.connect(gain);gain.connect(audioContext.destination);
+        audio.onended=()=>{source.disconnect();gain.disconnect();};audio.play().catch(()=>{source.disconnect();gain.disconnect();});
+    }
     let trainingProjected = false, trainingSignature = '', trainingSound = null;
     let trainingSending = false, trainingPending = null;
     {% if sesion_entrenamiento_tv %}
     const trainingActionUrl = "{% url 'gestion:accion_tv' sesion_entrenamiento_tv.token %}";
-    async function publishTraining(force=false) {
+    async function publishTraining(force=false,claim=false) {
         if (!trainingProjected || activeMatch) return;
         const phase = paused ? 'paused' : finished ? 'ended' : countdown ? 'preparation' : resting ? 'rest' : running ? 'round' : 'stopped';
         const signature = JSON.stringify([phase,currentRound,rounds,duration,rest,phaseEndsAt,trainingSound]);
         if (!force && signature === trainingSignature) return;
         trainingSignature = signature;
-        trainingPending = {phase,round:currentRound,rounds,running,remaining:countdown?countdownRemaining:remaining,sound_event:trainingSound};
+        trainingPending = {phase,round:currentRound,rounds,running,remaining:countdown?countdownRemaining:remaining,sound_event:trainingSound,bell_volume:bellVolume,claim};
         if (trainingSending) return;
         trainingSending = true;
         try {
             while (trainingPending) {
                 const payload=trainingPending; trainingPending=null;
-                const response=await fetch(trainingActionUrl,{method:'POST',headers:{'X-CSRFToken':document.querySelector('[name=csrfmiddlewaretoken]').value,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({action:'training_sync',value:JSON.stringify(payload)})});
+                const response=await fetch(trainingActionUrl,{method:'POST',headers:{'X-CSRFToken':document.querySelector('[name=csrfmiddlewaretoken]').value,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({action:'training_sync',value:JSON.stringify(payload),claim:payload.claim?'1':'0'})});
+                if(response.status===409){trainingProjected=false;trainingPending=null;throw new Error('TV desconectada o controlada desde otro modo. Pulsa Proyectar entrenamiento.');}
                 if(!response.ok) throw new Error('No se pudo sincronizar el entrenamiento.');
                 document.getElementById('trainingTVStatus').textContent='Entrenamiento proyectado';
             }
         } catch(error) { trainingSignature=''; document.getElementById('trainingTVStatus').textContent=error.message; }
         finally { trainingSending=false; }
     }
-    function projectTraining() { if(activeMatch){alert('Finaliza el combate para proyectar el entrenamiento.');return;} trainingProjected=true;publishTraining(true); }
+    async function projectTraining() { if(activeMatch){alert('Finaliza el combate para proyectar el entrenamiento.');return;} trainingProjected=true;await publishTraining(true,true);if(trainingProjected&&timerMusicLoaded)loadTimerYoutube(); }
+    async function disconnectTraining(){trainingProjected=false;trainingPending=null;while(trainingSending)await new Promise(resolve=>setTimeout(resolve,50));try{const response=await fetch(trainingActionUrl,{method:'POST',headers:{'X-CSRFToken':document.querySelector('[name=csrfmiddlewaretoken]').value,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({action:'disconnect'})});if(!response.ok)throw new Error('No se pudo desconectar la TV.');document.getElementById('trainingTVStatus').textContent='TV desconectada';}catch(error){document.getElementById('trainingTVStatus').textContent=error.message;}}
     {% else %}
     function publishTraining() {}
     {% endif %}
@@ -750,9 +762,7 @@
         bell.volume = 1;
         bell.currentTime = 0;
 
-        bell.play().catch(function(error) {
-            console.log('No se pudo reproducir campana:', error);
-        });
+        playTimerSound(bell);
     }
 
     function tonoCorto() {
@@ -790,9 +800,7 @@
         clap.volume = 1;
         clap.currentTime = 0;
 
-        clap.play().catch(function(error) {
-            console.log('No se pudo reproducir palmas:', error);
-        });
+        playTimerSound(clap);
     }
 
     function setVisualState(state) {
@@ -1698,4 +1706,30 @@
     setInterval(updateClock, 1000);
 </script>
 
+<script>
+document.getElementById('timerBellVolume').value=bellVolume;
+document.getElementById('bellVolumeValue').textContent=bellVolume+'%';
+let timerPlayer=null,timerMusicLoaded=false,timerMusicReady=false,pendingMusicUrl=null;
+function onYouTubeIframeAPIReady(){timerPlayer=new YT.Player('timerMusicPlayer',{width:'100%',height:'270',playerVars:{playsinline:1,origin:location.origin},events:{onReady:()=>{timerMusicReady=true;timerPlayer.setVolume(Number(document.getElementById('timerMusicVolume').value));if(pendingMusicUrl)loadTimerYoutube();},onError:()=>{document.getElementById('timerMusicStatus').textContent='YouTube no pudo reproducir este contenido. Puede estar restringido, privado o no disponible.';}}});}
+async function sendTimerMusic(action,value=''){
+    {% if sesion_entrenamiento_tv %}
+    const response=await fetch(trainingActionUrl,{method:'POST',headers:{'X-CSRFToken':document.querySelector('[name=csrfmiddlewaretoken]').value,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({action:'youtube_'+action,value})});
+    const data=await response.json();if(!response.ok)throw new Error(data.error||'No se pudo controlar la música de la TV.');
+    {% endif %}
+}
+async function loadTimerYoutube(){
+    const value=document.getElementById('timerYoutubeUrl').value.trim(),status=document.getElementById('timerMusicStatus');
+    try{
+        const url=new URL(value);if(!['youtube.com','www.youtube.com','m.youtube.com','music.youtube.com','youtu.be'].includes(url.hostname))throw new Error('Ingresa un enlace de YouTube.');
+        const playlist=url.searchParams.get('list'),video=url.hostname==='youtu.be'?url.pathname.slice(1).split('/')[0]:url.searchParams.get('v')||url.pathname.split('/')[2];
+        if(!playlist&&!/^[\w-]{11}$/.test(video||''))throw new Error('El enlace no contiene un video o lista válida.');
+        if(trainingProjected){if(timerMusicReady)timerPlayer.pauseVideo();document.getElementById('timerMusicBox').hidden=true;await sendTimerMusic('load',value);await sendTimerMusic('volume',document.getElementById('timerMusicVolume').value);status.textContent='Música cargada en la TV.';}
+        else {pendingMusicUrl=value;document.getElementById('timerMusicBox').hidden=false;if(!timerMusicReady){status.textContent='Preparando reproductor de YouTube…';return;}if(playlist)timerPlayer.loadPlaylist({list:playlist,listType:'playlist'});else timerPlayer.loadVideoById(video);pendingMusicUrl=null;status.textContent='Música cargada en este dispositivo.';}
+        timerMusicLoaded=true;
+    }catch(error){status.textContent=error.message;}
+}
+async function timerMusicCommand(command){try{if(trainingProjected)await sendTimerMusic(command);else if(timerMusicReady){({play:()=>timerPlayer.playVideo(),pause:()=>timerPlayer.pauseVideo(),next:()=>timerPlayer.nextVideo(),previous:()=>timerPlayer.previousVideo()})[command]();}}catch(error){document.getElementById('timerMusicStatus').textContent=error.message;}}
+async function setTimerMusicVolume(value){if(timerMusicReady)timerPlayer.setVolume(Number(value));if(trainingProjected){try{await sendTimerMusic('volume',value);}catch(error){document.getElementById('timerMusicStatus').textContent=error.message;}}}
+</script>
+<script src="https://www.youtube.com/iframe_api"></script>
 {% endblock %}

@@ -776,6 +776,29 @@ class CronometroLlavesPermisosTests(TestCase):
 
 
 class ModoTVTests(TestCase):
+    def test_youtube_admite_lista_y_video_y_conserva_lista_al_reiniciar(self):
+        from gestion.models import ConfiguracionHome
+        enlace = 'https://www.youtube.com/watch?v=WxnN05vOuSM&list=PLw6p6PA8M2miu0w4K1g6vQ1BHUBeyM4_-'
+        ConfiguracionHome.objects.create(playlist_youtube_url=enlace)
+        self.client.force_login(self.staff)
+        control = self.client.get(reverse('gestion:control_tv'))
+        self.assertContains(control, 'homePlaylistData')
+        sesion = SesionTV.objects.get(propietario=self.staff)
+        url = reverse('gestion:accion_tv', args=[sesion.token])
+        lista = self.client.post(url, {'action': 'youtube_load', 'value': enlace})
+        self.assertEqual(lista.status_code, 200)
+        self.assertEqual(lista.json()['state']['youtube_playlist_id'], 'PLw6p6PA8M2miu0w4K1g6vQ1BHUBeyM4_-')
+        self.assertEqual(self.client.post(url, {'action': 'youtube_next'}).json()['state']['youtube_command']['type'], 'next')
+        self.client.post(url, {'action': 'reset'})
+        sesion.refresh_from_db()
+        self.assertTrue(sesion.estado['youtube_playlist_id'])
+        lista_sola = self.client.post(url, {'action': 'youtube_load', 'value': enlace.replace('watch?v=WxnN05vOuSM&', 'playlist?')})
+        self.assertIsNone(lista_sola.json()['state']['youtube_video_id'])
+        self.assertEqual(self.client.post(url, {'action': 'youtube_play'}).status_code, 200)
+        video = self.client.post(url, {'action': 'youtube_load', 'value': 'https://youtu.be/WxnN05vOuSM'})
+        self.assertIsNone(video.json()['state']['youtube_playlist_id'])
+        self.assertEqual(self.client.post(url, {'action': 'youtube_load', 'value': 'https://example.com/playlist?list=PLw6p6PA8M2miu0w4K1g6vQ1BHUBeyM4_-'}).status_code, 400)
+
     def test_entrenamiento_se_proyecta_y_pausa_sin_cambiar_marcador(self):
         import json
         self.client.force_login(self.staff)
@@ -783,19 +806,33 @@ class ModoTVTests(TestCase):
         sesion = SesionTV.objects.get(propietario=self.staff)
         url = reverse('gestion:accion_tv', args=[sesion.token])
         datos = {'phase': 'round', 'remaining': 120, 'round': 2,
-                 'rounds': 5, 'running': True}
+                 'rounds': 5, 'running': True, 'bell_volume': 150}
         response = self.client.post(url, {
-            'action': 'training_sync', 'value': json.dumps(datos),
+            'action': 'training_sync', 'value': json.dumps(datos), 'claim': '1',
         })
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['state']['mode'], 'training')
         self.assertEqual(response.json()['state']['training']['round'], 2)
+        self.assertEqual(response.json()['state']['training']['bell_volume'], 150)
         datos.update(phase='paused', running=False, remaining=90)
         self.client.post(url, {'action': 'training_sync', 'value': json.dumps(datos)})
         sesion.refresh_from_db()
         self.assertEqual(sesion.estado['training']['remaining'], 90)
         self.assertFalse(sesion.estado['training']['running'])
         self.assertEqual(sesion.estado['red_points'], 0)
+        desconectado = self.client.post(url, {'action': 'disconnect'})
+        self.assertEqual(desconectado.json()['state']['mode'], 'disconnected')
+        self.assertEqual(self.client.post(url, {
+            'action': 'training_sync', 'value': json.dumps(datos),
+        }).status_code, 409)
+        reconectado = self.client.post(url, {
+            'action': 'training_sync', 'value': json.dumps(datos), 'claim': '1',
+        })
+        self.assertEqual(reconectado.json()['state']['mode'], 'training')
+        self.client.post(url, {'action': 'mode', 'value': 'timer'})
+        self.assertEqual(self.client.post(url, {
+            'action': 'training_sync', 'value': json.dumps(datos),
+        }).status_code, 409)
         self.client.force_login(self.otro_staff)
         self.assertEqual(self.client.post(url, {
             'action': 'training_sync', 'value': json.dumps(datos),

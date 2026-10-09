@@ -372,6 +372,7 @@ def estado_tv_inicial():
         'next_fight': None,
         'active_match': None,
         'youtube_video_id': None,
+        'youtube_playlist_id': None,
         'youtube_visible': False,
         'youtube_size': 'small',
         'youtube_volume': 35,

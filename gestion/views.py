@@ -4585,6 +4585,7 @@ def cronometro_lucha(request):
         'sesion_entrenamiento_tv': (
             _obtener_sesion_tv(request.user) if request.user.is_staff else None
         ),
+        'playlist_home': ConfiguracionHome.objects.filter(activo=True).first(),
         'torneos_llaves': torneos,
         'evento_llaves': evento_seleccionado,
         'categorias_llaves': categorias_torneo,
@@ -4731,6 +4732,17 @@ def _youtube_event(command):
     return {'type': command, 'id': timezone.now().isoformat()}
 
 
+def _youtube_playlist_id(value):
+    parsed = urlparse((value or '').strip())
+    if parsed.hostname not in {'youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com', 'youtu.be'}:
+        return None
+    playlist = parse_qs(parsed.query).get('list', [''])[0]
+    allowed = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-'
+    if 10 <= len(playlist) <= 150 and all(c in allowed for c in playlist):
+        return playlist
+    return None
+
+
 def _resolver_bye_tv(match):
     p1, p2 = match.get('p1'), match.get('p2')
     if not p1 or not p2:
@@ -4850,6 +4862,7 @@ def control_tv(request):
             'category_name': str(llave.categoria),
         } for llave in llaves_torneo_tv]
     return render(request, 'gestion/control_tv.html', {
+        'playlist_home': ConfiguracionHome.objects.filter(activo=True).first(),
         'sesion_tv': sesion,
         'llaves_torneo_tv': llaves_torneo_tv,
         'llaves_torneo_tv_data': llaves_torneo_tv_data,
@@ -4906,6 +4919,8 @@ def accion_tv(request, token):
     accion = request.POST.get('action', '')
 
     if accion == 'training_sync':
+        if estado.get('mode') != 'training' and request.POST.get('claim') != '1':
+            return JsonResponse({'error': 'La proyección cambió de modo. Pulsa Proyectar entrenamiento para volver a conectarla.'}, status=409)
         try:
             datos = json.loads(request.POST.get('value', '{}'))
             fase = datos.get('phase')
@@ -4920,11 +4935,22 @@ def accion_tv(request, token):
                 'running': bool(datos.get('running')),
                 'updated_at': timezone.now().isoformat(),
                 'sound_event': datos.get('sound_event'),
+                'bell_volume': max(0, min(200, int(datos.get('bell_volume', 100)))),
             }
         except (ValueError, TypeError, KeyError, AttributeError):
             return JsonResponse({'error': 'Configuración de entrenamiento inválida.'}, status=400)
         estado['training'] = entrenamiento
         estado['mode'] = 'training'
+    elif accion == 'disconnect':
+        estado['mode'] = 'disconnected'
+        estado['youtube_command'] = _youtube_event('pause')
+        estado['youtube_visible'] = False
+        estado['running'] = False
+        estado['started_at'] = None
+        estado['preparing'] = False
+        estado['preparation_started_at'] = None
+        if estado.get('training'):
+            estado['training']['running'] = False
     elif accion == 'mode':
         estado['mode'] = request.POST.get('value') if request.POST.get('value') in {'overview', 'timer', 'bracket', 'training'} else 'overview'
     elif accion == 'start' and estado['remaining'] > 0 and not estado['running']:
@@ -4989,14 +5015,16 @@ def accion_tv(request, token):
         estado['blue_name'] = request.POST.get('blue_name', '')[:60].upper() or 'COMPETIDOR AZUL'
     elif accion == 'youtube_load':
         video_id = _youtube_video_id(request.POST.get('value'))
-        if not video_id:
+        playlist_id = _youtube_playlist_id(request.POST.get('value'))
+        if not video_id and not playlist_id:
             return JsonResponse({'error': 'El enlace de YouTube no es válido.'}, status=400)
         estado['youtube_video_id'] = video_id
+        estado['youtube_playlist_id'] = playlist_id
         estado['youtube_visible'] = True
         estado['youtube_command'] = _youtube_event('load')
-    elif accion in {'youtube_play', 'youtube_pause', 'youtube_stop'}:
-        if not estado.get('youtube_video_id'):
-            return JsonResponse({'error': 'Primero carga un video de YouTube.'}, status=400)
+    elif accion in {'youtube_play', 'youtube_pause', 'youtube_stop', 'youtube_next', 'youtube_previous'}:
+        if not estado.get('youtube_video_id') and not estado.get('youtube_playlist_id'):
+            return JsonResponse({'error': 'Primero carga un video o una lista de YouTube.'}, status=400)
         estado['youtube_visible'] = True
         estado['youtube_command'] = _youtube_event(accion.removeprefix('youtube_'))
     elif accion == 'youtube_visibility':

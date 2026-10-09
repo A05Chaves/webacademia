@@ -1,0 +1,18 @@
+<details class="card bg-dark text-light border-secondary mb-3">
+  <summary class="p-3 fw-bold">Música de YouTube y sonido del cronómetro</summary>
+  <div class="card-body">
+    <label for="timerBellVolume" class="form-label">Campana y aviso de ronda: <b id="bellVolumeValue">100%</b></label>
+    <input id="timerBellVolume" class="form-range" type="range" min="0" max="200" step="5" value="100" oninput="setBellVolume(this.value)">
+    <button type="button" class="btn btn-outline-info btn-sm mb-3" onclick="iniciarAudio();campana();publishTraining(true)">Probar campana</button>
+    <div class="input-group"><input id="timerYoutubeUrl" class="form-control" type="url" placeholder="Enlace de video o lista de YouTube" value="{{ playlist_home.playlist_youtube_url|default:'' }}"><button type="button" class="btn btn-primary" onclick="loadTimerYoutube()">Cargar</button></div>
+    <div class="d-flex flex-wrap gap-2 my-3">
+      <button type="button" class="btn btn-outline-light" onclick="timerMusicCommand('previous')">Anterior</button>
+      <button type="button" class="btn btn-success" onclick="timerMusicCommand('play')">Reproducir</button>
+      <button type="button" class="btn btn-outline-light" onclick="timerMusicCommand('pause')">Pausar</button>
+      <button type="button" class="btn btn-outline-light" onclick="timerMusicCommand('next')">Siguiente</button>
+    </div>
+    <label for="timerMusicVolume" class="form-label">Volumen de música</label><input id="timerMusicVolume" class="form-range" type="range" min="0" max="100" value="35" oninput="setTimerMusicVolume(this.value)">
+    <p id="timerMusicStatus" role="status" class="small text-secondary">Puedes usar la lista guardada en Configuración de Home.</p>
+    <div id="timerMusicBox" hidden style="max-width:480px;min-height:270px"><div id="timerMusicPlayer"></div></div>
+  </div>
+</details>
