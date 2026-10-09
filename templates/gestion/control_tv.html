@@ -48,6 +48,7 @@ if(configuredPlaylist){const button=document.createElement('button');button.type
 youtubeControls.appendChild(playlistControls);
 const trainingButton=document.createElement('a');trainingButton.className='btn btn-dark';trainingButton.href="{% url 'gestion:cronometro_lucha' %}";trainingButton.textContent='Cronómetro de entrenamiento';document.querySelector('.tv-control .control-row').appendChild(trainingButton);
 const disconnectButton=document.createElement('button');disconnectButton.type='button';disconnectButton.className='btn btn-outline-danger';disconnectButton.textContent='Desconectar TV';disconnectButton.onclick=()=>action('disconnect');document.querySelector('.tv-control .control-row').appendChild(disconnectButton);
+const reconnectButton=document.createElement('button');reconnectButton.type='button';reconnectButton.className='btn btn-primary';reconnectButton.textContent='Volver a conectar TV';reconnectButton.onclick=()=>action('reconnect');document.querySelector('.tv-control .control-row').appendChild(reconnectButton);
 const actionUrl="{% url 'gestion:accion_tv' sesion_tv.token %}",stateUrl="{% url 'gestion:estado_tv' sesion_tv.token %}";
 const savedBrackets=JSON.parse(document.getElementById('savedBracketsData')?.textContent||'[]');
 let currentNextFight=null,currentBracketType=null,currentBracket=null,editingBracket=false;

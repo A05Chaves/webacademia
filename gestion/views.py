@@ -4917,6 +4917,8 @@ def accion_tv(request, token):
     if display_phase != 'preparation':
         estado['remaining'] = display_remaining
     accion = request.POST.get('action', '')
+    if accion == 'start' and estado.get('mode') == 'disconnected':
+        estado['mode'] = 'timer'
 
     if accion == 'training_sync':
         if estado.get('mode') != 'training' and request.POST.get('claim') != '1':
@@ -4942,6 +4944,8 @@ def accion_tv(request, token):
         estado['training'] = entrenamiento
         estado['mode'] = 'training'
     elif accion == 'disconnect':
+        if estado.get('mode') != 'disconnected':
+            estado['mode_before_disconnect'] = estado.get('mode', 'overview')
         estado['mode'] = 'disconnected'
         estado['youtube_command'] = _youtube_event('pause')
         estado['youtube_visible'] = False
@@ -4951,6 +4955,9 @@ def accion_tv(request, token):
         estado['preparation_started_at'] = None
         if estado.get('training'):
             estado['training']['running'] = False
+    elif accion == 'reconnect':
+        modo = estado.get('mode_before_disconnect', 'overview')
+        estado['mode'] = modo if modo in {'overview', 'timer', 'bracket', 'training'} else 'overview'
     elif accion == 'mode':
         estado['mode'] = request.POST.get('value') if request.POST.get('value') in {'overview', 'timer', 'bracket', 'training'} else 'overview'
     elif accion == 'start' and estado['remaining'] > 0 and not estado['running']:

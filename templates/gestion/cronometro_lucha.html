@@ -689,7 +689,7 @@
         audio.onended=()=>{source.disconnect();gain.disconnect();};audio.play().catch(()=>{source.disconnect();gain.disconnect();});
     }
     let trainingProjected = false, trainingSignature = '', trainingSound = null;
-    let trainingSending = false, trainingPending = null;
+    let trainingSending = false, trainingPending = null, trainingDisconnecting = false;
     {% if sesion_entrenamiento_tv %}
     const trainingActionUrl = "{% url 'gestion:accion_tv' sesion_entrenamiento_tv.token %}";
     async function publishTraining(force=false,claim=false) {
@@ -712,8 +712,25 @@
         } catch(error) { trainingSignature=''; document.getElementById('trainingTVStatus').textContent=error.message; }
         finally { trainingSending=false; }
     }
-    async function projectTraining() { if(activeMatch){alert('Finaliza el combate para proyectar el entrenamiento.');return;} trainingProjected=true;await publishTraining(true,true);if(trainingProjected&&timerMusicLoaded)loadTimerYoutube(); }
-    async function disconnectTraining(){trainingProjected=false;trainingPending=null;while(trainingSending)await new Promise(resolve=>setTimeout(resolve,50));try{const response=await fetch(trainingActionUrl,{method:'POST',headers:{'X-CSRFToken':document.querySelector('[name=csrfmiddlewaretoken]').value,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({action:'disconnect'})});if(!response.ok)throw new Error('No se pudo desconectar la TV.');document.getElementById('trainingTVStatus').textContent='TV desconectada';}catch(error){document.getElementById('trainingTVStatus').textContent=error.message;}}
+    async function projectTraining() {
+        if(activeMatch){alert('Finaliza el combate para proyectar el entrenamiento.');return;}
+        document.getElementById('trainingTVStatus').textContent='Conectando TV…';
+        while(trainingDisconnecting || trainingSending)await new Promise(resolve=>setTimeout(resolve,50));
+        trainingPending=null;trainingSignature='';trainingProjected=true;
+        await publishTraining(true,true);
+        if(trainingProjected&&timerMusicLoaded)loadTimerYoutube();
+    }
+    async function disconnectTraining(){
+        if(trainingDisconnecting)return;
+        trainingDisconnecting=true;trainingProjected=false;trainingPending=null;trainingSignature='';
+        try{
+            while(trainingSending)await new Promise(resolve=>setTimeout(resolve,50));
+            const response=await fetch(trainingActionUrl,{method:'POST',headers:{'X-CSRFToken':document.querySelector('[name=csrfmiddlewaretoken]').value,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({action:'disconnect'})});
+            if(!response.ok)throw new Error('No se pudo desconectar la TV.');
+            document.getElementById('trainingTVStatus').textContent='TV desconectada. Pulsa Proyectar entrenamiento para volver a conectar.';
+        }catch(error){document.getElementById('trainingTVStatus').textContent=error.message;}
+        finally{trainingDisconnecting=false;}
+    }
     {% else %}
     function publishTraining() {}
     {% endif %}

@@ -776,6 +776,23 @@ class CronometroLlavesPermisosTests(TestCase):
 
 
 class ModoTVTests(TestCase):
+    def test_desconectar_y_reconectar_tv_conserva_la_sesion(self):
+        self.client.force_login(self.staff)
+        self.client.get(reverse('gestion:control_tv'))
+        sesion = SesionTV.objects.get(propietario=self.staff)
+        url = reverse('gestion:accion_tv', args=[sesion.token])
+        self.client.post(url, {'action': 'mode', 'value': 'timer'})
+        for _ in range(2):
+            self.client.post(url, {'action': 'disconnect'})
+        reconectado = self.client.post(url, {'action': 'reconnect'})
+        self.assertEqual(reconectado.json()['state']['mode'], 'timer')
+        sesion.refresh_from_db()
+        self.assertTrue(sesion.vigente)
+        self.client.post(url, {'action': 'disconnect'})
+        iniciado = self.client.post(url, {'action': 'start'})
+        self.assertEqual(iniciado.json()['state']['mode'], 'timer')
+        self.assertTrue(iniciado.json()['state']['preparing'])
+
     def test_youtube_admite_lista_y_video_y_conserva_lista_al_reiniciar(self):
         from gestion.models import ConfiguracionHome
         enlace = 'https://www.youtube.com/watch?v=WxnN05vOuSM&list=PLw6p6PA8M2miu0w4K1g6vQ1BHUBeyM4_-'
