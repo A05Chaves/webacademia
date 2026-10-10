@@ -286,7 +286,10 @@
     .fight-timer-page:fullscreen .timer-action-btn {
         min-height: 56px;
     }
-    .fight-tools-nav { display:flex; gap:10px; margin-bottom:16px; }
+    .fight-tools-nav { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:16px; min-width:0; }
+    .fight-tools-nav > button,.fight-tools-nav > a { white-space:normal; overflow-wrap:anywhere; max-width:100%; min-width:0; }
+    .fight-tools-nav > span { flex-basis:100%; overflow-wrap:anywhere; }
+    @media(max-width:600px){.fight-tools-nav > button,.fight-tools-nav > a{flex:1 1 calc(50% - 10px);padding:10px;font-size:.85rem;display:flex;align-items:center;justify-content:center;gap:6px}.fight-timer-page{min-width:0;max-width:100%}}
     .fight-tools-nav button { border:1px solid var(--border-color); border-radius:14px; padding:11px 18px; background:var(--bg-card); color:var(--text-main); font-weight:800; }
     .fight-tools-nav button.active { color:#fff; background:#0d6efd; border-color:#0d6efd; }
     .tool-panel[hidden] { display:none !important; }

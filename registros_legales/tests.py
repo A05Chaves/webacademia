@@ -15,7 +15,7 @@ from PIL import Image, ImageDraw
 from planes.models import Plan
 from alumnos.models import Alumno
 from instructores.models import Instructor
-from .forms import RegistroLegalEstudianteForm
+from .forms import FotoRegistroField, RegistroLegalEstudianteForm
 from .admin import RegistroLegalEstudianteAdmin
 from .models import RegistroLegalEstudiante
 from .services import crear_alumno_desde_registro
@@ -32,6 +32,18 @@ def imagen_png(con_firma=False):
 
 
 class RegistroLegalObligatorioTests(TestCase):
+    def test_foto_grande_se_optimiza_y_convierte_a_jpg(self):
+        archivo = SimpleUploadedFile(
+            'foto_celular.png', imagen_png() + b'\0' * (6 * 1024 * 1024),
+            content_type='image/png',
+        )
+        foto = FotoRegistroField().clean(archivo)
+        self.assertTrue(foto.name.endswith('.jpg'))
+        self.assertLess(foto.size, 5 * 1024 * 1024)
+        with Image.open(foto) as imagen:
+            self.assertEqual(imagen.format, 'JPEG')
+            self.assertLessEqual(max(imagen.size), 1600)
+
     def setUp(self):
         self.directorio_media = TemporaryDirectory()
         self.configuracion_media = self.settings(

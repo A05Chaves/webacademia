@@ -1,4 +1,8 @@
 from django import forms
+from io import BytesIO
+from pathlib import Path
+from django.core.files.uploadedfile import SimpleUploadedFile
+from PIL import Image, ImageOps, UnidentifiedImageError
 from django.contrib.auth import password_validation
 from django.contrib.auth.forms import UsernameField
 from django.contrib.auth.hashers import make_password
@@ -12,6 +16,39 @@ from instructores.models import Instructor, SolicitudRegistroProfesor
 from planes.models import Plan
 
 User = get_user_model()
+
+
+class FotoRegistroField(forms.FileField):
+    def to_python(self, data):
+        archivo = super().to_python(data)
+        if not archivo:
+            return archivo
+        if archivo.size > 20 * 1024 * 1024:
+            raise forms.ValidationError('La foto no puede superar 20 MB.')
+        try:
+            archivo.seek(0)
+            with Image.open(archivo) as original:
+                if original.format not in {'JPEG', 'PNG', 'WEBP'}:
+                    raise forms.ValidationError('Selecciona una foto JPG, PNG o WEBP. Si es HEIC, conviértela a JPG.')
+                foto = ImageOps.exif_transpose(original)
+                foto.thumbnail((1600, 1600))
+                if foto.mode in {'RGBA', 'LA'} or 'transparency' in foto.info:
+                    rgba = foto.convert('RGBA')
+                    fondo = Image.new('RGB', foto.size, 'white')
+                    fondo.paste(rgba, mask=rgba.getchannel('A'))
+                    foto = fondo
+                else:
+                    foto = foto.convert('RGB')
+                contenido = BytesIO()
+                foto.save(contenido, format='JPEG', quality=85, optimize=True)
+            return SimpleUploadedFile(
+                Path(archivo.name).stem[:100] + '.jpg',
+                contenido.getvalue(), content_type='image/jpeg',
+            )
+        except (UnidentifiedImageError, OSError, SyntaxError, Image.DecompressionBombError) as error:
+            raise forms.ValidationError('No se pudo abrir la foto. Selecciona una imagen JPG, PNG o WEBP válida; si es HEIC, conviértela a JPG.') from error
+        finally:
+            archivo.seek(0)
 
 MENSAJE_REGISTRO_PENDIENTE = (
     'Ya existe un registro con este documento y está pendiente por validar '
@@ -52,6 +89,10 @@ def contactos_repetidos(correo='', celular='', excluir_registro_id=None):
 
 
 class RegistroLegalEstudianteForm(forms.ModelForm):
+    foto = FotoRegistroField(
+        required=True,
+        widget=forms.FileInput(attrs={'class': 'form-control', 'accept': 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp'}),
+    )
     usuario_solicitado = UsernameField(
         label='Usuario de acceso',
         max_length=150,
