@@ -209,6 +209,24 @@ class TiendaTests(TestCase):
         self.assertFalse(formulario.is_valid())
         self.assertIn('linea_modelo', formulario.errors)
 
+    def test_dashboard_movimiento_de_venta_enlaza_factura(self):
+        venta = VentaTienda.objects.create(
+            modalidad='CONTADO', estado='PAGADA', moneda='COP',
+            subtotal=80000, total=80000,
+        )
+        MovimientoTienda.objects.create(
+            cuenta=self.cuenta, tipo='INGRESO', origen='VENTA',
+            concepto=f'Venta {venta.numero}', valor=80000, venta=venta,
+        )
+        response = self.client.get(reverse('tienda:panel'))
+        self.assertContains(
+            response,
+            f'<a href="{reverse("tienda:detalle_venta", args=[venta.pk])}" '
+            f'class="text-info" title="Ver factura y productos de la venta">'
+            f'Venta {venta.numero}</a>',
+            html=True,
+        )
+
     def test_panel_requiere_usuario_del_personal(self):
         self.client.logout()
 
