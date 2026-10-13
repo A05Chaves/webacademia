@@ -35,18 +35,36 @@ document.addEventListener('DOMContentLoaded',()=>{
     const titulo=card.querySelector('.card-header strong')?.textContent.trim();
     if(secciones[titulo])card.id=secciones[titulo];
   });
-  const tabla=[...document.querySelectorAll('table')].find(t=>t.tHead?.innerText.includes('SKU / producto'));
+  const tabla=document.querySelector('#productos-tienda table');
   if(!tabla)return;
   const card=tabla.closest('.card'), barra=document.createElement('div');
   barra.className='card-body border-bottom border-secondary';
   barra.innerHTML=`<div class="row g-2"><div class="col-md-5"><label class="form-label">Buscar producto</label><input id="filtro-producto" class="form-control" placeholder="Nombre, SKU, proveedor, marca o variante"></div><div class="col-md-3"><label class="form-label">Categoría</label><select id="filtro-categoria" class="form-select"><option value="">Todas</option>{% for c in categorias %}<option value="{{ c.nombre|escapejs }}">{{ c.nombre }}</option>{% endfor %}</select></div><div class="col-md-4"><label class="form-label">Subcategoría</label><select id="filtro-subcategoria" class="form-select"><option value="">Todas</option></select></div></div><small class="text-secondary d-block mt-2">Haz clic en el nombre de cualquier columna para ordenar ascendente o descendente.</small>`;
   card.insertBefore(barra,card.querySelector('.table-responsive'));
-  const filas=[...tabla.tBodies[0].rows], buscar=document.getElementById('filtro-producto'), categoria=document.getElementById('filtro-categoria'), subcategoria=document.getElementById('filtro-subcategoria');
+  const filas=[...tabla.tBodies[0].rows].filter(f=>f.cells.length===10), buscar=document.getElementById('filtro-producto'), categoria=document.getElementById('filtro-categoria'), subcategoria=document.getElementById('filtro-subcategoria');
   function datosCategoria(fila){const partes=fila.cells[2].innerText.split('/').map(v=>v.trim());return {categoria:partes[0]==='—'?'':partes[0],subcategoria:partes[1]==='—'?'':partes[1]}}
-  function actualizarSubcategorias(){const actual=subcategoria.value, opciones=[...new Set(filas.map(f=>datosCategoria(f)).filter(d=>!categoria.value||d.categoria===categoria.value).map(d=>d.subcategoria).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));subcategoria.innerHTML='<option value="">Todas</option>'+opciones.map(v=>`<option>${v}</option>`).join('');if(opciones.includes(actual))subcategoria.value=actual}
+  function actualizarSubcategorias(){const actual=subcategoria.value, opciones=[...new Set(filas.map(f=>datosCategoria(f)).filter(d=>!categoria.value||d.categoria===categoria.value).map(d=>d.subcategoria).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));subcategoria.replaceChildren(new Option('Todas',''));opciones.forEach(v=>subcategoria.add(new Option(v,v)));if(opciones.includes(actual))subcategoria.value=actual}
   function filtrar(){const q=buscar.value.trim().toLocaleLowerCase('es');filas.forEach(f=>{const d=datosCategoria(f);f.hidden=Boolean((q&&!f.innerText.toLocaleLowerCase('es').includes(q))||(categoria.value&&d.categoria!==categoria.value)||(subcategoria.value&&d.subcategoria!==subcategoria.value))})}
   buscar.addEventListener('input',filtrar);categoria.addEventListener('change',()=>{actualizarSubcategorias();filtrar()});subcategoria.addEventListener('change',filtrar);actualizarSubcategorias();
-  [...tabla.tHead.rows[0].cells].forEach((th,indice)=>{if(indice===0||indice===tabla.tHead.rows[0].cells.length-1)return;th.style.cursor='pointer';th.title='Ordenar por esta columna';let asc=true;th.addEventListener('click',()=>{const valor=f=>f.cells[indice].innerText.trim(), numero=v=>Number(v.replace(/[^0-9,.-]/g,'').replace(/\./g,'').replace(',','.'));filas.sort((a,b)=>{const av=valor(a),bv=valor(b),an=numero(av),bn=numero(bv);const cmp=Number.isFinite(an)&&Number.isFinite(bn)&&/\d/.test(av)&&/\d/.test(bv)?an-bn:av.localeCompare(bv,'es',{numeric:true});return asc?cmp:-cmp});filas.forEach(f=>tabla.tBodies[0].appendChild(f));asc=!asc})});
+  [...tabla.tHead.rows[0].cells].forEach((th,indice)=>{
+    if(indice===0||indice===tabla.tHead.rows[0].cells.length-1)return;
+    th.style.cursor='pointer';th.title='Ordenar por esta columna';th.tabIndex=0;th.setAttribute('aria-sort','none');
+    let asc=true;
+    function ordenar(){
+      const valor=f=>f.cells[indice].textContent.trim();
+      const numero=v=>Number(v.split('/')[0].trim().replace(/\./g,'').replace(',','.'));
+      filas.sort((a,b)=>{
+        const av=valor(a),bv=valor(b);
+        const cmp=(indice===6||indice===7)?numero(av)-numero(bv):av.localeCompare(bv,'es',{numeric:true,sensitivity:'base'});
+        return asc?cmp:-cmp;
+      });
+      filas.forEach(f=>tabla.tBodies[0].appendChild(f));
+      [...tabla.tHead.rows[0].cells].forEach(c=>c.setAttribute('aria-sort','none'));
+      th.setAttribute('aria-sort',asc?'ascending':'descending');asc=!asc;
+    }
+    th.addEventListener('click',ordenar);
+    th.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();ordenar()}});
+  });
 });
 </script>
 {% endblock %}
