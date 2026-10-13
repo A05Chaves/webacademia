@@ -1,7 +1,12 @@
 {% extends 'gestion/base.html' %}{% block content %}
 <div class="page-heading"><div class="page-heading-main"><h2 class="page-heading-title"><i class="fa-solid fa-cart-shopping"></i><span>Registrar venta</span></h2><p class="page-heading-subtitle text-secondary">Registra la venta y el comprador sin salir del formulario.</p></div><div class="page-heading-actions"><a href="{% url 'tienda:panel' %}" class="btn btn-outline-light page-heading-action"><i class="fa-solid fa-arrow-left"></i><span>Volver</span></a></div></div>
-<form method="post" class="card bg-dark text-light border-secondary"><div class="card-body p-4">{% csrf_token %}
-{% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+<form id="formulario-venta" method="post" class="card bg-dark text-light border-secondary"><div class="card-body p-4">{% csrf_token %}
+<div id="errores-venta" class="alert alert-danger{% if not form.errors %} d-none{% endif %}" role="alert" tabindex="-1" aria-live="assertive">
+<strong>No se pudo guardar la venta. Revisa estos datos:</strong>
+<ul id="lista-errores-venta" class="mb-0 mt-2">
+{% for field in form %}{% for error in field.errors %}<li>{{ field.label }}: {{ error }}</li>{% endfor %}{% endfor %}
+{% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+</ul></div>
 <h5 class="border-bottom pb-2 mb-3">Producto y valor</h5><div class="row g-3 mb-4">
 {% include 'tienda/venta_campo.html' with field=form.fecha_venta col='col-md-3' %}{% include 'tienda/venta_campo.html' with field=form.moneda col='col-md-3' %}{% include 'tienda/venta_campo.html' with field=form.producto col='col-md-6' %}{% include 'tienda/venta_campo.html' with field=form.cantidad col='col-md-3' %}{% include 'tienda/venta_campo.html' with field=form.descuento_porcentaje col='col-md-3' %}{% include 'tienda/venta_campo.html' with field=form.modalidad col='col-md-3' %}<div id="bloque-cuenta" class="col-md-3">{% include 'tienda/venta_campo.html' with field=form.cuenta col='' %}</div>{% include 'tienda/venta_campo.html' with field=form.tipo_entrega col='col-md-3' %}<div id="bloque-fecha-entrega" class="col-md-4">{% include 'tienda/venta_campo.html' with field=form.fecha_entrega_estimada col='' %}</div>{% include 'tienda/venta_campo.html' with field=form.observaciones col='col-12' %}
 </div>
@@ -24,6 +29,32 @@
 {{ compradores_vista_previa|json_script:"compradores-venta-data" }}
 <script>
 const productosVenta = JSON.parse(document.getElementById('productos-venta-data').textContent);
+const formularioVenta = document.getElementById('formulario-venta');
+const avisoErroresVenta = document.getElementById('errores-venta');
+let mostrarErroresPendiente = false;
+formularioVenta.addEventListener('invalid', function () {
+    if (mostrarErroresPendiente) return;
+    mostrarErroresPendiente = true;
+    setTimeout(function () {
+        mostrarErroresPendiente = false;
+        const lista = document.getElementById('lista-errores-venta');
+        lista.replaceChildren();
+        formularioVenta.querySelectorAll('input, select, textarea').forEach(campo => {
+            if (!campo.willValidate || campo.validity.valid) return;
+            const etiqueta = Array.from(formularioVenta.querySelectorAll('label')).find(label => label.htmlFor === campo.id);
+            const item = document.createElement('li');
+            item.textContent = `${etiqueta ? etiqueta.textContent.trim() : campo.name}: ${campo.validationMessage}`;
+            lista.appendChild(item);
+        });
+        avisoErroresVenta.classList.remove('d-none');
+        avisoErroresVenta.scrollIntoView({behavior: 'smooth', block: 'center'});
+        avisoErroresVenta.focus({preventScroll: true});
+    }, 0);
+}, true);
+if (!avisoErroresVenta.classList.contains('d-none')) {
+    avisoErroresVenta.scrollIntoView({block: 'center'});
+    avisoErroresVenta.focus({preventScroll: true});
+}
 const compradoresVenta = JSON.parse(document.getElementById('compradores-venta-data').textContent);
 const campoFechaVenta = document.getElementById('id_fecha_venta');
 const campoProducto = document.getElementById('id_producto');

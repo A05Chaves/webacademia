@@ -362,6 +362,19 @@ class TiendaTests(TestCase):
             2,
         )
 
+    def test_venta_invalida_muestra_resumen_visible_y_no_guarda(self):
+        response = self.client.post(reverse('tienda:registrar_venta'), {
+            'producto': self.producto.id, 'cantidad': '2',
+            'modalidad': 'CONTADO',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'No se pudo guardar la venta. Revisa estos datos:')
+        self.assertContains(response, 'Seleccione la cuenta que recibe el pago.')
+        self.assertContains(response, 'id="errores-venta" class="alert alert-danger"')
+        self.assertFalse(VentaTienda.objects.exists())
+        self.producto.refresh_from_db()
+        self.assertEqual(self.producto.stock, 10)
+
     def test_venta_descuenta_inventario_y_solo_afecta_tienda(self):
         response = self.client.post(reverse('tienda:registrar_venta'), {
             'producto': self.producto.id,
