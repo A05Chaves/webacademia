@@ -375,6 +375,16 @@ class TiendaTests(TestCase):
         self.producto.refresh_from_db()
         self.assertEqual(self.producto.stock, 10)
 
+    def test_venta_ignora_datos_ocultos_de_nuevo_comprador(self):
+        response = self.client.post(reverse('tienda:registrar_venta'), {
+            'producto': self.producto.pk, 'cantidad': '1',
+            'cuenta': self.cuenta.pk, 'modalidad': 'CONTADO',
+            'comprador_whatsapp': '12345678901234567890123',
+            'comprador_correo': 'dato-invalido',
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(VentaTienda.objects.count(), 1)
+
     def test_venta_descuenta_inventario_y_solo_afecta_tienda(self):
         response = self.client.post(reverse('tienda:registrar_venta'), {
             'producto': self.producto.id,

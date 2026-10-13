@@ -433,6 +433,12 @@ class VentaTiendaForm(OperacionProductoForm):
         self.fields['cuenta'].required = False
         self.fields['modalidad'].required = False
         self.fields['modalidad'].initial = VentaTienda.Modalidades.CONTADO
+        if self.is_bound and not self.data.get('registrar_comprador'):
+            # Los datos del comprador existente provienen de su registro,
+            # no de los campos auxiliares para crear un comprador nuevo.
+            for nombre in self.fields:
+                if nombre.startswith('comprador_'):
+                    self.fields[nombre].disabled = True
 
     def clean(self):
         cleaned = super().clean()
