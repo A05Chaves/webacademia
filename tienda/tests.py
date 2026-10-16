@@ -221,11 +221,30 @@ class TiendaTests(TestCase):
         response = self.client.get(reverse('tienda:panel'))
         self.assertContains(
             response,
-            f'<a href="{reverse("tienda:detalle_venta", args=[venta.pk])}" '
+            f'<a href="{reverse("tienda:detalle_venta", args=[venta.pk])}'
+            f'?volver={reverse("tienda:panel")}%23movimiento-{MovimientoTienda.objects.get().pk}" '
             f'class="text-info" title="Ver factura y productos de la venta">'
             f'Venta {venta.numero}</a>',
             html=True,
         )
+
+    def test_dashboard_pagina_todos_los_movimientos_del_periodo(self):
+        for indice in range(18):
+            MovimientoTienda.objects.create(
+                cuenta=self.cuenta, tipo='INGRESO', origen='OTRO_INGRESO',
+                concepto=f'Movimiento {indice}', valor=100,
+            )
+        hoy = timezone.localdate().isoformat()
+        filtros = {'desde': hoy, 'hasta': hoy}
+        primera = self.client.get(reverse('tienda:panel'), filtros)
+        segunda = self.client.get(reverse('tienda:panel'), {**filtros, 'pagina': 2})
+        self.assertEqual(primera.context['movimientos'].paginator.count, 18)
+        self.assertEqual(len(primera.context['movimientos']), 15)
+        self.assertEqual(len(segunda.context['movimientos']), 3)
+        ids = {m.pk for m in primera.context['movimientos']}
+        ids.update(m.pk for m in segunda.context['movimientos'])
+        self.assertEqual(len(ids), 18)
+        self.assertContains(primera, f'desde={hoy}&amp;hasta={hoy}&amp;pagina=2')
 
     def test_panel_requiere_usuario_del_personal(self):
         self.client.logout()

@@ -56,7 +56,7 @@
     <a href="{% url 'tienda:descargar_comprobante' venta.id %}" class="btn btn-primary comprobante-accion"><i class="fa-solid fa-download"></i><span>Descargar factura</span></a>
     {% if venta.cliente.correo %}<form method="post" action="{% url 'tienda:enviar_comprobante_correo' venta.id %}">{% csrf_token %}<button class="btn btn-info comprobante-accion"><i class="fa-solid fa-envelope"></i><span>{% if venta.fecha_envio_correo %}Reenviar correo{% else %}Enviar por correo{% endif %}</span></button></form>{% endif %}
     {% endif %}
-    <a href="{% if venta.es_cartera_inicial %}{% url 'tienda:creditos' %}{% else %}{% url 'tienda:panel' %}{% endif %}" class="btn btn-outline-warning comprobante-accion"><i class="fa-solid fa-arrow-left"></i><span>Volver</span></a>
+<a href="{% if venta.es_cartera_inicial %}{% url 'tienda:creditos' %}{% else %}{{ volver_url }}{% endif %}" class="btn btn-outline-warning comprobante-accion"><i class="fa-solid fa-arrow-left"></i><span>Volver</span></a>
   </div>
 </div>
 {% if venta.tipo_entrega == 'SOBRE_PEDIDO' %}<div class="alert {% if venta.entregada %}alert-success{% else %}alert-warning{% endif %}"><strong>Venta sobre pedido.</strong> {% if venta.entregada %}Entregada el {{ venta.fecha_entrega_real|date:'j F Y, H:i'|lower }}.{% else %}Entrega pendiente{% if venta.fecha_entrega_estimada %}, estimada para {{ venta.fecha_entrega_estimada|date:'j F Y'|lower }}{% endif %}. El inventario se descontará al confirmar la entrega.<form method="post" action="{% url 'tienda:marcar_venta_entregada' venta.id %}" class="d-inline ms-2">{% csrf_token %}<button class="btn btn-warning btn-sm">Marcar entregada</button></form>{% endif %}</div>{% endif %}

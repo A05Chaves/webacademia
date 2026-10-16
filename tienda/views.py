@@ -10,10 +10,13 @@ from django.contrib.auth import get_user_model
 from gestion.decorators import administrador_required as staff_member_required
 from django.conf import settings
 from django.core.mail import EmailMessage
+from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Prefetch, Q, Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from urllib.parse import urlsplit
 from django.utils import timezone
 from django.utils.formats import number_format
 from django.views.decorators.http import require_POST
@@ -501,7 +504,8 @@ def panel(request):
     ).select_related('cliente').prefetch_related('detalles').first()
     movimientos = MovimientoTienda.objects.filter(
         fecha__date__range=(desde, hasta)
-    ).select_related('cuenta', 'categoria', 'producto', 'venta')[:15]
+    ).select_related('cuenta', 'categoria', 'producto', 'venta')
+    movimientos = Paginator(movimientos, 15).get_page(request.GET.get('pagina'))
     creditos = VentaTienda.objects.exclude(
         estado__in=[VentaTienda.Estados.PAGADA, VentaTienda.Estados.ANULADA]
     ).select_related('cliente')[:8]
@@ -1540,6 +1544,12 @@ def registrar_abono(request, venta_id):
 
 @staff_member_required
 def detalle_venta(request, venta_id):
+    volver_url = request.GET.get('volver', '')
+    destino = urlsplit(volver_url)
+    if destino.scheme or destino.netloc or destino.path not in (
+        reverse('tienda:panel'), reverse('tienda:consultas'),
+    ):
+        volver_url = reverse('tienda:panel')
     venta = get_object_or_404(
         VentaTienda.objects.select_related('cliente').prefetch_related(
             'detalles__producto', 'movimientos__cuenta', 'cuotas__aplicaciones'
@@ -1554,7 +1564,7 @@ def detalle_venta(request, venta_id):
     telefono = ''.join(filter(str.isdigit, venta.cliente.telefono_whatsapp)) if venta.cliente else ''
     whatsapp_url = f'https://wa.me/{telefono}?text={quote(texto)}' if telefono else ''
     return render(request, 'tienda/detalle_venta.html', {
-        'venta': venta, 'whatsapp_url': whatsapp_url,
+        'venta': venta, 'whatsapp_url': whatsapp_url, 'volver_url': volver_url,
         'puede_whatsapp': bool(telefono and venta.cliente.acepta_whatsapp),
     })
 
