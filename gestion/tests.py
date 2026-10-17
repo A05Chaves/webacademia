@@ -776,6 +776,30 @@ class CronometroLlavesPermisosTests(TestCase):
 
 
 class ModoTVTests(TestCase):
+    def test_tools_y_modo_tv_tienen_codigos_y_estados_independientes(self):
+        from django.test import Client
+        self.client.force_login(self.staff)
+        self.client.get(reverse('gestion:control_tv'))
+        tools = self.client.get(reverse('gestion:cronometro_lucha'))
+        general = SesionTV.objects.get(propietario=self.staff, tipo='general')
+        entrenamiento = SesionTV.objects.get(propietario=self.staff, tipo='training')
+        self.assertNotEqual(general.codigo, entrenamiento.codigo)
+        self.assertNotEqual(general.token, entrenamiento.token)
+        self.assertContains(tools, entrenamiento.codigo)
+        self.client.get(reverse('gestion:control_tv'))
+        self.client.get(reverse('gestion:cronometro_lucha'))
+        self.assertEqual(SesionTV.objects.filter(propietario=self.staff).count(), 2)
+        pantalla = Client()
+        for sesion in (general, entrenamiento):
+            self.assertRedirects(pantalla.post(reverse('gestion:vincular_tv'), {'codigo': sesion.codigo}), reverse('gestion:pantalla_tv', args=[sesion.token]))
+        url = reverse('gestion:accion_tv', args=[entrenamiento.token])
+        self.assertEqual(self.client.post(url, {'action': 'disconnect'}).status_code, 200)
+        general.refresh_from_db()
+        self.assertEqual(general.estado['mode'], 'overview')
+        self.assertEqual(self.client.post(url, {'action': 'mode', 'value': 'overview'}).status_code, 400)
+        general_url = reverse('gestion:accion_tv', args=[general.token])
+        self.assertEqual(self.client.post(general_url, {'action': 'training_sync', 'claim': '1'}).status_code, 400)
+
     def test_tv_desconectada_puede_vincularse_de_nuevo_con_codigo(self):
         from django.test import Client
         self.client.force_login(self.staff)
@@ -859,10 +883,10 @@ class ModoTVTests(TestCase):
             'action': 'training_sync', 'value': json.dumps(datos), 'claim': '1',
         })
         self.assertEqual(reconectado.json()['state']['mode'], 'training')
-        self.client.post(url, {'action': 'mode', 'value': 'timer'})
+        self.assertEqual(self.client.post(url, {'action': 'mode', 'value': 'timer'}).status_code, 400)
         self.assertEqual(self.client.post(url, {
             'action': 'training_sync', 'value': json.dumps(datos),
-        }).status_code, 409)
+        }).status_code, 200)
         self.client.force_login(self.otro_staff)
         self.assertEqual(self.client.post(url, {
             'action': 'training_sync', 'value': json.dumps(datos),

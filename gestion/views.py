@@ -4583,7 +4583,7 @@ def cronometro_lucha(request):
                         break
     return render(request, 'gestion/cronometro_lucha.html', {
         'sesion_entrenamiento_tv': (
-            _obtener_sesion_tv(request.user) if request.user.is_staff else None
+            _obtener_sesion_tv(request.user, SesionTV.Tipos.ENTRENAMIENTO) if request.user.is_staff else None
         ),
         'playlist_home': ConfiguracionHome.objects.filter(activo=True).first(),
         'torneos_llaves': torneos,
@@ -4810,9 +4810,10 @@ def _crear_llave_tv(names, configured_size):
     return bracket
 
 
-def _obtener_sesion_tv(usuario):
+def _obtener_sesion_tv(usuario, tipo=SesionTV.Tipos.GENERAL):
     sesion = SesionTV.objects.filter(
         propietario=usuario,
+        tipo=tipo,
         activa=True,
         expira_en__gt=timezone.now(),
     ).first()
@@ -4823,6 +4824,8 @@ def _obtener_sesion_tv(usuario):
                 break
         sesion = SesionTV.objects.create(
             propietario=usuario,
+            tipo=tipo,
+            estado={**estado_tv_inicial(), 'mode': 'training' if tipo == SesionTV.Tipos.ENTRENAMIENTO else 'overview'},
             codigo=codigo,
             # La vigencia real termina al cerrar sesión. Esta fecha lejana se
             # conserva por compatibilidad con sesiones y migraciones anteriores.
@@ -4923,6 +4926,13 @@ def accion_tv(request, token):
     if display_phase != 'preparation':
         estado['remaining'] = display_remaining
     accion = request.POST.get('action', '')
+    es_entrenamiento = sesion.tipo == SesionTV.Tipos.ENTRENAMIENTO
+    if accion == 'training_sync' and not es_entrenamiento:
+        return JsonResponse({'error': 'Usa el código del cronómetro de Tools para proyectar entrenamiento.'}, status=400)
+    if es_entrenamiento and not (accion in {'training_sync', 'disconnect', 'reconnect'} or accion.startswith('youtube_')):
+        return JsonResponse({'error': 'Esta conexión es exclusiva del cronómetro de Tools.'}, status=400)
+    if accion == 'mode' and request.POST.get('value') == 'training':
+        return JsonResponse({'error': 'El entrenamiento tiene su propio código en Tools.'}, status=400)
     if accion == 'start' and estado.get('mode') == 'disconnected':
         estado['mode'] = 'timer'
 

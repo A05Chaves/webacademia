@@ -381,6 +381,11 @@ def estado_tv_inicial():
 
 
 class SesionTV(models.Model):
+    class Tipos(models.TextChoices):
+        GENERAL = 'general', 'Modo TV'
+        ENTRENAMIENTO = 'training', 'Cronómetro de Tools'
+
+    tipo = models.CharField(max_length=12, choices=Tipos.choices, default=Tipos.GENERAL)
     propietario = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,

@@ -453,7 +453,7 @@
         {% if sesion_entrenamiento_tv %}
         <button type="button" onclick="projectTraining()"><i class="fa-solid fa-tv"></i> Proyectar entrenamiento</button>
         <button type="button" onclick="disconnectTraining()"><i class="fa-solid fa-link-slash"></i> Desconectar TV</button>
-        <a class="btn btn-outline-info" href="{% url 'gestion:pantalla_tv' sesion_entrenamiento_tv.token %}" target="_blank">Abrir TV · {{ sesion_entrenamiento_tv.codigo }}</a>
+        <a class="btn btn-outline-info" href="{% url 'gestion:pantalla_tv' sesion_entrenamiento_tv.token %}" target="_blank">TV de Tools · Código {{ sesion_entrenamiento_tv.codigo }}</a>
         <span id="trainingTVStatus" role="status"></span>
         <form hidden>{% csrf_token %}</form>
         {% endif %}
