@@ -10,9 +10,17 @@
       <button type="button" class="btn btn-success" onclick="timerMusicCommand('play')">Reproducir</button>
       <button type="button" class="btn btn-outline-light" onclick="timerMusicCommand('pause')">Pausar</button>
       <button type="button" class="btn btn-outline-light" onclick="timerMusicCommand('next')">Siguiente</button>
+      <button type="button" class="btn btn-outline-light" onclick="toggleTimerMusic()">Mostrar / minimizar video</button>
     </div>
     <label for="timerMusicVolume" class="form-label">Volumen de música</label><input id="timerMusicVolume" class="form-range" type="range" min="0" max="100" value="35" oninput="setTimerMusicVolume(this.value)">
     <p id="timerMusicStatus" role="status" class="small text-secondary">Puedes usar la lista guardada en Configuración de Home.</p>
-    <div id="timerMusicBox" hidden style="max-width:480px;min-height:270px"><div id="timerMusicPlayer"></div></div>
+    <div id="timerMusicBox" hidden style="width:100%;max-width:480px;aspect-ratio:16/9"><div id="timerMusicPlayer"></div></div>
   </div>
 </details>
+<style>#timerMusicBox iframe{width:100%;height:100%;max-width:100%}</style>
+<script>
+async function toggleTimerMusic(){
+  if(trainingProjected){try{await sendTimerMusic('visibility')}catch(error){document.getElementById('timerMusicStatus').textContent=error.message}}
+  else{const box=document.getElementById('timerMusicBox');box.hidden=!box.hidden;}
+}
+</script>

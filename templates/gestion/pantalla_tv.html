@@ -18,6 +18,17 @@ body{background:var(--tv-bg);color:var(--tv-text)}.top{border-bottom:1px solid v
 .round-title{color:var(--tv-muted)}.match{background:var(--tv-panel);border-color:var(--tv-border)}.slot.winner{background:#315744;color:#d8f3e5}.slot.bye,.champion{color:#d8bc72}.youtube-float{border-color:var(--tv-border);box-shadow:0 12px 35px rgba(0,0,0,.55)}
 </style>
 <style>.training-screen{display:none;height:100%;align-items:center;justify-content:center;flex-direction:column;gap:20px;text-align:center}.training-time{font-size:clamp(100px,25vw,300px);font-weight:850;line-height:1;font-variant-numeric:tabular-nums}.training-label{font-size:clamp(28px,4vw,60px);font-weight:750}.training-round{font-size:clamp(22px,3vw,45px);color:var(--tv-muted)}</style>
+<style>
+.screen{height:100vh;height:100dvh;padding:clamp(10px,2vh,22px) clamp(12px,2vw,30px)}
+.top{flex-shrink:0}.panel{overflow:auto;min-width:0}.overview{height:100%;grid-template-columns:minmax(0,38%) minmax(0,1fr);gap:clamp(10px,2vw,24px);padding-top:12px}
+.class-card,.attendees{min-width:0;min-height:0;padding:clamp(12px,2vw,28px)}
+.attendees{display:flex;flex-direction:column}.names{overflow:auto;min-height:0;grid-auto-rows:min-content}.name{overflow-wrap:anywhere;font-size:clamp(14px,1.7vw,25px)}
+.class-title{font-size:clamp(24px,4vw,65px);overflow-wrap:anywhere}.meta{font-size:clamp(16px,2vw,25px)}.attendees h2{font-size:clamp(18px,2.2vw,30px)}
+.training-time{font-size:min(25vw,40vh);max-width:100%}.training-screen{gap:clamp(8px,2vh,20px)}
+.youtube-float{max-width:calc(100vw - 24px);max-height:45vh}.youtube-float.large{width:min(62vw,900px)}
+@media(max-width:700px){.overview{grid-template-columns:1fr;height:auto}.attendees{display:flex;max-height:48vh}.names{grid-template-columns:repeat(2,minmax(0,1fr))}.youtube-float{width:42vw;min-width:180px}}
+@media(max-height:550px){.brand,.clock{font-size:20px}.top{padding-bottom:6px}.class-title{margin:8px 0}.count{font-size:clamp(45px,12vh,90px)}.fighter{height:24vh}.big-time{font-size:17vh}}
+</style>
 </head>
 <body>
 <div id="soundGate" class="sound-gate"><button onclick="enableSound()">🔊 Activar sonido y comenzar</button></div>
@@ -42,6 +53,15 @@ const $=id=>document.getElementById(id);
 const fmt=s=>`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
 let soundEnabled=false,lastSound=null,audioContext=null,ytPlayer=null,ytReady=false,lastYoutubeCommand=null,lastVideoId=null,pendingState=null;
 let trainingState=null,trainingReceivedAt=0,trainingServerTime=0;
+let attendeesSignature='',namesDirection=1,namesWaitUntil=0;
+setInterval(()=>{
+  const names=$('names');
+  if($('overview').style.display==='none'||Date.now()<namesWaitUntil)return;
+  const max=names.scrollHeight-names.clientHeight;
+  if(max<=0)return;
+  names.scrollTop+=namesDirection;
+  if(names.scrollTop>=max||names.scrollTop<=0){namesDirection*=-1;namesWaitUntil=Date.now()+3000;}
+},80);
 function renderTraining(){if(!trainingState)return;const t=trainingState;const elapsed=t.running?Math.max(0,(trainingServerTime+Date.now()-trainingReceivedAt-Date.parse(t.updated_at))/1000):0;const seconds=Math.max(0,Math.ceil(t.remaining-elapsed));$('trainingTime').textContent=fmt(seconds);$('trainingLabel').textContent=({stopped:'LISTO PARA ENTRENAR',preparation:'PREPARACIÓN',round:'ENTRENAMIENTO',rest:'DESCANSO',paused:'PAUSADO',ended:'FINALIZADO'})[t.phase]||'ENTRENAMIENTO';$('trainingRound').textContent=`RONDA ${t.round}${t.rounds?' / '+t.rounds:' · SIN LÍMITE'}`;}
 setInterval(renderTraining,200);
 
@@ -57,8 +77,20 @@ async function enableSound(){
   $('soundGate').style.display='none';
 }
 function fallbackSound(type){if(!audioContext)return;const count=type==='claps'?3:1;for(let i=0;i<count;i++){const o=audioContext.createOscillator(),g=audioContext.createGain(),t=audioContext.currentTime+i*.22;o.frequency.value=type==='claps'?1500:850;g.gain.setValueAtTime(.5,t);g.gain.exponentialRampToValueAtTime(.001,t+.18);o.connect(g);g.connect(audioContext.destination);o.start(t);o.stop(t+.18)}}
-const tvSoundNodes=new Map();
-function playEvent(e){if(!soundEnabled||!e||e.id===lastSound)return;lastSound=e.id;const audio=$(e.type==='claps'?'claps':'bell');const volume=pendingState?.mode==='training'?(pendingState.training?.bell_volume??100):100;if(!tvSoundNodes.has(audio)){const source=audioContext.createMediaElementSource(audio),gain=audioContext.createGain();source.connect(gain);gain.connect(audioContext.destination);tvSoundNodes.set(audio,gain)}tvSoundNodes.get(audio).gain.value=volume/100;audio.currentTime=0;audio.play().catch(()=>fallbackSound(e.type))}
+const tvSoundBuffers=new Map();
+async function playEvent(e){
+  if(!soundEnabled||!e||e.id===lastSound)return;lastSound=e.id;
+  const audio=$(e.type==='claps'?'claps':'bell');
+  const volume=pendingState?.mode==='training'?(pendingState.training?.bell_volume??100):100;
+  try{
+    if(audioContext.state==='suspended')await audioContext.resume();
+    if(!tvSoundBuffers.has(audio.src))tvSoundBuffers.set(audio.src,fetch(audio.src).then(r=>{if(!r.ok)throw new Error('audio');return r.arrayBuffer()}).then(b=>audioContext.decodeAudioData(b)));
+    const source=audioContext.createBufferSource(),gain=audioContext.createGain();
+    source.buffer=await tvSoundBuffers.get(audio.src);gain.gain.value=volume/100;
+    source.connect(gain);gain.connect(audioContext.destination);
+    source.onended=()=>{source.disconnect();gain.disconnect()};source.start();
+  }catch(error){tvSoundBuffers.delete(audio.src);fallbackSound(e.type)}
+}
 function syncYoutube(s){
   pendingState=s;
   const box=$('youtubeFloat');
@@ -128,7 +160,14 @@ function render(d){
   $('classTitle').textContent=c.title;
   $('classMeta').innerHTML=c.time?`${c.time}<br>${c.discipline}<br>${c.instructor}`:'';
   $('classTotal').textContent=c.total;
-  $('names').innerHTML=c.attendees.length?c.attendees.map(n=>`<div class="name">${n}</div>`).join(''):'<div class="meta">Aún no hay confirmaciones.</div>';
+  const signature=JSON.stringify(c.attendees);
+  if(signature!==attendeesSignature){
+    attendeesSignature=signature;$('names').replaceChildren();
+    for(const name of (c.attendees.length?c.attendees:['Aún no hay confirmaciones.'])){
+      const row=document.createElement('div');row.className='name';row.textContent=name;$('names').appendChild(row);
+    }
+    $('names').scrollTop=0;namesDirection=1;namesWaitUntil=Date.now()+3000;
+  }
   ['red','blue'].forEach(side=>{renderFighterName(side,s[side+'_name']);$(side+'Points').textContent=s[side+'_points'];$(side+'Advantages').textContent=s[side+'_advantages'];$(side+'Penalties').textContent=s[side+'_penalties']});
   $('nextFightTV').textContent=s.next_fight?`SIGUIENTE: ${s.next_fight.category} · ${s.next_fight.p1} VS ${s.next_fight.p2}`:'';
   $('timerPhase').textContent=s.display_phase==='preparation'?'ALISTAMIENTO':(s.display_phase==='ended'?'ROUND FINALIZADO':'');

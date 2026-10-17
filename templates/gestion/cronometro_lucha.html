@@ -685,11 +685,17 @@
     let audioContext = null;
     let bellVolume = Math.max(0,Math.min(200,Number(localStorage.getItem('timerBellVolume')??100)));
     function setBellVolume(value){bellVolume=Number(value);localStorage.setItem('timerBellVolume',String(bellVolume));document.getElementById('bellVolumeValue').textContent=bellVolume+'%';publishTraining(true);}
-    function playTimerSound(audio){
+    const timerSoundBuffers=new Map();
+    async function playTimerSound(audio){
         if(!audioContext) iniciarAudio();
-        const source=audioContext.createMediaElementSource(audio),gain=audioContext.createGain();
-        gain.gain.value=bellVolume/100;source.connect(gain);gain.connect(audioContext.destination);
-        audio.onended=()=>{source.disconnect();gain.disconnect();};audio.play().catch(()=>{source.disconnect();gain.disconnect();});
+        try{
+            if(audioContext.state==='suspended')await audioContext.resume();
+            if(!timerSoundBuffers.has(audio.src))timerSoundBuffers.set(audio.src,fetch(audio.src).then(r=>{if(!r.ok)throw new Error('audio');return r.arrayBuffer()}).then(b=>audioContext.decodeAudioData(b)));
+            const source=audioContext.createBufferSource(),gain=audioContext.createGain();
+            source.buffer=await timerSoundBuffers.get(audio.src);
+            gain.gain.value=bellVolume/100;source.connect(gain);gain.connect(audioContext.destination);
+            source.onended=()=>{source.disconnect();gain.disconnect();};source.start();
+        }catch(error){timerSoundBuffers.delete(audio.src);console.warn('No se pudo reproducir el aviso del cronómetro',error);}
     }
     let trainingProjected = false, trainingSignature = '', trainingSound = null;
     let trainingSending = false, trainingPending = null, trainingDisconnecting = false;
