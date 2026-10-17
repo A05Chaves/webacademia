@@ -776,6 +776,28 @@ class CronometroLlavesPermisosTests(TestCase):
 
 
 class ModoTVTests(TestCase):
+    def test_entrenamiento_avanza_sin_actualizaciones_del_telefono(self):
+        from gestion.views import _avanzar_entrenamiento
+        inicio = timezone.now()
+        datos = {
+            'phase': 'round', 'running': True, 'round': 1, 'rounds': 3,
+            'duration': 60, 'rest': 20, 'remaining': 60,
+            'phase_ends_at': (inicio + timedelta(seconds=60)).isoformat(),
+        }
+        descanso = _avanzar_entrenamiento(datos, inicio + timedelta(seconds=65))
+        self.assertEqual((descanso['phase'], descanso['remaining']), ('rest', 15))
+        segunda = _avanzar_entrenamiento(datos, inicio + timedelta(seconds=90))
+        self.assertEqual((segunda['phase'], segunda['round'], segunda['remaining']), ('round', 2, 50))
+        final = _avanzar_entrenamiento(datos, inicio + timedelta(seconds=220))
+        self.assertEqual(final['phase'], 'ended')
+        self.assertFalse(final['running'])
+        datos.update(rounds=0)
+        infinito = _avanzar_entrenamiento(datos, inicio + timedelta(days=3))
+        self.assertTrue(infinito['running'])
+        self.assertGreater(infinito['round'], 100)
+        datos.update(running=False)
+        self.assertEqual(_avanzar_entrenamiento(datos, inicio + timedelta(days=3)), datos)
+
     def test_tools_y_modo_tv_tienen_codigos_y_estados_independientes(self):
         from django.test import Client
         self.client.force_login(self.staff)

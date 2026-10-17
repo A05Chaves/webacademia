@@ -4640,6 +4640,56 @@ def _clase_tv_payload():
     }
 
 
+def _avanzar_entrenamiento(datos, ahora):
+    """Deriva la fase desde su fecha límite, aunque el control esté suspendido."""
+    datos = dict(datos)
+    if not datos.get('running') or not datos.get('phase_ends_at'):
+        return datos
+    limite = datetime.fromisoformat(datos['phase_ends_at'])
+    if timezone.is_naive(limite):
+        limite = timezone.make_aware(limite)
+    duracion = max(1, int(datos.get('duration', 300)))
+    descanso = max(0, int(datos.get('rest', 60)))
+    ronda = int(datos.get('round', 1))
+    rondas = int(datos.get('rounds', 0))
+    fase = datos['phase']
+    cambio = False
+    while ahora >= limite:
+        cambio = True
+        if fase == 'preparation':
+            fase = 'round'
+            limite += timedelta(seconds=duracion)
+        elif fase == 'round':
+            if rondas and ronda >= rondas:
+                datos.update(phase='ended', round=ronda, running=False, remaining=0)
+                break
+            fase = 'rest'
+            limite += timedelta(seconds=descanso)
+        elif fase == 'rest':
+            ronda += 1
+            fase = 'round'
+            limite += timedelta(seconds=duracion)
+        else:
+            break
+        # Salta ciclos completos para no iterar durante ausencias prolongadas.
+        if fase == 'round' and ahora >= limite:
+            ciclos = int((ahora - limite).total_seconds() // (duracion + descanso))
+            if rondas:
+                ciclos = min(ciclos, max(0, rondas - ronda))
+            ronda += ciclos
+            limite += timedelta(seconds=ciclos * (duracion + descanso))
+    if datos.get('running'):
+        import math
+        datos.update(phase=fase, round=ronda, remaining=max(0, math.ceil((limite-ahora).total_seconds())))
+    datos['updated_at'] = ahora.isoformat()
+    datos['phase_ends_at'] = limite.isoformat()
+    if cambio:
+        datos['sound_event'] = {'type': 'bell', 'id': 'training:' + limite.isoformat()}
+    elif fase == 'round' and 0 < datos['remaining'] <= 10:
+        datos['sound_event'] = {'type': 'claps', 'id': 'warning:' + limite.isoformat()}
+    return datos
+
+
 def _estado_tv_actual(sesion, guardar=True):
     estado = {**estado_tv_inicial(), **(sesion.estado or {})}
     cambio = False
@@ -4703,6 +4753,8 @@ def _estado_tv_actual(sesion, guardar=True):
         sesion.save(update_fields=['estado', 'actualizada'])
     estado.setdefault('display_remaining', estado['remaining'])
     estado.setdefault('display_phase', 'stopped')
+    if estado.get('mode') == 'training' and estado.get('training'):
+        estado['training'] = _avanzar_entrenamiento(estado['training'], ahora)
     return estado
 
 
@@ -4954,7 +5006,14 @@ def accion_tv(request, token):
                 'updated_at': timezone.now().isoformat(),
                 'sound_event': datos.get('sound_event'),
                 'bell_volume': max(0, min(200, int(datos.get('bell_volume', 100)))),
+                'duration': max(1, min(86400, int(datos.get('duration', 300)))),
+                'rest': max(0, min(86400, int(datos.get('rest', 60)))),
             }
+            if datos.get('phase_ends_at'):
+                limite = datetime.fromisoformat(datos['phase_ends_at'])
+                if timezone.is_naive(limite):
+                    limite = timezone.make_aware(limite)
+                entrenamiento['phase_ends_at'] = limite.isoformat()
         except (ValueError, TypeError, KeyError, AttributeError):
             return JsonResponse({'error': 'Configuración de entrenamiento inválida.'}, status=400)
         estado['training'] = entrenamiento

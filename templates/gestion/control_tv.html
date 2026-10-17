@@ -40,6 +40,14 @@ body[data-theme="light"] .tv-control{--tv-accent:#2f6fa8;--tv-panel:rgba(255,255
 {% if playlist_home.playlist_youtube_url %}{{ playlist_home.playlist_youtube_url|json_script:"homePlaylistData" }}{% endif %}
 <script>
 const youtubeControls=document.getElementById('youtubeUrl').closest('.tv-card');
+const tvPlaylistKey='galeras:tv:playlist:{{ request.user.pk }}';
+const playlistInput=document.getElementById('youtubeUrl');
+playlistInput.value=localStorage.getItem(tvPlaylistKey)??'';
+playlistInput.addEventListener('change',()=>localStorage.setItem(tvPlaylistKey,playlistInput.value.trim()));
+const clearPlaylistButton=document.createElement('button');
+clearPlaylistButton.type='button';clearPlaylistButton.className='btn btn-outline-secondary';clearPlaylistButton.textContent='×';clearPlaylistButton.title='Borrar enlace guardado';clearPlaylistButton.setAttribute('aria-label','Borrar enlace guardado');
+clearPlaylistButton.onclick=()=>{playlistInput.value='';localStorage.setItem(tvPlaylistKey,'');playlistInput.focus()};
+playlistInput.after(clearPlaylistButton);
 document.getElementById('youtubeUrl').placeholder='Enlace de video o lista de YouTube';
 const playlistControls=document.createElement('div');playlistControls.className='control-row';
 for(const [label,command] of [['Anterior','youtube_previous'],['Siguiente','youtube_next']]){const button=document.createElement('button');button.type='button';button.className='btn btn-secondary';button.textContent=label;button.onclick=()=>youtubeAction(command);playlistControls.appendChild(button)}
@@ -58,7 +66,7 @@ async function send(data){const r=await fetch(actionUrl,{method:'POST',headers:{
 async function action(a,v){await send({action:a,value:v??''});sync()}
 async function setDuration(){const input=document.getElementById('duration');input.value=Math.max(1,Math.min(60,Number(input.value)||5));await action('duration',input.value)}
 async function adjustDuration(delta){const input=document.getElementById('duration');input.value=Math.max(1,Math.min(60,(Number(input.value)||5)+delta));await setDuration()}
-async function loadYoutube(){const input=document.getElementById('youtubeUrl');const result=await send({action:'youtube_load',value:input.value});if(!result.error)sync()}
+async function loadYoutube(){const input=document.getElementById('youtubeUrl');const result=await send({action:'youtube_load',value:input.value});if(!result.error){localStorage.setItem(tvPlaylistKey,input.value.trim());sync()}}
 async function youtubeAction(name){await send({action:name});sync()}
 async function youtubeVolume(value){await send({action:'youtube_volume',value});sync()}
 async function score(field,delta){await send({action:field,delta:String(delta)});sync()}

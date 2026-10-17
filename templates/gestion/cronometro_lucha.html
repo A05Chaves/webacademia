@@ -679,6 +679,10 @@
     let countdownRemaining = 5;
     let interval = null;
     let phaseEndsAt = null;
+    let refreshTrainingClock = () => {};
+    document.addEventListener('visibilitychange', () => {if (!document.hidden) refreshTrainingClock();});
+    window.addEventListener('focus', () => refreshTrainingClock());
+    window.addEventListener('pageshow', () => refreshTrainingClock());
     let warningDone = false;
 
     let currentTotal = duration;
@@ -707,7 +711,7 @@
         const signature = JSON.stringify([phase,currentRound,rounds,duration,rest,phaseEndsAt,trainingSound]);
         if (!force && signature === trainingSignature) return;
         trainingSignature = signature;
-        trainingPending = {phase,round:currentRound,rounds,running,remaining:countdown?countdownRemaining:remaining,sound_event:trainingSound,bell_volume:bellVolume,claim};
+        trainingPending = {phase,round:currentRound,rounds,running,remaining:countdown?countdownRemaining:remaining,sound_event:trainingSound,bell_volume:bellVolume,duration,rest,phase_ends_at:running?new Date(phaseEndsAt).toISOString():null,claim};
         if (trainingSending) return;
         trainingSending = true;
         try {
@@ -920,74 +924,50 @@
         phaseEndsAt = Date.now() + Math.max(0, phaseSeconds) * 1000;
 
         function tick() {
-            if (countdown) {
-                countdownRemaining = Math.max(0, Math.ceil((phaseEndsAt - Date.now()) / 1000));
-
-                if (countdownRemaining <= 0) {
+            if (!running) return;
+            const now = Date.now();
+            let changed = false;
+            while (now >= phaseEndsAt) {
+                changed = true;
+                warningDone = false;
+                if (countdown) {
                     countdown = false;
                     resting = false;
-                    remaining = duration;
                     currentTotal = duration;
-                    warningDone = false;
-                    phaseEndsAt = Date.now() + duration * 1000;
-                    campana();
-                }
-
-                updateDisplay();
-                return;
-            }
-
-            const previousRemaining = remaining;
-            remaining = Math.max(0, Math.ceil((phaseEndsAt - Date.now()) / 1000));
-
-            if (!resting && remaining <= 10 && previousRemaining > 10 && !warningDone) {
-                warningDone = true;
-                palmasTresVeces();
-            }
-
-            if (remaining <= 0) {
-                campana();
-
-                if (activeMatch && !resting) {
-                    clearInterval(interval);
-                    running = false;
-                    paused = false;
-                    finished = true;
-                    remaining = 0;
-                    document.getElementById('startBtn').innerHTML = '<i class="fa-solid fa-flag-checkered"></i> Finalizado';
-                    updateDisplay();
-                    return;
-                }
-
-                if (!resting) {
-                    resting = true;
-                    remaining = rest;
-                    currentTotal = rest;
-                    warningDone = false;
-                    phaseEndsAt = Date.now() + rest * 1000;
-                } else {
-                    resting = false;
-                    currentRound++;
-                    warningDone = false;
-
-                    if (rounds !== 0 && currentRound > rounds) {
-                        resetTimer();
-                        campana();
-                        return;
+                    phaseEndsAt += duration * 1000;
+                } else if (!resting) {
+                    if (activeMatch || (rounds !== 0 && currentRound >= rounds)) {
+                        clearInterval(interval);
+                        running = false; paused = false; finished = true; remaining = 0;
+                        document.getElementById('startBtn').innerHTML = '<i class="fa-solid fa-flag-checkered"></i> Finalizado';
+                        campana(); updateDisplay(); return;
                     }
-
-                    remaining = duration;
-                    currentTotal = duration;
-                    phaseEndsAt = Date.now() + duration * 1000;
-                    campana();
+                    resting = true; currentTotal = rest;
+                    phaseEndsAt += rest * 1000;
+                } else {
+                    resting = false; currentRound++; currentTotal = duration;
+                    phaseEndsAt += duration * 1000;
+                }
+                if (!countdown && !resting && now >= phaseEndsAt) {
+                    const cycle = (duration + rest) * 1000;
+                    let cycles = Math.floor((now - phaseEndsAt) / cycle);
+                    if (rounds !== 0) cycles = Math.min(cycles, Math.max(0, rounds - currentRound));
+                    currentRound += cycles; phaseEndsAt += cycles * cycle;
                 }
             }
-
+            const seconds = Math.max(0, Math.ceil((phaseEndsAt - now) / 1000));
+            if (countdown) countdownRemaining = seconds;
+            else remaining = seconds;
+            if (changed) campana();
+            if (!countdown && !resting && remaining <= 10 && !warningDone) {
+                warningDone = true; palmasTresVeces();
+            }
             updateDisplay();
         }
 
-        tick();
+        refreshTrainingClock = tick;
         interval = setInterval(tick, 200);
+        tick();
     }
 
     function toggleTimer() {
@@ -1749,6 +1729,7 @@ async function loadTimerYoutube(){
         const url=new URL(value);if(!['youtube.com','www.youtube.com','m.youtube.com','music.youtube.com','youtu.be'].includes(url.hostname))throw new Error('Ingresa un enlace de YouTube.');
         const playlist=url.searchParams.get('list'),video=url.hostname==='youtu.be'?url.pathname.slice(1).split('/')[0]:url.searchParams.get('v')||url.pathname.split('/')[2];
         if(!playlist&&!/^[\w-]{11}$/.test(video||''))throw new Error('El enlace no contiene un video o lista válida.');
+        localStorage.setItem(timerPlaylistKey,value);
         if(trainingProjected){if(timerMusicReady)timerPlayer.pauseVideo();document.getElementById('timerMusicBox').hidden=true;await sendTimerMusic('load',value);await sendTimerMusic('volume',document.getElementById('timerMusicVolume').value);status.textContent='Música cargada en la TV.';}
         else {pendingMusicUrl=value;document.getElementById('timerMusicBox').hidden=false;if(!timerMusicReady){status.textContent='Preparando reproductor de YouTube…';return;}if(playlist)timerPlayer.loadPlaylist({list:playlist,listType:'playlist'});else timerPlayer.loadVideoById(video);pendingMusicUrl=null;status.textContent='Música cargada en este dispositivo.';}
         timerMusicLoaded=true;
