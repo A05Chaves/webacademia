@@ -1,0 +1,7 @@
+{% extends 'gestion/base.html' %}{% block content %}
+<div class="page-heading"><h2>{{ titulo }}</h2><a class="btn btn-outline-secondary" href="{% url 'gestion:avatares_panel' %}">Volver al panel</a></div>
+<div class="card"><div class="card-body p-4"><p class="text-secondary">Configuración del catálogo. Guardar no cobra monedas ni modifica los avatares actuales de los usuarios.</p>
+<form method="post" enctype="multipart/form-data">{% csrf_token %}{{ form.non_field_errors }}
+<div class="row g-3">{% for field in form %}<div class="col-md-6"><label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label><div>{{ field }}</div>{% if field.help_text %}<small class="text-secondary">{{ field.help_text }}</small>{% endif %}<div class="text-danger">{{ field.errors }}</div></div>{% endfor %}</div>
+<div class="d-flex gap-2 mt-4"><button class="btn btn-success" type="submit">Guardar configuración</button><a class="btn btn-outline-secondary" href="{% url 'gestion:avatares_panel' %}">Cancelar</a></div></form></div></div>
+{% endblock %}

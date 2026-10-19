@@ -2,6 +2,7 @@ from django.urls import path
 
 from alumnos import admin
 from . import views
+from . import avatar_catalogo
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import path, include
 from django.contrib.auth import views as auth_views
@@ -10,6 +11,10 @@ from django.contrib.auth import views as auth_views
 app_name = 'gestion'
 
 urlpatterns = [
+    path('configuraciones/avatares/', avatar_catalogo.panel, name='avatares_panel'),
+    path('configuraciones/avatares/parametros/', avatar_catalogo.configurar, name='avatares_configurar'),
+    path('configuraciones/avatares/<str:tipo>/nuevo/', avatar_catalogo.editar, name='avatares_crear'),
+    path('configuraciones/avatares/<str:tipo>/<int:pk>/', avatar_catalogo.editar, name='avatares_editar'),
     path('', views.home_publica, name='home_publica'),
     path(
         'asistencias-home/actuales/',

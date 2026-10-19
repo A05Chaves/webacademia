@@ -1,6 +1,6 @@
 from django.db import models
 from django.core.exceptions import ValidationError
-from django.core.validators import MaxValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.conf import settings
 from django.utils import timezone
 import uuid
@@ -378,6 +378,57 @@ def estado_tv_inicial():
         'youtube_volume': 35,
         'youtube_command': None,
     }
+
+
+class ConfiguracionAvatar(models.Model):
+    edad_adulto = models.PositiveSmallIntegerField(default=18, verbose_name='Edad desde la que se muestra el catálogo de adultos', validators=[MinValueValidator(1), MaxValueValidator(100)])
+
+
+class AvatarCatalogo(models.Model):
+    class Publicos(models.TextChoices):
+        TODOS = 'TODOS', 'Niños y adultos'
+        NINOS = 'NINOS', 'Niños'
+        ADULTOS = 'ADULTOS', 'Adultos'
+
+    nombre = models.CharField(max_length=100, unique=True)
+    descripcion = models.TextField(blank=True)
+    publico = models.CharField(max_length=10, choices=Publicos.choices, default=Publicos.TODOS)
+    precio = models.PositiveIntegerField(default=0, verbose_name='Precio en monedas')
+    imagen = models.ImageField(upload_to='avatares/catalogo/', blank=True)
+    activo = models.BooleanField(default=True)
+    actualizado = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['nombre']
+
+    def __str__(self):
+        return self.nombre
+
+
+class ArticuloAvatar(models.Model):
+    class Tipos(models.TextChoices):
+        ACCESORIO = 'ACCESORIO', 'Accesorio'
+        UNIFORME = 'UNIFORME', 'Uniforme'
+        FONDO = 'FONDO', 'Fondo'
+        EFECTO = 'EFECTO', 'Efecto'
+        MEJORA = 'MEJORA', 'Mejora o evolución'
+
+    nombre = models.CharField(max_length=100, unique=True)
+    descripcion = models.TextField(blank=True)
+    tipo = models.CharField(max_length=12, choices=Tipos.choices, default=Tipos.ACCESORIO)
+    publico = models.CharField(max_length=10, choices=AvatarCatalogo.Publicos.choices, default=AvatarCatalogo.Publicos.TODOS)
+    precio = models.PositiveIntegerField(default=5, verbose_name='Precio en monedas')
+    avatar = models.ForeignKey(AvatarCatalogo, on_delete=models.PROTECT, null=True, blank=True, verbose_name='Avatar compatible', help_text='Vacío: compatible con todos los avatares.')
+    requisito = models.ForeignKey('self', on_delete=models.PROTECT, null=True, blank=True, verbose_name='Artículo requerido previamente')
+    imagen = models.ImageField(upload_to='avatares/articulos/', blank=True)
+    activo = models.BooleanField(default=True)
+    actualizado = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['tipo', 'nombre']
+
+    def __str__(self):
+        return self.nombre
 
 
 class SesionTV(models.Model):
