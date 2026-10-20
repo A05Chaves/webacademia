@@ -59,3 +59,16 @@ class AvatarCatalogoTests(TestCase):
             'nombre': 'No autorizado', 'precio': 1, 'publico': 'TODOS',
         })
         self.assertFalse(AvatarCatalogo.objects.exists())
+
+    def test_eclosion_preview_desde_30_sin_gastar_ni_cambiar_avatar(self):
+        self.client.force_login(self.usuario)
+        for saldo, imagen in [(29, 'avatar-huevo-bjj.png'), (30, 'avatar-cuy-eclosion-preview.png'), (125, 'avatar-cuy-eclosion-preview.png')]:
+            self.billetera.saldo = saldo
+            self.billetera.save(update_fields=['saldo'])
+            response = self.client.get(reverse('gestion:mi_perfil'))
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, imagen)
+            self.billetera.refresh_from_db()
+            self.assertEqual(self.billetera.saldo, saldo)
+            self.assertEqual(self.billetera.avatar, 'HUEVO')
+        self.assertFalse(MovimientoMonedas.objects.exists())

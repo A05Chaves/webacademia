@@ -33,7 +33,7 @@
         <div class="row align-items-center g-4">
             <div class="col-md-auto text-center">
                 <div class="profile-identity">
-                    <div class="avatar-huevo" role="img" aria-label="Avatar huevo practicante de jiu-jitsu"></div>
+                    <div class="avatar-huevo" role="img" aria-label="{% if avatar_eclosion_preview %}Cuy asomándose del cascarón, vista previa{% else %}Avatar huevo practicante de jiu-jitsu{% endif %}"></div>
                     <img src="{% static 'img/monedas-recompensa.png' %}?v=face"
                          class="profile-coin-stack"
                          alt="Montón de monedas de recompensa con la cara del cuy">

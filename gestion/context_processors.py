@@ -17,6 +17,8 @@ def gamificacion_usuario(request):
         ).order_by('fecha_programada', 'id').first()
     return {
         'billetera_monedas_usuario': billetera,
+        # Vista previa reversible: no cambia el avatar guardado ni consume monedas.
+        'avatar_eclosion_preview': billetera.saldo >= 30,
         'notificacion_recompensa_pendiente': notificacion,
         'consultar_notificaciones_recompensa': es_estudiante,
     }

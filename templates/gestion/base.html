@@ -334,7 +334,7 @@
         .payment-feedback-card p { font-size: 1.08rem; line-height: 1.55; }
 
         .avatar-huevo {
-            background: transparent url('{% static "img/avatar-huevo-bjj.png" %}') center / contain no-repeat;
+            background: transparent url('{% if avatar_eclosion_preview %}{% static "img/avatar-cuy-eclosion-preview.png" %}{% else %}{% static "img/avatar-huevo-bjj.png" %}{% endif %}') center / contain no-repeat;
             display: inline-block;
             filter: drop-shadow(0 8px 10px rgba(0,0,0,.24));
             height: 168px;
