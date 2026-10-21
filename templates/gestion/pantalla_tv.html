@@ -30,6 +30,14 @@ body{background:var(--tv-bg);color:var(--tv-text)}.top{border-bottom:1px solid v
 @media(max-height:550px){.brand,.clock{font-size:20px}.top{padding-bottom:6px}.class-title{margin:8px 0}.count{font-size:clamp(45px,12vh,90px)}.fighter{height:24vh}.big-time{font-size:17vh}}
 </style>
 <style>.tv-rewards{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}.tv-reward{display:inline-flex;align-items:center;gap:5px;border:1px solid #ad8b40;border-radius:999px;padding:3px 9px;color:#ffe39a;background:rgba(194,148,45,.13);font-size:clamp(14px,1.3vw,21px);font-weight:800}.tv-reward img{width:28px;height:28px;object-fit:contain}</style>
+<style>
+.overview{grid-template-rows:minmax(0,1fr)}
+.attendees{height:100%;overflow:hidden}.attendees h2{flex-shrink:0}
+.names{flex:1;overflow-y:auto;overflow-x:hidden;align-content:start;scroll-behavior:auto;overscroll-behavior:contain}
+.names .name{font-size:var(--names-font,24px);line-height:1.2;padding:8px 10px;min-width:0}
+.names .tv-rewards{margin-top:5px;gap:5px}.names .tv-reward{font-size:.75em;padding:2px 7px}.names .tv-reward img{height:1.3em;width:1.3em}
+@media(max-width:700px){.overview{height:100%;grid-template-rows:auto minmax(0,1fr);overflow:hidden}.class-card{padding:10px}.attendees{max-height:none}.class-title{font-size:24px;margin:6px 0}.class-card .count{font-size:40px}.class-card .meta{font-size:15px}}
+</style>
 </head>
 <body>
 <div id="soundGate" class="sound-gate"><button onclick="enableSound()">🔊 Activar sonido y comenzar</button></div>
@@ -55,13 +63,25 @@ const fmt=s=>`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStar
 let soundEnabled=false,lastSound=null,audioContext=null,ytPlayer=null,ytReady=false,lastYoutubeCommand=null,lastVideoId=null,pendingState=null;
 let trainingState=null,trainingReceivedAt=0,trainingServerTime=0;
 let attendeesSignature='',namesDirection=1,namesWaitUntil=0;
+function ajustarListaTV(){
+  if($('overview').style.display==='none')return;
+  const names=$('names'),cantidad=names.children.length;
+  const columnas=names.clientWidth>=950&&cantidad>16?3:(names.clientWidth<340?1:2);
+  names.style.gridTemplateColumns=`repeat(${columnas},minmax(0,1fr))`;
+  let tamano=Math.min(26,Math.max(18,Math.floor(names.clientWidth/columnas/15)));
+  names.style.setProperty('--names-font',tamano+'px');
+  while(tamano>16&&names.scrollHeight>names.clientHeight+1){tamano--;names.style.setProperty('--names-font',tamano+'px');}
+}
+window.addEventListener('resize',()=>requestAnimationFrame(ajustarListaTV));
+if(window.ResizeObserver)new ResizeObserver(()=>requestAnimationFrame(ajustarListaTV)).observe($('names'));
 setInterval(()=>{
   const names=$('names');
   if($('overview').style.display==='none'||Date.now()<namesWaitUntil)return;
   const max=names.scrollHeight-names.clientHeight;
   if(max<=0)return;
   names.scrollTop+=namesDirection;
-  if(names.scrollTop>=max||names.scrollTop<=0){namesDirection*=-1;namesWaitUntil=Date.now()+3000;}
+  if(names.scrollTop>=max-1){namesDirection=-1;namesWaitUntil=Date.now()+3000;}
+  else if(names.scrollTop<=1){namesDirection=1;namesWaitUntil=Date.now()+3000;}
 },80);
 function renderTraining(){if(!trainingState)return;const t=trainingState;const elapsed=t.running?Math.max(0,(trainingServerTime+Date.now()-trainingReceivedAt-Date.parse(t.updated_at))/1000):0;const seconds=Math.max(0,Math.ceil(t.remaining-elapsed));$('trainingTime').textContent=fmt(seconds);$('trainingLabel').textContent=({stopped:'LISTO PARA ENTRENAR',preparation:'PREPARACIÓN',round:'ENTRENAMIENTO',rest:'DESCANSO',paused:'PAUSADO',ended:'FINALIZADO'})[t.phase]||'ENTRENAMIENTO';$('trainingRound').textContent=`RONDA ${t.round}${t.rounds?' / '+t.rounds:' · SIN LÍMITE'}`;}
 setInterval(renderTraining,200);
@@ -182,6 +202,7 @@ function render(d){
       $('names').appendChild(row);
     }
     $('names').scrollTop=0;namesDirection=1;namesWaitUntil=Date.now()+3000;
+    requestAnimationFrame(ajustarListaTV);
   }
   ['red','blue'].forEach(side=>{renderFighterName(side,s[side+'_name']);$(side+'Points').textContent=s[side+'_points'];$(side+'Advantages').textContent=s[side+'_advantages'];$(side+'Penalties').textContent=s[side+'_penalties']});
   $('nextFightTV').textContent=s.next_fight?`SIGUIENTE: ${s.next_fight.category} · ${s.next_fight.p1} VS ${s.next_fight.p2}`:'';
