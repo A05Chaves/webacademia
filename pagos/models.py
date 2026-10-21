@@ -12,6 +12,12 @@ from finanzas.models import CuentaFinanciera
 
 
 class MetodoPagoQR(models.Model):
+    @property
+    def es_efectivo(self):
+        if self.cuenta_financiera_id:
+            return self.cuenta_financiera.tipo == CuentaFinanciera.Tipos.EFECTIVO
+        return self.nombre.strip().casefold() in {'efectivo', 'pago en efectivo'}
+
     nombre = models.CharField(max_length=100, unique=True)
     titular = models.CharField(max_length=150)
     descripcion = models.TextField(blank=True, null=True)
@@ -429,6 +435,21 @@ class LlaveCategoriaEvento(models.Model):
 
 
 class Pago(models.Model):
+    class Ajustes(models.TextChoices):
+        NORMAL = 'NORMAL', 'Pago completo'
+        ABONO = 'ABONO', 'Abono (queda saldo pendiente)'
+        DESCUENTO = 'DESCUENTO', 'Descuento acordado (requiere aprobación)'
+        OTRO = 'OTRO', 'Otro (requiere revisión)'
+
+    mensualidades = models.PositiveSmallIntegerField(default=1)
+    precio_mensualidad = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_calculado = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    tipo_ajuste = models.CharField(max_length=12, choices=Ajustes.choices, default=Ajustes.NORMAL)
+    motivo_ajuste = models.CharField(max_length=240, blank=True)
+    saldo_pendiente = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    mensualidades_cobertura = models.PositiveSmallIntegerField(default=1)
+    cambio_plan_solicitado = models.BooleanField(default=False)
+    plan_anterior = models.ForeignKey('planes.Plan', on_delete=models.PROTECT, null=True, blank=True, related_name='pagos_cambio_desde')
     class Estados(models.TextChoices):
         PENDIENTE = 'PENDIENTE', 'Pendiente'
         APROBADO = 'APROBADO', 'Aprobado'
@@ -475,7 +496,7 @@ class Pago(models.Model):
         MetodoPagoQR, on_delete=models.PROTECT, related_name='pagos'
     )
     valor = models.DecimalField(max_digits=10, decimal_places=2)
-    comprobante = models.FileField(upload_to='comprobantes_pagos/')
+    comprobante = models.FileField(upload_to='comprobantes_pagos/', blank=True)
     referencia_pago = models.CharField(max_length=100, blank=True, null=True)
     pagador_nombre = models.CharField(max_length=180, blank=True)
     pagador_documento = models.CharField(max_length=30, blank=True, db_index=True)
@@ -526,6 +547,8 @@ class Pago(models.Model):
                 raise ValidationError({
                     'suscripcion': 'La suscripción seleccionada no pertenece al alumno indicado.'
                 })
+        if self.tipo in (self.Tipos.MENSUALIDAD, self.Tipos.PROMOCION) and self.metodo_qr_id and not self.comprobante and not self.metodo_qr.es_efectivo:
+            raise ValidationError({'comprobante': 'Adjunta el comprobante para pagos que no sean en efectivo.'})
         if (
             self.tipo in (self.Tipos.MENSUALIDAD, self.Tipos.PROMOCION)
             and not self.suscripcion_id

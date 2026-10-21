@@ -367,12 +367,75 @@ class SuscripcionForm(forms.ModelForm):
         }
 
 
-class PagoForm(forms.ModelForm):
+class MensualidadesPagoMixin:
+    clasificacion_administrativa = False
+    @property
+    def planes_resumen(self):
+        return {str(p.pk): {'precio': str(p.precio), 'dias': p.duracion_dias, 'clases_semana': p.clases_semana, 'clases_mes': p.clases_mes, 'ilimitado': p.asistencia_ilimitada} for p in self.fields['plan'].queryset}
+
+    @property
+    def metodos_efectivo(self):
+        return [str(m.pk) for m in self.fields['metodo_qr'].queryset.select_related('cuenta_financiera') if m.es_efectivo]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['mensualidades'].required = False
+        self.fields['mensualidades'].widget = forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 24})
+        self.fields['tipo_ajuste'].required = False
+        self.fields['tipo_ajuste'].widget.attrs['class'] = 'form-select'
+        self.fields['motivo_ajuste'].widget.attrs['class'] = 'form-control'
+        self.fields['comprobante'].required = True
+        metodo_id = self.data.get(self.add_prefix('metodo_qr')) if self.is_bound else None
+        metodo = MetodoPagoQR.objects.filter(pk=metodo_id).select_related('cuenta_financiera').first() if str(metodo_id or '').isdigit() else None
+        if metodo and metodo.es_efectivo:
+            for nombre in ('comprobante', 'referencia_pago'):
+                self.fields[nombre].required = False
+                self.fields[nombre].disabled = True
+
+    def clean(self):
+        cleaned = super().clean()
+        cantidad = cleaned.get('mensualidades')
+        metodo = cleaned.get('metodo_qr')
+        if metodo and metodo.es_efectivo:
+            cleaned['comprobante'] = None
+            cleaned['referencia_pago'] = ''
+        if cantidad is None:
+            cantidad = 1
+        if not 1 <= cantidad <= 24:
+            self.add_error('mensualidades', 'Selecciona entre 1 y 24 mensualidades.')
+        cleaned['mensualidades'] = cantidad
+        ajuste = cleaned.get('tipo_ajuste') or Pago.Ajustes.NORMAL
+        cleaned['tipo_ajuste'] = ajuste
+        plan, valor = cleaned.get('plan'), cleaned.get('valor')
+        if valor is not None and valor <= 0:
+            self.add_error('valor', 'El valor pagado debe ser mayor que cero.')
+        if plan and valor is not None:
+            total = plan.precio * cantidad
+            if self.clasificacion_administrativa:
+                ajuste = Pago.Ajustes.NORMAL if valor == total else Pago.Ajustes.OTRO
+                cleaned['tipo_ajuste'] = ajuste
+                cleaned['motivo_ajuste'] = ''
+            if not self.clasificacion_administrativa and valor != total and ajuste == Pago.Ajustes.NORMAL:
+                self.add_error('tipo_ajuste', 'El valor es diferente al calculado. Indica si es abono, descuento u otro.')
+            if not self.clasificacion_administrativa and ajuste != Pago.Ajustes.NORMAL and not cleaned.get('motivo_ajuste', '').strip():
+                self.add_error('motivo_ajuste', 'Explica el abono, descuento o acuerdo.')
+            if ajuste in (Pago.Ajustes.ABONO, Pago.Ajustes.DESCUENTO) and valor >= total:
+                self.add_error('tipo_ajuste', 'Un abono o descuento debe ser inferior al total calculado.')
+            self.instance.precio_mensualidad = plan.precio
+            self.instance.total_calculado = total
+            self.instance.saldo_pendiente = max(total - valor, 0) if ajuste != Pago.Ajustes.DESCUENTO else 0
+            cobertura = min(cantidad, int(valor // plan.precio)) if plan.precio > 0 else 0
+            self.instance.mensualidades_cobertura = cantidad if ajuste in (Pago.Ajustes.NORMAL, Pago.Ajustes.DESCUENTO) else cobertura
+        return cleaned
+
+
+class PagoForm(MensualidadesPagoMixin, forms.ModelForm):
     class Meta:
         model = Pago
         fields = [
             'alumno',
             'plan',
+            'mensualidades', 'tipo_ajuste', 'motivo_ajuste',
             'metodo_qr',
             'valor',
             'comprobante',
@@ -408,6 +471,7 @@ class PagoForm(forms.ModelForm):
 
 
 class ValidarPagoForm(forms.ModelForm):
+    mensualidades_cobertura = forms.IntegerField(required=False, min_value=0, max_value=24, label='Mensualidades que se habilitarán', widget=forms.NumberInput(attrs={'class': 'form-control', 'min': 0, 'max': 24}))
     fecha_inicio = forms.DateField(
         required=False,
         label='Fecha real de inicio',
@@ -436,6 +500,7 @@ class ValidarPagoForm(forms.ModelForm):
         fields = [
             'estado',
             'observacion_admin',
+            'tipo_ajuste', 'motivo_ajuste',
         ]
 
         widgets = {
@@ -449,13 +514,19 @@ class ValidarPagoForm(forms.ModelForm):
         self.pago = kwargs.get('instance')
         self.fecha_inicio_automatica = None
         super().__init__(*args, **kwargs)
+        self.fields['estado'].choices = [('', 'Selecciona Aprobar o Rechazar'), ('APROBADO', 'Aprobar pago'), ('RECHAZADO', 'Rechazar pago')]
+        self.fields['estado'].error_messages.update(required='Selecciona Aprobar o Rechazar antes de guardar.', invalid_choice='Selecciona Aprobar o Rechazar; no se puede guardar la revisión como Pendiente.')
+        if not self.is_bound:
+            self.initial['estado'] = ''
+        self.fields['motivo_ajuste'].required = False
+        self.fields['observacion_admin'].required = False
         if self.pago and self.pago.tipo in (
             Pago.Tipos.MENSUALIDAD, Pago.Tipos.PROMOCION,
         ):
             hoy = timezone.localdate()
-            ultima = Suscripcion.objects.filter(
-                alumno=self.pago.alumno
-            ).order_by('-fecha_vencimiento').first()
+            self.fields['mensualidades_cobertura'].initial = self.pago.mensualidades_cobertura
+            from pagos.cambios_plan import ultima_cobertura
+            ultima = ultima_cobertura(self.pago.alumno)
             self.fecha_inicio_automatica = (
                 ultima.fecha_vencimiento + timedelta(days=1)
                 if ultima else hoy
@@ -463,6 +534,11 @@ class ValidarPagoForm(forms.ModelForm):
             self.fields['fecha_inicio'].initial = self.fecha_inicio_automatica
         else:
             self.fields['fecha_inicio'].widget = forms.HiddenInput()
+            for nombre in ('mensualidades_cobertura', 'tipo_ajuste', 'motivo_ajuste'):
+                self.fields[nombre].widget = forms.HiddenInput()
+        self.fields['tipo_ajuste'].required = False
+        self.fields['tipo_ajuste'].widget.attrs['class'] = 'form-select'
+        self.fields['motivo_ajuste'].widget.attrs['class'] = 'form-control'
 
     def clean_estado(self):
         estado = self.cleaned_data.get('estado')
@@ -476,8 +552,30 @@ class ValidarPagoForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
+        cleaned['tipo_ajuste'] = cleaned.get('tipo_ajuste') or self.pago.tipo_ajuste
         if cleaned.get('estado') == Pago.Estados.APROBADO:
             if self.pago.tipo in (Pago.Tipos.MENSUALIDAD, Pago.Tipos.PROMOCION):
+                ajuste = cleaned.get('tipo_ajuste') or self.pago.tipo_ajuste
+                cleaned['tipo_ajuste'] = ajuste
+                cobertura = cleaned.get('mensualidades_cobertura')
+                if cobertura is None:
+                    cobertura = self.pago.mensualidades_cobertura
+                if ajuste in (Pago.Ajustes.NORMAL, Pago.Ajustes.DESCUENTO):
+                    cobertura = self.pago.mensualidades
+                if self.pago.tipo == Pago.Tipos.PROMOCION:
+                    cobertura = 1
+                if cobertura > self.pago.mensualidades:
+                    self.add_error('mensualidades_cobertura', 'No puede superar las mensualidades solicitadas.')
+                if self.pago.total_calculado > 0:
+                    if self.pago.valor != self.pago.total_calculado and ajuste == Pago.Ajustes.NORMAL:
+                        self.add_error('tipo_ajuste', 'El valor no coincide con el total. Revisa el tratamiento de la diferencia.')
+                    if ajuste != Pago.Ajustes.NORMAL and not cleaned.get('motivo_ajuste', '').strip():
+                        self.add_error('motivo_ajuste', 'Confirma el motivo del ajuste antes de aprobar.')
+                    if ajuste in (Pago.Ajustes.ABONO, Pago.Ajustes.OTRO) and self.pago.precio_mensualidad > 0:
+                        maximo = int(self.pago.valor // self.pago.precio_mensualidad)
+                        if cobertura > maximo:
+                            self.add_error('mensualidades_cobertura', 'El abono no cubre esa cantidad de mensualidades completas. Confirma un descuento si corresponde.')
+                cleaned['mensualidades_cobertura'] = cobertura
                 # La fecha enviada por el navegador solo se considera cuando el
                 # administrador realmente modificó el control. En caso contrario,
                 # se conserva la continuidad de la última suscripción.
@@ -488,6 +586,10 @@ class ValidarPagoForm(forms.ModelForm):
                         'fecha_inicio',
                         'Selecciona la fecha de inicio que deseas aplicar.',
                     )
+                if self.pago.cambio_plan_solicitado and cleaned.get('fecha_inicio'):
+                    vigente_hasta = Suscripcion.objects.filter(alumno=self.pago.alumno, fecha_vencimiento__gte=timezone.localdate()).exclude(estado__in=['SUSPENDIDA', 'PENDIENTE_PAGO']).order_by('-fecha_vencimiento').first()
+                    if vigente_hasta and cleaned['fecha_inicio'] <= vigente_hasta.fecha_vencimiento:
+                        self.add_error('fecha_inicio', 'El cambio debe iniciar después de la cobertura ya pagada. No se permite reemplazarla anticipadamente.')
             if self.pago.posible_duplicado:
                 if not cleaned.get('confirmar_duplicado'):
                     self.add_error(
@@ -507,7 +609,8 @@ class ValidarPagoForm(forms.ModelForm):
             self.pago.promocion.dias_aplicados
             if self.pago.promocion_id else self.pago.plan.duracion_dias
         )
-        return inicio + timedelta(days=dias - 1)
+        cantidad = 1 if self.pago.promocion_id else self.cleaned_data.get('mensualidades_cobertura', self.pago.mensualidades)
+        return inicio + timedelta(days=dias * cantidad - 1)
 
 
 class PromocionForm(forms.ModelForm):
@@ -1334,11 +1437,14 @@ class ClaseProgramadaForm(forms.ModelForm):
 # FORMULARIO DE PAGO POR ESTUDIANTE
 
 
-class PagoAlumnoForm(forms.ModelForm):
+class PagoAlumnoForm(MensualidadesPagoMixin, forms.ModelForm):
+    clasificacion_administrativa = True
+    cambiar_plan = forms.BooleanField(required=False, label='Quiero cambiar mi plan', widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}))
     class Meta:
         model = Pago
         fields = [
             'plan',
+            'mensualidades', 'tipo_ajuste', 'motivo_ajuste',
             'metodo_qr',
             'valor',
             'comprobante',
@@ -1357,13 +1463,36 @@ class PagoAlumnoForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        alumno = kwargs.pop('alumno', None)
         super().__init__(*args, **kwargs)
-
-        self.fields['plan'].queryset = Plan.objects.filter(
-            activo=True
-        )
+        for nombre in ('tipo_ajuste', 'motivo_ajuste'):
+            self.fields[nombre].disabled = True
+            self.fields[nombre].initial = Pago.Ajustes.NORMAL if nombre == 'tipo_ajuste' else ''
+            self.fields[nombre].widget = forms.HiddenInput()
+        from pagos.cambios_plan import suscripcion_referencia, pago_mensualidad_pendiente, ultima_cobertura
+        self.pago_pendiente = pago_mensualidad_pendiente(alumno)
+        self.cobertura_actual = ultima_cobertura(alumno)
+        self.inicio_estimado = self.cobertura_actual.fecha_vencimiento + timedelta(days=1) if self.cobertura_actual else timezone.localdate()
+        self.cobertura_vigente = self.cobertura_actual and self.cobertura_actual.fecha_vencimiento >= timezone.localdate()
+        self.alumno_identificado = alumno is not None
+        self.suscripcion_actual = suscripcion_referencia(alumno)
+        filtros = Q(activo=True)
+        if self.suscripcion_actual:
+            filtros |= Q(pk=self.suscripcion_actual.plan_id)
+            self.fields['plan'].initial = self.suscripcion_actual.plan_id
+        self.fields['plan'].queryset = Plan.objects.filter(filtros)
 
         self.fields['metodo_qr'].queryset = metodos_pago_disponibles()
+
+    def clean(self):
+        cleaned = super().clean()
+        seleccionado = cleaned.get('plan')
+        if self.pago_pendiente:
+            pendiente = self.pago_pendiente
+            raise forms.ValidationError(f'Ya tienes un pago de mensualidad pendiente de validar: #{pendiente.pk}, reportado el {pendiente.fecha_reporte:%d/%m/%Y}, por $ {pendiente.valor:,.0f}. Espera la revisión antes de registrar otro pago.')
+        if self.suscripcion_actual and seleccionado and seleccionado.pk != self.suscripcion_actual.plan_id and not cleaned.get('cambiar_plan'):
+            self.add_error('plan', 'Marca “Quiero cambiar mi plan” para solicitar un plan diferente.')
+        return cleaned
 
     def clean_comprobante(self):
         comprobante = self.cleaned_data.get('comprobante')

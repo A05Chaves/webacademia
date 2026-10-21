@@ -1,0 +1,86 @@
+<script>
+document.addEventListener('DOMContentLoaded',()=>{
+ const data=document.getElementById('planes-mensualidades');if(!data)return;
+ const form=data.closest('form'),planes=JSON.parse(data.textContent),plan=form.elements.plan,cantidad=form.elements.mensualidades,valor=form.elements.valor;
+ const actual=form.querySelector('[data-plan-actual]'),cambiar=form.elements.cambiar_plan;
+ const efectivoIds=JSON.parse(document.getElementById('metodos-efectivo').textContent),metodoPago=form.elements.metodo_qr;
+ const esEfectivo=()=>efectivoIds.includes(metodoPago.value);
+ function ajustarSoporte(){
+   const efectivo=esEfectivo();
+   for(const nombre of ['referencia_pago','comprobante']){
+     const campo=form.elements[nombre];
+     campo.disabled=efectivo;
+     campo.required=nombre==='comprobante'&&!efectivo;
+     const bloque=campo.closest('.mb-3, .mb-4, .col-12, .payment-form-section');
+     if(bloque)bloque.hidden=efectivo;
+   }
+ }
+ metodoPago.addEventListener('change',ajustarSoporte);ajustarSoporte();
+ const pendiente=form.querySelector('[data-pago-pendiente]'),cobertura=form.querySelector('[data-cobertura-inicio]');
+ function bloquearPendiente(){form.querySelectorAll('button[type="submit"],input[type="submit"]').forEach(b=>{if(form.dataset.envioEnCurso!=='true')b.disabled=Boolean(pendiente&&!pendiente.hidden)});}
+ bloquearPendiente();
+ async function refrescarEstadoPago(){
+   if(!cobertura)return;
+   try{
+     const response=await fetch("{% url 'gestion:estado_registro_pago' %}",{cache:'no-store',credentials:'same-origin'});
+     if(!response.ok)return;
+     const estado=await response.json();
+     pendiente.hidden=!estado.pendiente;
+     if(estado.pendiente){const p=estado.pendiente;pendiente.textContent=`Ya tienes un pago de mensualidad pendiente de validar: #${p.id} · ${p.fecha} · $ ${new Intl.NumberFormat('es-CO').format(Number(p.valor))}. Espera la revisión antes de registrar otro pago.`;}
+     else pendiente.replaceChildren();
+     cobertura.dataset.coberturaInicio=estado.inicio;
+     cobertura.hidden=!estado.vigente_hasta;
+     cobertura.querySelector('[data-vigencia]').textContent=estado.vigente_hasta||'';
+     bloquearPendiente();
+   }catch(error){console.warn('No fue posible actualizar el estado del pago.',error);}
+ }
+ form.closest('.modal')?.addEventListener('shown.bs.modal',refrescarEstadoPago);
+ window.addEventListener('pageshow',refrescarEstadoPago);
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)refrescarEstadoPago()});
+ refrescarEstadoPago();
+ function periodoEstimado(){
+   const p=planes[plan.value];if(!cobertura||!p)return '';
+   const inicio=cobertura.dataset.coberturaInicio.split('-').map(Number),desde=new Date(Date.UTC(inicio[0],inicio[1]-1,inicio[2])),hasta=new Date(desde);
+   hasta.setUTCDate(hasta.getUTCDate()+p.dias*(Number(cantidad.value)||1)-1);
+   const formato=d=>d.toLocaleDateString('es-CO',{timeZone:'UTC'});
+   return 'Del '+formato(desde)+' al '+formato(hasta);
+ }
+ function actualizarPeriodo(){const aviso=form.querySelector('[data-periodo-estimado]');if(aviso)aviso.textContent=periodoEstimado();}
+ if(actual&&cambiar){
+   const selector=form.querySelector('[data-selector-plan]');
+   function mostrarPlanes(){selector.hidden=!cambiar.checked;if(!cambiar.checked){plan.value=actual.dataset.planActual;calcular(true)}}
+   cambiar.addEventListener('change',mostrarPlanes);selector.hidden=!cambiar.checked;
+ }
+ const dinero=n=>'$ '+new Intl.NumberFormat('es-CO',{minimumFractionDigits:0,maximumFractionDigits:2}).format(n);
+ const numero=v=>{let s=String(v);if(s.includes(','))s=s.replace(/\./g,'').replace(',','.');else if((s.match(/\./g)||[]).length>1||/\.\d{3}$/.test(s))s=s.replace(/\./g,'');return Number(s)};
+function calcular(llenar){const p=planes[plan.value];if(!p)return;const meses=Number(cantidad.value)||1,total=Number(p.precio)*meses;const aviso=form.querySelector('[data-total-mensualidades]');if(aviso)aviso.textContent=`Total sugerido: ${dinero(total)} · ${meses} mensualidad(es) · ${p.dias*meses} días según el plan.`;if(llenar){valor.value=valor.type==='number'?String(total):new Intl.NumberFormat('es-CO',{maximumFractionDigits:2}).format(total);valor.dispatchEvent(new Event('input',{bubbles:true}));}}
+ plan.addEventListener('change',()=>{calcular(true);actualizarPeriodo()});cantidad.addEventListener('input',()=>{calcular(true);actualizarPeriodo()});cambiar?.addEventListener('change',actualizarPeriodo);calcular(!valor.value);actualizarPeriodo();
+ const dialog=document.createElement('dialog');dialog.style.cssText='width:min(560px,92vw);max-height:85vh;overflow:auto;border-radius:16px;padding:24px;background:var(--bg-card);color:var(--text-main);border:1px solid var(--border-color)';
+ const titulo=document.createElement('h3');titulo.textContent='Confirma los datos del pago';dialog.appendChild(titulo);
+ const resumen=document.createElement('div');dialog.appendChild(resumen);
+ const corregir=document.createElement('button');corregir.type='button';corregir.className='btn btn-outline-secondary me-2';corregir.textContent='Corregir datos';corregir.onclick=()=>dialog.close();dialog.appendChild(corregir);
+ const confirmar=document.createElement('button');confirmar.type='button';confirmar.className='btn btn-success';confirmar.textContent='Confirmar y enviar';dialog.appendChild(confirmar);document.body.appendChild(dialog);
+ let confirmado=false;
+ confirmar.onclick=()=>{confirmado=true;dialog.close();form.requestSubmit()};
+ form.addEventListener('submit',e=>{
+   if(pendiente&&!pendiente.hidden){e.preventDefault();pendiente.scrollIntoView({block:'center'});return;}
+   if(confirmado){confirmado=false;return}e.preventDefault();
+   if(!form.reportValidity())return;
+   const p=planes[plan.value];if(!p)return;const meses=Number(cantidad.value)||1,total=Number(p.precio)*meses,pagado=valor.dataset.valorMonetario==='true'?numero(valor.value):Number(valor.value.replace(',','.'));
+   const texto=nombre=>{const f=form.elements[nombre];return f?.selectedOptions?.[0]?.textContent.trim()||f?.value||''};
+   const motivo=texto('tipo_ajuste');resumen.replaceChildren();
+   const filas=[['Estudiante',texto('alumno')||texto('username')||'{{ request.user.get_full_name|default:request.user.username|escapejs }}'],['Plan',texto('plan')],['Cambio de plan',cambiar?.checked?'Solicitud pendiente de aprobación':'No solicitado'],['Plan anterior',actual?.querySelector('strong')?.textContent||'Sin plan previo identificado'],['Mensualidades',meses],['Valor por mensualidad',dinero(Number(p.precio))],['Total calculado',dinero(total)],['Valor reportado',dinero(pagado)],['Diferencia',dinero(total-pagado)],['Tratamiento',motivo],['Observación',texto('motivo_ajuste')||'Sin observación'],['Cuenta / método',texto('metodo_qr')],['Referencia',texto('referencia_pago')||'Sin referencia'],['Comprobante',form.elements.comprobante.files[0]?.name||'Sin archivo']];
+   filas.splice(2,0,['Clases del plan seleccionado',p.ilimitado?'Acceso ilimitado':`${p.clases_semana} por semana · ${p.clases_mes} por mes`]);
+   if(esEfectivo()){for(const fila of filas){if(['Referencia','Comprobante'].includes(fila[0]))fila[1]='No aplica (pago en efectivo)';}}
+   if(cobertura)filas.push(['Cobertura estimada (sujeta a aprobación)',periodoEstimado()]);
+   if(cobertura&&!cobertura.hidden)filas.push(['Pago anticipado','Este pago se hará efectivo después de la vigencia actual ('+cobertura.querySelector('[data-vigencia]').textContent+'), sujeto a aprobación.']);
+   for(const [label,value] of filas){
+     if(!form.elements.tipo_ajuste&&['Tratamiento','Observación'].includes(label))continue;
+     const row=document.createElement('p'),strong=document.createElement('strong');strong.textContent=label+': ';row.append(strong,document.createTextNode(String(value)));
+     if(label==='Cuenta / método'){row.style.cssText='font-size:1.25rem;font-weight:800;color:#dc3545;overflow-wrap:anywhere';}
+     resumen.appendChild(row);
+   }
+   const nota=document.createElement('p');nota.textContent='Pendiente de validación. La administración revisará las diferencias de valor y confirmará la cobertura y las fechas antes de aprobar.';resumen.appendChild(nota);dialog.showModal();
+ });
+});
+</script>

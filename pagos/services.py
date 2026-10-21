@@ -153,6 +153,14 @@ def generar_pdf_comprobante_pago(pago):
             ['Inicio de cobertura', pago.suscripcion.fecha_inicio.strftime('%d/%m/%Y')],
             ['Fin de cobertura', pago.suscripcion.fecha_vencimiento.strftime('%d/%m/%Y')],
         ])
+    if pago.tipo in (Pago.Tipos.MENSUALIDAD, Pago.Tipos.PROMOCION) and pago.total_calculado:
+        filas.extend([
+            ['Mensualidades solicitadas', str(pago.mensualidades)],
+            ['Mensualidades habilitadas', str(pago.mensualidades_cobertura)],
+            ['Total calculado', f'$ {pago.total_calculado:,.2f} COP'],
+            ['Tratamiento', pago.get_tipo_ajuste_display()],
+            ['Saldo pendiente', f'$ {pago.saldo_pendiente:,.2f} COP'],
+        ])
     tabla = Table(filas, colWidths=[55 * mm, 115 * mm])
     tabla.setStyle(TableStyle([
         ('GRID', (0, 0), (-1, -1), .4, colors.HexColor('#BCC7D1')),

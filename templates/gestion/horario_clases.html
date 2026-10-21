@@ -491,7 +491,10 @@
                 <label class="form-label">
                     Plan
                 </label>
-                {{ pago_form.plan }}
+{% if pago_form.suscripcion_actual %}<div class="alert alert-info" data-plan-actual="{{ pago_form.suscripcion_actual.plan_id }}"><strong>Tu plan: {{ pago_form.suscripcion_actual.plan.nombre }}</strong><br>$ {{ pago_form.suscripcion_actual.plan.precio|floatformat:"0g" }} · {% if pago_form.suscripcion_actual.plan.asistencia_ilimitada %}Acceso ilimitado{% else %}{{ pago_form.suscripcion_actual.plan.clases_semana }} clases por semana · {{ pago_form.suscripcion_actual.plan.clases_mes }} clases por mes{% endif %}</div>{% endif %}
+                <div class="form-check mb-3">{{ pago_form.cambiar_plan }} <label for="{{ pago_form.cambiar_plan.id_for_label }}">Quiero cambiar mi plan</label></div>
+                <div data-selector-plan>{{ pago_form.plan }}</div>
+                {% include 'gestion/pago_mensualidades_campos.html' with formulario=pago_form %}
             </div>
 
             <div class="mb-3">
@@ -550,4 +553,5 @@
 
 </div>
 
+{% include 'gestion/pago_mensualidades_script.html' %}
 {% endblock %}

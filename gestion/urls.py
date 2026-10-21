@@ -131,6 +131,7 @@ urlpatterns = [
         name='confirmar_notificacion_recompensa',
     ),
 
+    path('pagos/alumno/estado/', views.estado_registro_pago, name='estado_registro_pago'),
     path('pagos/alumno/registrar/', views.registrar_pago_alumno,
          name='registrar_pago_alumno'),
 

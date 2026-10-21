@@ -10,6 +10,8 @@ class Notificacion(models.Model):
         PAGO_APROBADO = 'PAGO_APROBADO', 'Pago aprobado'
         PAGO_RECHAZADO = 'PAGO_RECHAZADO', 'Pago rechazado'
         RECOMPENSA = 'RECOMPENSA', 'Recompensa recibida'
+        CAMBIO_PLAN_SOLICITADO = 'CAMBIO_PLAN_SOLICITADO', 'Cambio de plan solicitado'
+        CAMBIO_PLAN_RESULTADO = 'CAMBIO_PLAN_RESULTADO', 'Resultado del cambio de plan'
 
     class Estados(models.TextChoices):
         PENDIENTE = 'PENDIENTE', 'Pendiente'
@@ -26,6 +28,8 @@ class Notificacion(models.Model):
         on_delete=models.CASCADE,
         related_name='notificaciones'
     )
+    pago = models.ForeignKey('pagos.Pago', on_delete=models.SET_NULL, null=True, blank=True, related_name='notificaciones_cambio_plan')
+    error_envio = models.TextField(blank=True)
     tipo = models.CharField(
         max_length=30,
         choices=Tipos.choices

@@ -519,7 +519,7 @@ def home_publica(request):
             config_home.playlist_youtube_url
         )
 
-    pago_form = PagoAlumnoForm()
+    pago_form = PagoAlumnoForm(alumno=getattr(request.user, 'perfil_alumno', None) if request.user.is_authenticated else None)
 
     promociones_home = Promocion.objects.filter(
         publicada_home=True,
@@ -1301,6 +1301,12 @@ def validar_pago(request, pago_id):
             )
 
             if pago.estado == 'APROBADO':
+                if pago.tipo in (Pago.Tipos.MENSUALIDAD, Pago.Tipos.PROMOCION):
+                    pago.mensualidades_cobertura = form.cleaned_data['mensualidades_cobertura']
+                    pago.saldo_pendiente = (
+                        max(pago.total_calculado - pago.valor, 0)
+                        if pago.tipo_ajuste in (Pago.Ajustes.ABONO, Pago.Ajustes.OTRO) else 0
+                    )
                 cuenta = (
                     pago.metodo_qr.cuenta_financiera
                     if pago.metodo_qr_id else None
@@ -1314,7 +1320,7 @@ def validar_pago(request, pago_id):
                     return redirect('gestion:validar_pago', pago_id=pago.id)
 
                 hoy = timezone.now().date()
-                if pago.tipo in (Pago.Tipos.MENSUALIDAD, Pago.Tipos.PROMOCION):
+                if pago.tipo in (Pago.Tipos.MENSUALIDAD, Pago.Tipos.PROMOCION) and pago.mensualidades_cobertura > 0:
                     if not pago.alumno_id or not pago.plan_id:
                         messages.error(
                             request,
@@ -1358,6 +1364,7 @@ def validar_pago(request, pago_id):
                     pago.suscripcion = suscripcion
                     pago.concepto_detalle = (
                         f'{pago.plan.nombre}'
+                        + f' · {pago.mensualidades_cobertura} mensualidad(es)'
                         + (f' - {pago.promocion.nombre}' if pago.promocion_id else '')
                     )
                     if (
@@ -1369,6 +1376,8 @@ def validar_pago(request, pago_id):
                     if hasattr(pago, 'aplicacion_promocion'):
                         pago.aplicacion_promocion.estado = AplicacionPromocion.Estados.APLICADA
                         pago.aplicacion_promocion.save(update_fields=['estado'])
+                elif pago.tipo in (Pago.Tipos.MENSUALIDAD, Pago.Tipos.PROMOCION):
+                    pago.concepto_detalle = f'Abono {pago.plan.nombre}: sin cobertura nueva. Saldo pendiente: {pago.saldo_pendiente}'
                 elif pago.tipo == Pago.Tipos.EVENTO:
                     inscripcion = getattr(pago, 'inscripcion_evento', None)
                     if not inscripcion:
@@ -1473,9 +1482,13 @@ def validar_pago(request, pago_id):
                         )
 
                 transaction.on_commit(enviar_despues_de_confirmar)
+                from pagos.cambios_plan import notificar_cambio_plan
+                notificar_cambio_plan(pago, resultado=True)
 
             elif pago.estado == 'RECHAZADO':
                 pago.save()
+                from pagos.cambios_plan import notificar_cambio_plan
+                notificar_cambio_plan(pago, resultado=True)
 
                 if hasattr(pago, 'aplicacion_promocion'):
                     pago.aplicacion_promocion.estado = AplicacionPromocion.Estados.RECHAZADA
@@ -1981,7 +1994,7 @@ def horario_clases(request):
 
     metodos_pago = MetodoPagoQR.objects.filter(activo=True)
 
-    pago_form = PagoAlumnoForm()
+    pago_form = PagoAlumnoForm(alumno=getattr(request.user, 'perfil_alumno', None) if request.user.is_authenticated else None)
 
     return render(request, 'gestion/horario_clases.html', {
         'dias': dias,
@@ -2230,6 +2243,24 @@ def asistentes_clase(request, clase_id):
     })
 
 
+def estado_registro_pago(request):
+    from pagos.cambios_plan import pago_mensualidad_pendiente, ultima_cobertura
+    alumno = getattr(request.user, 'perfil_alumno', None) if request.user.is_authenticated else None
+    if not alumno:
+        return JsonResponse({'error': 'Inicia sesión como estudiante.'}, status=403)
+    pendiente = pago_mensualidad_pendiente(alumno)
+    cobertura = ultima_cobertura(alumno)
+    hoy = timezone.localdate()
+    inicio = cobertura.fecha_vencimiento + timedelta(days=1) if cobertura else hoy
+    respuesta = JsonResponse({
+        'pendiente': {'id': pendiente.pk, 'valor': str(pendiente.valor), 'fecha': timezone.localtime(pendiente.fecha_reporte).strftime('%d/%m/%Y'), 'mensualidades': pendiente.mensualidades} if pendiente else None,
+        'inicio': inicio.isoformat(),
+        'vigente_hasta': cobertura.fecha_vencimiento.strftime('%d/%m/%Y') if cobertura and cobertura.fecha_vencimiento >= hoy else None,
+    })
+    respuesta['Cache-Control'] = 'no-store, private'
+    return respuesta
+
+
 def registrar_pago_alumno(request):
     if request.method == 'POST':
         username = request.POST.get('username')
@@ -2257,7 +2288,7 @@ def registrar_pago_alumno(request):
 
         alumno = user.perfil_alumno
 
-        form = PagoAlumnoForm(request.POST, request.FILES)
+        form = PagoAlumnoForm(request.POST, request.FILES, alumno=alumno)
 
         if form.is_valid():
             pago = form.save(commit=False)
@@ -2272,8 +2303,20 @@ def registrar_pago_alumno(request):
             )
             pago.pagador_correo = alumno.user.email
 
-            marcar_posible_duplicado(pago)
-            pago.save()
+            from pagos.cambios_plan import registrar_solicitud_cambio, notificar_cambio_plan
+            with transaction.atomic():
+                # Serializa los reportes del mismo estudiante y vuelve a comprobar
+                # después de tomar el bloqueo, incluso si abrió dos formularios.
+                Alumno.objects.select_for_update().get(pk=alumno.pk)
+                from pagos.cambios_plan import pago_mensualidad_pendiente
+                pendiente = pago_mensualidad_pendiente(alumno)
+                if pendiente:
+                    messages.warning(request, f'Ya tienes un pago de mensualidad pendiente de validar: #{pendiente.pk}. No se creó otro registro.', extra_tags='pago-feedback')
+                    return redirect('gestion:home_publica')
+                registrar_solicitud_cambio(pago)
+                marcar_posible_duplicado(pago)
+                pago.save()
+                notificar_cambio_plan(pago)
 
             resumen_pago = (
                 f'Valor pagado: $ {number_format(pago.valor, decimal_pos=0, force_grouping=True)}. '

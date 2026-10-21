@@ -1,0 +1,13 @@
+<div class="mb-3"><label class="form-label" for="{{ formulario.mensualidades.id_for_label }}">¿Cuántas mensualidades vas a pagar?</label>{{ formulario.mensualidades }}{{ formulario.mensualidades.errors }}</div>
+<div class="alert alert-warning" data-pago-pendiente role="alert" {% if not formulario.pago_pendiente %}hidden{% endif %}>{% if formulario.pago_pendiente %}<strong>Ya tienes un pago de mensualidad pendiente de validar.</strong><br>Registro #{{ formulario.pago_pendiente.pk }} · {{ formulario.pago_pendiente.fecha_reporte|date:'d/m/Y' }} · $ {{ formulario.pago_pendiente.valor|floatformat:'0g' }}{% endif %}</div>
+{% if formulario.alumno_identificado %}
+<div class="alert alert-info" data-cobertura-inicio="{{ formulario.inicio_estimado|date:'Y-m-d' }}" {% if not formulario.cobertura_vigente %}hidden{% endif %}>
+Plan vigente hasta: <strong data-vigencia>{{ formulario.cobertura_actual.fecha_vencimiento|date:'d/m/Y' }}</strong></div>
+{% endif %}
+{% if not formulario.clasificacion_administrativa %}<p class="alert alert-info" data-total-mensualidades>Total sugerido: selecciona un plan.</p>{% endif %}
+{% if not formulario.clasificacion_administrativa %}
+<div class="mb-3"><label class="form-label" for="{{ formulario.tipo_ajuste.id_for_label }}">Tratamiento del pago</label>{{ formulario.tipo_ajuste }}{{ formulario.tipo_ajuste.errors }}</div>
+<div class="mb-3"><label class="form-label" for="{{ formulario.motivo_ajuste.id_for_label }}">Motivo del abono, descuento o acuerdo</label>{{ formulario.motivo_ajuste }}{{ formulario.motivo_ajuste.errors }}<small class="text-secondary">El descuento debe ser confirmado por la administración. Un abono no habilita mensualidades sin pagar.</small></div>
+{% endif %}
+{{ formulario.planes_resumen|json_script:'planes-mensualidades' }}
+{{ formulario.metodos_efectivo|json_script:'metodos-efectivo' }}
