@@ -4666,6 +4666,8 @@ def _clase_tv_payload():
     ).select_related(
         'alumno__user', 'instructor__user'
     ).order_by('fecha_confirmacion')
+    asistencias = list(asistencias)
+    _cargar_progresos_en_asistencias(asistencias)
     nombres = [
         asistencia.nombre_participante.upper()
         + (' · PROFESOR' if asistencia.instructor_id else '')
@@ -4678,6 +4680,17 @@ def _clase_tv_payload():
         'time': f'{clase.hora_inicio:%H:%M} - {clase.hora_fin:%H:%M}',
         'instructor': str(clase.instructor).upper(),
         'attendees': nombres,
+        'attendees_details': [
+            {
+                'nombre': nombre,
+                'recompensas': [
+                    {'nombre': premio['nombre'], 'simbolo': premio['simbolo'],
+                     'imagen': premio['imagen_url'], 'cantidad': premio['cantidad'], 'meta': premio['meta']}
+                    for premio in asistencia.progresos_recompensas
+                ],
+            }
+            for asistencia, nombre in zip(asistencias, nombres)
+        ],
         'total': len(nombres),
         'capacity': clase.cupo_maximo,
     }

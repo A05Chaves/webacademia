@@ -561,6 +561,22 @@ class ConfiguracionYAsistenciaClasesTests(TestCase):
 
 
 class RecompensasConfigurablesTests(TestCase):
+    def test_tv_incluye_las_mismas_estrellas_del_estudiante(self):
+        from unittest.mock import patch
+        from gestion.views import _clase_tv_payload
+        from gestion.services_gamificacion import otorgar_recompensa
+        ahora = timezone.make_aware(datetime(2026, 10, 19, 10, 30))
+        asistencia = self._asistencia(ahora.date())
+        otorgar_recompensa(asistencia, self.estrella, self.usuario_profesor)
+        with patch('gestion.views.timezone.localtime', return_value=ahora):
+            datos = _clase_tv_payload()
+        self.assertEqual(datos['total'], 1)
+        self.assertIn('ANA', datos['attendees'][0])
+        premios = datos['attendees_details'][0]['recompensas']
+        self.assertEqual(premios[0]['cantidad'], 1)
+        self.assertEqual(premios[0]['nombre'], 'Estrella')
+        self.assertIn('imagen', premios[0])
+
     def setUp(self):
         User = get_user_model()
         self.admin = User.objects.create_user(

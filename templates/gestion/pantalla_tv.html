@@ -29,6 +29,7 @@ body{background:var(--tv-bg);color:var(--tv-text)}.top{border-bottom:1px solid v
 @media(max-width:700px){.overview{grid-template-columns:1fr;height:auto}.attendees{display:flex;max-height:48vh}.names{grid-template-columns:repeat(2,minmax(0,1fr))}.youtube-float{width:42vw;min-width:180px}}
 @media(max-height:550px){.brand,.clock{font-size:20px}.top{padding-bottom:6px}.class-title{margin:8px 0}.count{font-size:clamp(45px,12vh,90px)}.fighter{height:24vh}.big-time{font-size:17vh}}
 </style>
+<style>.tv-rewards{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}.tv-reward{display:inline-flex;align-items:center;gap:5px;border:1px solid #ad8b40;border-radius:999px;padding:3px 9px;color:#ffe39a;background:rgba(194,148,45,.13);font-size:clamp(14px,1.3vw,21px);font-weight:800}.tv-reward img{width:28px;height:28px;object-fit:contain}</style>
 </head>
 <body>
 <div id="soundGate" class="sound-gate"><button onclick="enableSound()">🔊 Activar sonido y comenzar</button></div>
@@ -160,11 +161,25 @@ function render(d){
   $('classTitle').textContent=c.title;
   $('classMeta').innerHTML=c.time?`${c.time}<br>${c.discipline}<br>${c.instructor}`:'';
   $('classTotal').textContent=c.total;
-  const signature=JSON.stringify(c.attendees);
+  const asistentes=c.attendees_details||c.attendees.map(nombre=>({nombre,recompensas:[]}));
+  const signature=JSON.stringify(asistentes);
   if(signature!==attendeesSignature){
     attendeesSignature=signature;$('names').replaceChildren();
-    for(const name of (c.attendees.length?c.attendees:['Aún no hay confirmaciones.'])){
-      const row=document.createElement('div');row.className='name';row.textContent=name;$('names').appendChild(row);
+    for(const asistente of (asistentes.length?asistentes:[{nombre:'Aún no hay confirmaciones.',recompensas:[]}])){
+      const row=document.createElement('div');row.className='name';
+      const nombre=document.createElement('span');nombre.textContent=asistente.nombre;row.appendChild(nombre);
+      if(asistente.recompensas?.length){
+        const premios=document.createElement('div');premios.className='tv-rewards';
+        for(const premio of asistente.recompensas){
+          const insignia=document.createElement('span');insignia.className='tv-reward';insignia.title=premio.nombre;
+          insignia.setAttribute('aria-label',premio.nombre+': '+premio.cantidad+(premio.meta?' de '+premio.meta:''));
+          if(premio.imagen){const img=document.createElement('img');img.src=premio.imagen;img.alt=premio.nombre;insignia.appendChild(img);}
+          else{const icon=document.createElement('span');icon.textContent=premio.simbolo;insignia.appendChild(icon);}
+          const cantidad=document.createElement('span');cantidad.textContent=premio.meta?premio.cantidad+' / '+premio.meta:'× '+premio.cantidad;insignia.appendChild(cantidad);premios.appendChild(insignia);
+        }
+        row.appendChild(premios);
+      }
+      $('names').appendChild(row);
     }
     $('names').scrollTop=0;namesDirection=1;namesWaitUntil=Date.now()+3000;
   }
