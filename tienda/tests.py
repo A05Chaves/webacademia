@@ -28,6 +28,14 @@ from .models import (
 
 @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
 class TiendaTests(TestCase):
+    def test_disciplina_conserva_mayusculas_y_minusculas(self):
+        disciplina = DisciplinaProducto.objects.create(nombre='Prueba inicial')
+        self.assertContains(self.client.get(reverse('tienda:editar_disciplina_producto', args=[disciplina.pk])), 'data-conservar-formato="true"')
+        for nombre in ('JIU JITSU', 'Jiu Jitsu', 'jiu jitsu'):
+            self.client.post(reverse('tienda:editar_disciplina_producto', args=[disciplina.pk]), {'nombre': nombre, 'activa': 'on'})
+            disciplina.refresh_from_db()
+            self.assertEqual(disciplina.nombre, nombre)
+
     def setUp(self):
         self.admin = get_user_model().objects.create_user(
             username='admin_tienda',

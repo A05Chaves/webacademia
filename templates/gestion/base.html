@@ -944,6 +944,7 @@
 
     function debeConvertirAMayusculas(campo) {
         if (!campo.matches('input[type="text"], input:not([type]), textarea')) return false;
+        if (campo.dataset.conservarFormato === 'true') return false;
         if (campo.disabled || campo.readOnly) return false;
         const identidad = `${campo.name || ''} ${campo.id || ''} ${campo.autocomplete || ''}`;
         return !patronCamposSinMayusculas.test(identidad);

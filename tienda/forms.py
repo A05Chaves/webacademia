@@ -163,6 +163,7 @@ class DisciplinaProductoForm(BootstrapModelForm):
     class Meta:
         model = DisciplinaProducto
         fields = ['nombre', 'activa']
+        widgets = {'nombre': forms.TextInput(attrs={'data-conservar-formato': 'true'})}
 
 
 class ProveedorTiendaForm(BootstrapModelForm):
