@@ -2,6 +2,20 @@ from django.db import models
 from django.utils import timezone
 
 
+class DisciplinaAcademia(models.Model):
+    codigo = models.CharField(max_length=30, unique=True, editable=False)
+    nombre = models.CharField(max_length=100, unique=True)
+    activa = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['nombre']
+        verbose_name = 'Disciplina de academia'
+        verbose_name_plural = 'Disciplinas de academia'
+
+    def __str__(self):
+        return self.nombre
+
+
 class ClaseProgramada(models.Model):
     class DiasSemana(models.TextChoices):
         LUNES = 'LUNES', 'Lunes'
@@ -63,7 +77,12 @@ class ClaseProgramada(models.Model):
         ordering = ['dia', 'hora_inicio']
 
     def __str__(self):
-        return f"{self.dia} - {self.disciplina} - {self.hora_inicio}"
+        return f"{self.dia} - {self.get_disciplina_display()} - {self.hora_inicio}"
+
+    def get_disciplina_display(self):
+        if not hasattr(self, '_nombre_disciplina'):
+            self._nombre_disciplina = DisciplinaAcademia.objects.filter(codigo=self.disciplina).values_list('nombre', flat=True).first() or dict(self.Disciplinas.choices).get(self.disciplina, self.disciplina)
+        return self._nombre_disciplina
 
 
 class AsistenciaClase(models.Model):

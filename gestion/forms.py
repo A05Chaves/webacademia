@@ -1415,12 +1415,22 @@ class ClaseProgramadaForm(forms.ModelForm):
                 'dia', 'hora_inicio', 'hora_fin', 'disciplina', 'titulo',
                 'publico_objetivo', 'instructor', 'cupo_maximo', 'activa',
             ])
+
         else:
             self.fields.pop('dia', None)
             self.order_fields([
                 'dias', 'hora_inicio', 'hora_fin', 'disciplina', 'titulo',
                 'publico_objetivo', 'instructor', 'cupo_maximo', 'activa',
             ])
+
+        from clases.models import DisciplinaAcademia
+        catalogo = list(DisciplinaAcademia.objects.all())
+        if catalogo:
+            actual = self.instance.disciplina if self.instance.pk else None
+            self.fields['disciplina'].choices = [('', 'Selecciona una disciplina')] + [
+                (d.codigo, d.nombre + (' (inactiva)' if not d.activa else ''))
+                for d in catalogo if d.activa or d.codigo == actual
+            ]
 
     def clean(self):
         cleaned_data = super().clean()

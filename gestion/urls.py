@@ -2,6 +2,7 @@ from django.urls import path
 
 from alumnos import admin
 from . import views
+from . import disciplinas_academia
 from . import avatar_catalogo
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import path, include
@@ -11,6 +12,8 @@ from django.contrib.auth import views as auth_views
 app_name = 'gestion'
 
 urlpatterns = [
+    path('configuraciones/disciplinas/', disciplinas_academia.configurar, name='configurar_disciplinas'),
+    path('configuraciones/disciplinas/<int:disciplina_id>/', disciplinas_academia.configurar, name='editar_disciplina_academia'),
     path('configuraciones/avatares/', avatar_catalogo.panel, name='avatares_panel'),
     path('configuraciones/avatares/parametros/', avatar_catalogo.configurar, name='avatares_configurar'),
     path('configuraciones/avatares/<str:tipo>/nuevo/', avatar_catalogo.editar, name='avatares_crear'),
