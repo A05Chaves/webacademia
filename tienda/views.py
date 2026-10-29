@@ -72,6 +72,14 @@ from .forms import PedidoTiendaForm
 
 
 MARCA_TIENDA = 'Bross Fight Sports'
+def _fecha_abono(fecha):
+    ahora = timezone.now()
+    if not fecha:
+        return ahora
+    hora = timezone.localtime(ahora).time().replace(tzinfo=None)
+    return timezone.make_aware(datetime.combine(fecha, hora), timezone.get_current_timezone())
+
+
 CARRITO_SESION = 'carrito_tienda_publica'
 
 
@@ -1219,6 +1227,7 @@ def registrar_abono_compra(request, compra_id):
             movimiento = MovimientoTienda.objects.create(
                 cuenta=form.cleaned_data['cuenta'], tipo=MovimientoTienda.Tipos.EGRESO,
                 origen=MovimientoTienda.Origenes.COMPRA, concepto=f'Abono compra {compra.numero}',
+                fecha=_fecha_abono(form.cleaned_data.get('fecha_pago')),
                 valor=valor, moneda=compra.moneda,
                 producto=(compra.producto if compra.detalles.count() == 1 else None),
                 compra=compra,
@@ -1504,6 +1513,7 @@ def registrar_abono(request, venta_id):
             movimiento = MovimientoTienda.objects.create(
                 cuenta=cuenta_tienda, tipo=MovimientoTienda.Tipos.INGRESO,
                 origen=MovimientoTienda.Origenes.ABONO, concepto=f'Abono {venta.numero}',
+                fecha=_fecha_abono(form.cleaned_data.get('fecha_pago')),
                 valor=form.cleaned_data['valor'], moneda=venta.moneda, venta=venta,
                 observaciones=form.cleaned_data['observaciones'], registrado_por=request.user,
             )
@@ -1765,17 +1775,34 @@ def consultas(request):
     desde, hasta = _rango_fechas(request)
     moneda = request.GET.get('moneda', '')
     producto_id = request.GET.get('producto', '')
-    movimientos = MovimientoTienda.objects.filter(fecha__date__range=(desde, hasta)).select_related('cuenta', 'producto', 'venta')
+    cliente_q = request.GET.get('cliente', '').strip()
+    limitar_fechas = request.GET.get('limitar_fechas') == '1'
+    movimientos = MovimientoTienda.objects.all().select_related('cuenta', 'producto', 'venta__cliente')
+    ventas = VentaTienda.objects.select_related('cliente').prefetch_related('detalles__producto').all()
+    if not cliente_q or limitar_fechas:
+        movimientos = movimientos.filter(fecha__date__range=(desde, hasta))
+        ventas = ventas.filter(fecha__date__range=(desde, hasta))
+    if cliente_q:
+        clientes = ClienteTienda.objects.filter(Q(nombres__icontains=cliente_q) | Q(numero_documento__icontains=cliente_q) | Q(telefono_whatsapp__icontains=cliente_q))
+        movimientos = movimientos.filter(venta__cliente__in=clientes)
+        ventas = ventas.filter(cliente__in=clientes)
     ajustes = AjusteInventario.objects.filter(fecha__date__range=(desde, hasta)).select_related('producto')
     if moneda in Monedas.values:
         movimientos = movimientos.filter(moneda=moneda)
+        ventas = ventas.filter(moneda=moneda)
         ajustes = ajustes.filter(producto__moneda=moneda)
     if producto_id.isdigit():
-        movimientos = movimientos.filter(producto_id=producto_id)
+        movimientos = movimientos.filter(Q(producto_id=producto_id) | Q(venta__detalles__producto_id=producto_id)).distinct()
+        ventas = ventas.filter(detalles__producto_id=producto_id).distinct()
         ajustes = ajustes.filter(producto_id=producto_id)
+    parametros = request.GET.copy()
+    parametros.pop('pagina_movimientos', None)
+    parametros.pop('pagina_ventas', None)
     return render(request, 'tienda/consultas.html', {
+        'cliente_q': cliente_q, 'limitar_fechas': limitar_fechas, 'filtros_query': parametros.urlencode(),
+        'ventas_cliente': Paginator(ventas, 25).get_page(request.GET.get('pagina_ventas')) if cliente_q else None,
         'desde': desde, 'hasta': hasta, 'moneda_filtro': moneda,
         'producto_filtro': producto_id, 'monedas': Monedas.choices,
-        'productos': ProductoTienda.objects.all(), 'movimientos': movimientos[:200],
+        'productos': ProductoTienda.objects.all(), 'movimientos': Paginator(movimientos, 25).get_page(request.GET.get('pagina_movimientos')),
         'ajustes': ajustes[:200], 'cuentas': CuentaTienda.objects.all(),
     })

@@ -743,6 +743,7 @@ class CompraTiendaForm(OperacionProductoForm):
 
 
 class AbonoCompraForm(forms.Form):
+    fecha_pago = forms.DateField(required=False, label='Fecha del pago', help_text='Opcional. Si se deja vacía, se usa la fecha de hoy.', widget=forms.DateInput(format='%Y-%m-%d', attrs={'type':'date','class':'form-control'}))
     cuota = forms.ModelChoiceField(
         queryset=CuotaCompraTienda.objects.none(), label='Cuota que desea pagar',
         widget=forms.Select(attrs={'class': 'form-select'}),
@@ -980,6 +981,7 @@ class TransferenciaTiendaForm(forms.Form):
 
 
 class AbonoVentaForm(forms.Form):
+    fecha_pago = forms.DateField(required=False, label='Fecha del abono', help_text='Opcional. Si se deja vacía, se usa la fecha de hoy.', widget=forms.DateInput(format='%Y-%m-%d', attrs={'type':'date','class':'form-control'}))
     cuota = forms.ModelChoiceField(
         queryset=CuotaVentaTienda.objects.none(),
         required=False,

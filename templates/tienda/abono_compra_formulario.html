@@ -50,7 +50,8 @@
         <div class="card bg-dark text-light border-secondary">
             <div class="card-body p-4">
                 <form method="post" id="form-pago-compra">
-                    {% csrf_token %}
+                {% csrf_token %}
+                <div class="mb-3"><label class="form-label" for="{{ form.fecha_pago.id_for_label }}">{{ form.fecha_pago.label }}</label>{{ form.fecha_pago }}{{ form.fecha_pago.errors }}<small class="text-secondary">{{ form.fecha_pago.help_text }}</small></div>
                     {% if form.non_field_errors %}
                         <div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>
                     {% endif %}

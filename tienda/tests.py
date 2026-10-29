@@ -28,6 +28,34 @@ from .models import (
 
 @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
 class TiendaTests(TestCase):
+    def test_busqueda_cliente_incluye_historial_fuera_del_mes_y_creditos(self):
+        cliente = ClienteTienda.objects.create(nombres='Ana Compradora', tipo_documento='CC', numero_documento='CLI-123', telefono_whatsapp='3001234567')
+        venta = VentaTienda.objects.create(cliente=cliente, modalidad='CREDITO', estado='PENDIENTE', moneda='COP', subtotal=80000, total=80000, saldo_pendiente=60000, fecha=timezone.now()-timedelta(days=100))
+        movimiento = MovimientoTienda.objects.create(cuenta=self.cuenta, tipo='INGRESO', origen='ABONO', concepto='Abono antiguo', valor=20000, venta=venta, fecha=venta.fecha)
+        MovimientoTienda.objects.create(cuenta=self.cuenta, tipo='INGRESO', origen='OTRO_INGRESO', concepto='No corresponde', valor=100)
+        for consulta in ('Ana', 'CLI-123', '3001234567'):
+            response = self.client.get(reverse('tienda:consultas'), {'cliente': consulta})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.context['movimientos'].paginator.count, 1)
+            self.assertEqual(response.context['movimientos'][0], movimiento)
+            self.assertEqual(response.context['ventas_cliente'].paginator.count, 1)
+            self.assertContains(response, 'Abono antiguo')
+        response = self.client.get(reverse('tienda:consultas'), {'cliente':'Ana','limitar_fechas':'1','desde':timezone.localdate().isoformat(),'hasta':timezone.localdate().isoformat()})
+        self.assertEqual(response.context['movimientos'].paginator.count, 0)
+
+    def test_abono_permite_fecha_manual_o_automatica(self):
+        for manual in (True, False):
+            venta = VentaTienda.objects.create(modalidad='CREDITO', estado='PENDIENTE', moneda='COP', subtotal=80000, total=80000, saldo_pendiente=80000)
+            cuota = CuotaVentaTienda.objects.create(venta=venta, numero=1, fecha_vencimiento=timezone.localdate(), valor=80000, saldo=80000)
+            datos = {'cuota':cuota.pk, 'cuenta':self.cuenta.pk, 'valor':'20000'}
+            esperada = timezone.localdate()-timedelta(days=5) if manual else timezone.localdate()
+            if manual:datos['fecha_pago'] = esperada.isoformat()
+            response = self.client.post(reverse('tienda:registrar_abono',args=[venta.pk]), datos)
+            self.assertEqual(response.status_code, 302)
+            movimiento = MovimientoTienda.objects.get(venta=venta)
+            self.assertEqual(timezone.localtime(movimiento.fecha).date(), esperada)
+            venta.refresh_from_db();self.assertEqual(venta.saldo_pendiente, 60000)
+
     def test_disciplina_conserva_mayusculas_y_minusculas(self):
         disciplina = DisciplinaProducto.objects.create(nombre='Prueba inicial')
         self.assertContains(self.client.get(reverse('tienda:editar_disciplina_producto', args=[disciplina.pk])), 'data-conservar-formato="true"')
